@@ -162,6 +162,22 @@ class MangoSwarmDaemonTest {
     }
 
     @Test
+    void handlerProgressIsRecordedAsTaskLiveness() throws Exception {
+        MangoSwarmProperties properties = properties(10, 1, 1);
+        CountDownLatch executed = new CountDownLatch(1);
+        FakeRepository repository = new FakeRepository(1);
+        MangoSwarmDaemon daemon = daemon(properties, repository, 1, new ProgressHandler(executed));
+
+        daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+
+        assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(repository.progressCalls).isEqualTo(2);
+        assertThat(repository.lastProgressPercent).isEqualTo(100);
+        assertThat(repository.lastProgressDescription).isEqualTo("completed");
+        daemon.stop();
+    }
+
+    @Test
     void calculatesExponentialRetryDelayFromGlobalDefaults() {
         MangoSwarmProperties properties = new MangoSwarmProperties();
         properties.getRetry().setBaseDelay(Duration.ofSeconds(5));
@@ -247,7 +263,8 @@ class MangoSwarmDaemonTest {
         }
 
         @Override
-        public TaskExecutionResult execute(String payload, TaskExecutionContext context) throws Exception {
+        public TaskExecutionResult execute(TaskExecutionContext<String> context) throws Exception {
+            context.progress(100);
             return TaskExecutionResult.completed();
         }
     }
@@ -262,7 +279,7 @@ class MangoSwarmDaemonTest {
         }
 
         @Override
-        public TaskExecutionResult execute(String payload, TaskExecutionContext context) throws Exception {
+        public TaskExecutionResult execute(TaskExecutionContext<String> context) throws Exception {
             entered.countDown();
             release.await(5, TimeUnit.SECONDS);
             return TaskExecutionResult.completed();
@@ -277,9 +294,25 @@ class MangoSwarmDaemonTest {
         }
 
         @Override
-        public TaskExecutionResult execute(String payload, TaskExecutionContext context) {
+        public TaskExecutionResult execute(TaskExecutionContext<String> context) {
             executed.countDown();
             return TaskExecutionResult.failed("temporary failure");
+        }
+    }
+
+    private static final class ProgressHandler extends CompletingHandler {
+        private final CountDownLatch executed;
+
+        private ProgressHandler(CountDownLatch executed) {
+            this.executed = executed;
+        }
+
+        @Override
+        public TaskExecutionResult execute(TaskExecutionContext<String> context) {
+            context.progress(25, "connecting");
+            context.progress(100, "completed");
+            executed.countDown();
+            return TaskExecutionResult.completed();
         }
     }
 
@@ -292,6 +325,9 @@ class MangoSwarmDaemonTest {
         private int failTimedOutCalls;
         private int failedTaskCalls;
         private int rescheduleAfterFailureCalls;
+        private int progressCalls;
+        private int lastProgressPercent;
+        private String lastProgressDescription;
         private Instant retryAvailableAt;
 
         private FakeRepository(int available) {
@@ -299,12 +335,12 @@ class MangoSwarmDaemonTest {
         }
 
         @Override
-        public UUID enqueue(String taskType, com.fasterxml.jackson.databind.JsonNode payload, Instant availableAt) {
+        public UUID queue(String taskType, com.fasterxml.jackson.databind.JsonNode payload, Instant availableAt) {
             return UUID.randomUUID();
         }
 
         @Override
-        public UUID enqueueInNextSlot(
+        public UUID queueInNextSlot(
                 String taskType,
                 com.fasterxml.jackson.databind.JsonNode payload,
                 Instant requestedAt,
@@ -336,6 +372,13 @@ class MangoSwarmDaemonTest {
 
         @Override
         public void markInProgress(UUID taskId, UUID workerId, Instant now) {
+        }
+
+        @Override
+        public void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description) {
+            progressCalls++;
+            lastProgressPercent = progressPercent;
+            lastProgressDescription = description;
         }
 
         @Override

@@ -18,7 +18,7 @@ class TaskRepositoryTest extends PostgresTestSupport {
     void claimsTasksInBatches() {
         Instant now = Instant.parse("2026-05-20T10:00:00Z");
         for (int i = 0; i < 5; i++) {
-            taskRepository.enqueue("email", JsonNodeFactory.instance.objectNode().put("i", i), now);
+            taskRepository.queue("email", JsonNodeFactory.instance.objectNode().put("i", i), now);
         }
 
         List<TaskRecord> claimed = taskRepository.claimBatch("email", UUID.randomUUID(), now, 3);
@@ -31,19 +31,19 @@ class TaskRepositoryTest extends PostgresTestSupport {
     }
 
     @Test
-    void enqueueInNextSlotPushesRequestedTimePastLatestSlot() {
+    void queueInNextSlotPushesRequestedTimePastLatestSlot() {
         Instant now = Instant.parse("2026-05-20T10:00:00Z");
-        UUID first = taskRepository.enqueueInNextSlot(
+        UUID first = taskRepository.queueInNextSlot(
                 "email",
                 JsonNodeFactory.instance.objectNode().put("i", 1),
                 now,
                 java.time.Duration.ofMillis(10));
-        UUID second = taskRepository.enqueueInNextSlot(
+        UUID second = taskRepository.queueInNextSlot(
                 "email",
                 JsonNodeFactory.instance.objectNode().put("i", 2),
                 now,
                 java.time.Duration.ofMillis(10));
-        UUID third = taskRepository.enqueueInNextSlot(
+        UUID third = taskRepository.queueInNextSlot(
                 "email",
                 JsonNodeFactory.instance.objectNode().put("i", 3),
                 now.plusSeconds(1),
@@ -69,18 +69,18 @@ class TaskRepositoryTest extends PostgresTestSupport {
     void farFutureTaskDoesNotBlockEarlierScheduleSlots() {
         Instant now = Instant.parse("2026-05-20T10:00:00Z");
         Instant future = now.plusSeconds(3600);
-        taskRepository.enqueueInNextSlot(
+        taskRepository.queueInNextSlot(
                 "email",
                 JsonNodeFactory.instance.objectNode().put("i", "future"),
                 future,
                 java.time.Duration.ofMillis(10));
 
-        UUID immediate = taskRepository.enqueueInNextSlot(
+        UUID immediate = taskRepository.queueInNextSlot(
                 "email",
                 JsonNodeFactory.instance.objectNode().put("i", "now"),
                 now,
                 java.time.Duration.ofMillis(10));
-        UUID beforeFuture = taskRepository.enqueueInNextSlot(
+        UUID beforeFuture = taskRepository.queueInNextSlot(
                 "email",
                 JsonNodeFactory.instance.objectNode().put("i", "before-future"),
                 future.minusSeconds(1),
@@ -100,7 +100,7 @@ class TaskRepositoryTest extends PostgresTestSupport {
     void concurrentClaimsDoNotClaimSameTaskTwice() throws Exception {
         Instant now = Instant.parse("2026-05-20T10:00:00Z");
         for (int i = 0; i < 20; i++) {
-            taskRepository.enqueue("email", JsonNodeFactory.instance.objectNode().put("i", i), now);
+            taskRepository.queue("email", JsonNodeFactory.instance.objectNode().put("i", i), now);
         }
         CountDownLatch start = new CountDownLatch(1);
         var executor = Executors.newFixedThreadPool(2);
@@ -126,7 +126,7 @@ class TaskRepositoryTest extends PostgresTestSupport {
     @Test
     void reclaimsOnlyWhenRequestedByCaller() {
         Instant now = Instant.parse("2026-05-20T10:00:00Z");
-        taskRepository.enqueue("email", JsonNodeFactory.instance.objectNode(), now.minusSeconds(60));
+        taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now.minusSeconds(60));
         taskRepository.claimBatch("email", UUID.randomUUID(), now.minusSeconds(60), 1);
 
         int reclaimed = taskRepository.reclaimTimedOut("email", java.time.Duration.ofSeconds(30), now);
@@ -137,11 +137,55 @@ class TaskRepositoryTest extends PostgresTestSupport {
     }
 
     @Test
+    void progressUpdatesLivenessForTimeoutRecovery() {
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+        UUID workerId = UUID.randomUUID();
+        UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now.minusSeconds(60));
+        taskRepository.claimBatch("email", workerId, now.minusSeconds(60), 1);
+        taskRepository.markInProgress(taskId, workerId, now.minusSeconds(60));
+
+        taskRepository.recordProgress(taskId, workerId, now.minusSeconds(5), 50, "sending");
+        int reclaimed = taskRepository.reclaimTimedOut("email", java.time.Duration.ofSeconds(30), now);
+
+        assertThat(reclaimed).isZero();
+        var row = jdbcTemplate.queryForMap("""
+                select status, progress_percent, progress_description, last_progress_at
+                from mango_swarm_tasks
+                where id = ?
+                """, taskId);
+        assertThat(row.get("status")).isEqualTo("in_progress");
+        assertThat(row.get("progress_percent")).isEqualTo(50);
+        assertThat(row.get("progress_description")).isEqualTo("sending");
+        assertThat(((java.sql.Timestamp) row.get("last_progress_at")).toInstant()).isEqualTo(now.minusSeconds(5));
+    }
+
+    @Test
+    void completionRecordsFinalProgress() {
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+        UUID workerId = UUID.randomUUID();
+        UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+        taskRepository.claimBatch("email", workerId, now, 1);
+        taskRepository.markInProgress(taskId, workerId, now);
+
+        taskRepository.markCompleted(taskId, workerId, now.plusSeconds(5));
+
+        var row = jdbcTemplate.queryForMap("""
+                select status, progress_percent, progress_description, last_progress_at
+                from mango_swarm_tasks
+                where id = ?
+                """, taskId);
+        assertThat(row.get("status")).isEqualTo("completed");
+        assertThat(row.get("progress_percent")).isEqualTo(100);
+        assertThat(row.get("progress_description")).isEqualTo("finished");
+        assertThat(((java.sql.Timestamp) row.get("last_progress_at")).toInstant()).isEqualTo(now.plusSeconds(5));
+    }
+
+    @Test
     void reschedulesFailedAttemptUsingSameTaskRow() {
         Instant now = Instant.parse("2026-05-20T10:00:00Z");
         Instant retryAt = now.plusSeconds(10);
         UUID workerId = UUID.randomUUID();
-        UUID taskId = taskRepository.enqueue("email", JsonNodeFactory.instance.objectNode(), now);
+        UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
         taskRepository.claimBatch("email", workerId, now, 1);
         taskRepository.markInProgress(taskId, workerId, now);
 

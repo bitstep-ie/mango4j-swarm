@@ -6,6 +6,11 @@ import java.util.Map;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * Spring Boot configuration properties for mango-swarm.
+ * <p>
+ * Prefix: {@code mango.swarm}
+ */
 @ConfigurationProperties(prefix = "mango.swarm")
 public class MangoSwarmProperties {
     private boolean enabled = true;
@@ -72,6 +77,7 @@ public class MangoSwarmProperties {
         this.taskTypes = taskTypes;
     }
 
+    /** Worker heartbeat and stale-worker pruning settings. */
     public static class Worker {
         private Duration heartbeatInterval = Duration.ofSeconds(10);
         private Duration staleAfter = Duration.ofSeconds(30);
@@ -93,6 +99,7 @@ public class MangoSwarmProperties {
         }
     }
 
+    /** Database schema and native-SQL schema-prefix settings. */
     public static class Database {
         private String schema;
         private boolean applySchemaToHibernateDefault = true;
@@ -114,6 +121,7 @@ public class MangoSwarmProperties {
         }
     }
 
+    /** Local executor and polling settings. */
     public static class Executor {
         private String maxThreads = "auto";
         private Duration pollInterval = Duration.ofMillis(100);
@@ -153,17 +161,20 @@ public class MangoSwarmProperties {
         }
     }
 
+    /** Executor queue overload strategy. */
     public enum QueueStrategy {
         CALLER_RUNS,
         ABORT
     }
 
+    /** Runtime virtual-thread policy. */
     public enum VirtualThreads {
         ENABLED,
         DISABLED,
         AUTO
     }
 
+    /** Global retry backoff defaults. */
     public static class Retry {
         private Duration baseDelay = Duration.ZERO;
         private double multiplier = 2.0d;
@@ -194,6 +205,7 @@ public class MangoSwarmProperties {
         }
     }
 
+    /** Per-task-type execution policy. */
     public static class TaskType {
         private int rate;
         private Duration period = Duration.ofSeconds(1);

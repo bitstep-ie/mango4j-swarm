@@ -2,6 +2,8 @@ package ie.bitstep.mango.swarm;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import ie.bitstep.mango.swarm.config.MangoSwarmProperties;
 import ie.bitstep.mango.swarm.db.TaskRecord;
 import ie.bitstep.mango.swarm.db.TaskRepository;
@@ -16,12 +18,44 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MangoTasksTest {
 
     @Test
+    void queuesObjectPayloadForImmediateExecution() {
+        RecordingRepository repository = new RecordingRepository();
+        MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties());
+        Instant before = Instant.now();
+
+        UUID taskId = tasks.queue("email", new EmailRequest("customer-1", "x@example.com"));
+
+        assertThat(taskId).isEqualTo(RecordingRepository.TASK_ID);
+        assertThat(repository.taskType).isEqualTo("email");
+        assertThat(repository.availableAt).isAfterOrEqualTo(before);
+        assertThat(repository.slotSpacing).isEqualTo(Duration.ofMillis(10));
+        assertThat(repository.payload.get("customerId").asText()).isEqualTo("customer-1");
+        assertThat(repository.payload.get("email").asText()).isEqualTo("x@example.com");
+    }
+
+    @Test
+    void queuesJsonPayloadForImmediateExecution() {
+        RecordingRepository repository = new RecordingRepository();
+        MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties());
+        ObjectNode payload = JsonNodeFactory.instance.objectNode()
+                .put("customerId", "customer-2")
+                .put("email", "y@example.com");
+
+        UUID taskId = tasks.queue("email", payload);
+
+        assertThat(taskId).isEqualTo(RecordingRepository.TASK_ID);
+        assertThat(repository.taskType).isEqualTo("email");
+        assertThat(repository.payload).isSameAs(payload);
+        assertThat(repository.slotSpacing).isEqualTo(Duration.ofMillis(10));
+    }
+
+    @Test
     void schedulesObjectPayloadAtRequestedTime() {
         RecordingRepository repository = new RecordingRepository();
         MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties());
         Instant availableAt = Instant.parse("2026-05-21T10:00:00Z");
 
-        UUID taskId = tasks.schedule("email", new EmailRequest("customer-1", "x@example.com"), availableAt);
+        UUID taskId = tasks.at(availableAt, "email", new EmailRequest("customer-1", "x@example.com"));
 
         assertThat(taskId).isEqualTo(RecordingRepository.TASK_ID);
         assertThat(repository.taskType).isEqualTo("email");
@@ -37,7 +71,7 @@ class MangoTasksTest {
         MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties());
         Instant before = Instant.now().plusSeconds(29);
 
-        tasks.scheduleAfter("email", new EmailRequest("customer-1", "x@example.com"), Duration.ofSeconds(30));
+        tasks.after(Duration.ofSeconds(30), "email", new EmailRequest("customer-1", "x@example.com"));
 
         assertThat(repository.availableAt).isAfterOrEqualTo(before);
     }
@@ -63,12 +97,12 @@ class MangoTasksTest {
         private static final UUID TASK_ID = UUID.fromString("018f0000-0000-7000-8000-000000000001");
 
         @Override
-        public UUID enqueue(String taskType, JsonNode payload, Instant availableAt) {
-            return enqueueInNextSlot(taskType, payload, availableAt, Duration.ZERO);
+        public UUID queue(String taskType, JsonNode payload, Instant availableAt) {
+            return queueInNextSlot(taskType, payload, availableAt, Duration.ZERO);
         }
 
         @Override
-        public UUID enqueueInNextSlot(String taskType, JsonNode payload, Instant availableAt, Duration slotSpacing) {
+        public UUID queueInNextSlot(String taskType, JsonNode payload, Instant availableAt, Duration slotSpacing) {
             this.taskType = taskType;
             this.payload = payload;
             this.availableAt = availableAt;
@@ -83,6 +117,10 @@ class MangoTasksTest {
 
         @Override
         public void markInProgress(UUID taskId, UUID workerId, Instant now) {
+        }
+
+        @Override
+        public void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description) {
         }
 
         @Override

@@ -8,8 +8,8 @@ spring:
     password: mango
 
   flyway:
-    # The application owns schema creation and schema selection. The library
-    # migration remains unqualified and runs wherever the app points Flyway.
+    # The application owns schema and table creation. This example ships
+    # its own migration under classpath:db/migration.
     init-sqls: CREATE SCHEMA IF NOT EXISTS mango_reference
     default-schema: mango_reference
     schemas: mango_reference

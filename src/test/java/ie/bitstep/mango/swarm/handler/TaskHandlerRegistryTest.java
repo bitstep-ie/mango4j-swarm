@@ -48,7 +48,7 @@ class TaskHandlerRegistryTest {
             }
 
             @Override
-            public TaskExecutionResult execute(String payload, TaskExecutionContext context) {
+            public TaskExecutionResult execute(TaskExecutionContext<String> context) {
                 return TaskExecutionResult.completed();
             }
         };

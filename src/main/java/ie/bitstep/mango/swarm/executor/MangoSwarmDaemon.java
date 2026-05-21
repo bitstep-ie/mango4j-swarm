@@ -346,8 +346,16 @@ public class MangoSwarmDaemon {
                     workerId,
                     task.attemptCount());
             Object payload = extractPayload(task.payload(), handler.payloadExtractor());
-            TaskExecutionResult result = handler.execute(payload, new TaskExecutionContext(
-                    task.id(), task.taskType(), workerId, task.attemptCount(), task.claimedAt()));
+            TaskExecutionContext context = new TaskExecutionContext(
+                    task.id(),
+                    task.taskType(),
+                    workerId,
+                    task.attemptCount(),
+                    task.claimedAt(),
+                    payload,
+                    (percent, description) ->
+                            taskRepository.recordProgress(task.id(), workerId, Instant.now(), percent, description));
+            TaskExecutionResult result = handler.execute(context);
             if (result == null || result.isCompleted()) {
                 taskRepository.markCompleted(task.id(), workerId, Instant.now());
                 log.debug(

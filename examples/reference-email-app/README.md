@@ -1,12 +1,13 @@
 # Reference Email App
 
-This is a minimal Spring Boot app that uses `mango-swarm` to enqueue and execute `send-email` tasks.
+This is a minimal Spring Boot app that uses `mango-swarm` to queue and execute `send-email` tasks.
 
 The handler does not send real email. It logs the request when the task fires.
+It also reports progress stages (for example `preparing`) and the library writes a final `100 / finished` progress state when the task completes.
 
 ## Schema Ownership
 
-The swarm library migration does not create or hard-code a PostgreSQL schema. The application owns schema creation and schema selection.
+The swarm library does not ship a runtime migration. The application owns schema creation, table creation, and schema selection.
 
 This reference app does that in `application.yml`:
 

@@ -8,6 +8,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Predicate;
 
+/**
+ * Helper for extracting evolved payload shapes from durable JSON task payloads.
+ * <p>
+ * Supports aliases, defaults, nested paths, validation and clear extraction errors.
+ */
 public final class PayloadReader {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -17,12 +22,30 @@ public final class PayloadReader {
         this.root = Objects.requireNonNull(root, "root");
     }
 
+    /**
+     * Reads a required value from the first matching path.
+     *
+     * @param type target Java type
+     * @param primaryPath primary field path
+     * @param aliases legacy/alternate field paths
+     * @param <T> target type
+     * @return converted value
+     */
     public <T> T required(Class<T> type, String primaryPath, String... aliases) {
         Optional<T> value = readFirst(type, primaryPath, aliases);
         return value.orElseThrow(() -> new PayloadExtractionException(
                 "Missing required payload field. Tried paths: " + allPaths(primaryPath, aliases)));
     }
 
+    /**
+     * Reads an optional value from the first matching path.
+     *
+     * @param type target Java type
+     * @param primaryPath primary field path
+     * @param aliases legacy/alternate field paths
+     * @param <T> target type
+     * @return optional value wrapper with default/validation helpers
+     */
     public <T> OptionalValue<T> optional(Class<T> type, String primaryPath, String... aliases) {
         return new OptionalValue<>(type, primaryPath, readFirst(type, primaryPath, aliases));
     }
@@ -64,6 +87,7 @@ public final class PayloadReader {
         return Arrays.toString(concat(primary, aliases));
     }
 
+    /** Optional payload value wrapper with validation and fallback helpers. */
     public static final class OptionalValue<T> {
         private final Class<T> type;
         private final String path;
@@ -75,18 +99,28 @@ public final class PayloadReader {
             this.value = value;
         }
 
+        /** @return wrapped value or provided default when absent */
         public T orDefault(T defaultValue) {
             return value.orElse(defaultValue);
         }
 
+        /** @return raw optional value */
         public Optional<T> asOptional() {
             return value;
         }
 
+        /** @return value or throws extraction exception with the provided message */
         public T orElseThrow(String message) {
             return value.orElseThrow(() -> new PayloadExtractionException(message));
         }
 
+        /**
+         * Validates the value when present.
+         *
+         * @param predicate validation predicate
+         * @param message validation error message
+         * @return this wrapper for fluent chaining
+         */
         public OptionalValue<T> validate(Predicate<T> predicate, String message) {
             value.ifPresent(v -> {
                 if (!predicate.test(v)) {

@@ -40,7 +40,7 @@ class ReferenceEmailTaskSeeder implements ApplicationRunner {
                     .put("subject", "Reference email task %02d".formatted(i))
                     .put("body", "The reference handler logs this request instead of sending email.");
 
-            UUID taskId = mangoTasks.enqueue("send-email", payload);
+            UUID taskId = mangoTasks.queue("send-email", payload);
             log.debug("queued send-email reference task: taskId={}, sequence={}/{}", taskId, i, seedCount);
         }
         ObjectNode futurePayload = objectMapper.createObjectNode()
@@ -49,7 +49,7 @@ class ReferenceEmailTaskSeeder implements ApplicationRunner {
                 .put("subject", "Scheduled reference email task")
                 .put("body", "This task was queued on startup but should only become available later.");
 
-        UUID futureTaskId = mangoTasks.scheduleAfter("send-email", futurePayload, Duration.ofSeconds(30));
+        UUID futureTaskId = mangoTasks.after(Duration.ofSeconds(30), "send-email", futurePayload);
         log.debug("scheduled future send-email reference task: taskId={}, delay={}", futureTaskId, Duration.ofSeconds(30));
     }
 }

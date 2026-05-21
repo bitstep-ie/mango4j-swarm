@@ -36,7 +36,7 @@ public class JdbcTaskRepository implements TaskRepository {
     }
 
     @Override
-    public UUID enqueue(String taskType, JsonNode payload, Instant availableAt) {
+    public UUID queue(String taskType, JsonNode payload, Instant availableAt) {
         return jdbcTemplate.execute((ConnectionCallback<UUID>) connection -> {
             UUID taskId = UuidV7.generate();
             try (PreparedStatement statement = connection.prepareStatement("""
@@ -54,7 +54,7 @@ public class JdbcTaskRepository implements TaskRepository {
     }
 
     @Override
-    public UUID enqueueInNextSlot(String taskType, JsonNode payload, Instant requestedAt, Duration slotSpacing) {
+    public UUID queueInNextSlot(String taskType, JsonNode payload, Instant requestedAt, Duration slotSpacing) {
         return jdbcTemplate.execute((ConnectionCallback<UUID>) connection -> {
             try {
                 try (PreparedStatement lock = connection.prepareStatement("SELECT pg_advisory_lock(hashtext(?)::bigint)")) {
@@ -147,6 +147,9 @@ public class JdbcTaskRepository implements TaskRepository {
                 SET status = 'claimed',
                     claimed_by = ?,
                     claimed_at = ?,
+                    progress_percent = NULL,
+                    progress_description = NULL,
+                    last_progress_at = NULL,
                     attempt_count = attempt_count + 1,
                     updated_at = ?
                 WHERE t.id IN (
@@ -169,18 +172,43 @@ public class JdbcTaskRepository implements TaskRepository {
     public void markInProgress(UUID taskId, UUID workerId, Instant now) {
         jdbcTemplate.update("""
                 UPDATE %s
-                SET status = 'in_progress', updated_at = ?
+                SET status = 'in_progress', last_progress_at = ?, updated_at = ?
                 WHERE id = ? AND claimed_by = ? AND status = 'claimed'
-                """.formatted(tables.tasks()), Timestamp.from(now), taskId, workerId);
+                """.formatted(tables.tasks()), Timestamp.from(now), Timestamp.from(now), taskId, workerId);
+    }
+
+    @Override
+    public void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description) {
+        jdbcTemplate.update("""
+                UPDATE %s
+                SET progress_percent = ?, progress_description = ?, last_progress_at = ?, updated_at = ?
+                WHERE id = ? AND claimed_by = ? AND status = 'in_progress'
+                """.formatted(tables.tasks()),
+                progressPercent,
+                truncate(description),
+                Timestamp.from(now),
+                Timestamp.from(now),
+                taskId,
+                workerId);
     }
 
     @Override
     public void markCompleted(UUID taskId, UUID workerId, Instant now) {
         jdbcTemplate.update("""
                 UPDATE %s
-                SET status = 'completed', completed_at = ?, updated_at = ?
+                SET status = 'completed',
+                    completed_at = ?,
+                    progress_percent = 100,
+                    progress_description = 'finished',
+                    last_progress_at = ?,
+                    updated_at = ?
                 WHERE id = ? AND claimed_by = ? AND status IN ('claimed', 'in_progress')
-                """.formatted(tables.tasks()), Timestamp.from(now), Timestamp.from(now), taskId, workerId);
+                """.formatted(tables.tasks()),
+                Timestamp.from(now),
+                Timestamp.from(now),
+                Timestamp.from(now),
+                taskId,
+                workerId);
     }
 
     @Override
@@ -200,6 +228,9 @@ public class JdbcTaskRepository implements TaskRepository {
                     available_at = ?,
                     claimed_by = NULL,
                     claimed_at = NULL,
+                    progress_percent = NULL,
+                    progress_description = NULL,
+                    last_progress_at = NULL,
                     failed_at = NULL,
                     updated_at = ?,
                     last_error_message = ?
@@ -219,11 +250,14 @@ public class JdbcTaskRepository implements TaskRepository {
                 SET status = 'queued',
                     claimed_by = NULL,
                     claimed_at = NULL,
+                    progress_percent = NULL,
+                    progress_description = NULL,
+                    last_progress_at = NULL,
                     updated_at = ?,
                     last_error_message = 'Reclaimed after timeout'
                 WHERE task_type = ?
                   AND status IN ('claimed', 'in_progress')
-                  AND claimed_at < ?
+                  AND COALESCE(last_progress_at, claimed_at) < ?
                 """.formatted(tables.tasks()), Timestamp.from(now), taskType, Timestamp.from(now.minus(timeout)));
     }
 
@@ -237,7 +271,7 @@ public class JdbcTaskRepository implements TaskRepository {
                     last_error_message = 'Task timed out and reclaim is disabled'
                 WHERE task_type = ?
                   AND status IN ('claimed', 'in_progress')
-                  AND claimed_at < ?
+                  AND COALESCE(last_progress_at, claimed_at) < ?
                 """.formatted(tables.tasks()), Timestamp.from(now), Timestamp.from(now), taskType, Timestamp.from(now.minus(timeout)));
     }
 

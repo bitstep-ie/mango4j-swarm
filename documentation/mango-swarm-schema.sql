@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS mango_swarm_tasks (
     available_at timestamptz NOT NULL DEFAULT now(),
     claimed_by uuid NULL,
     claimed_at timestamptz NULL,
+    progress_percent integer NULL CHECK (progress_percent BETWEEN 0 AND 100),
+    progress_description text NULL,
+    last_progress_at timestamptz NULL,
     attempt_count integer NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -43,7 +46,7 @@ CREATE INDEX IF NOT EXISTS idx_mango_tasks_type_available
     ON mango_swarm_tasks (task_type, status, available_at);
 
 CREATE INDEX IF NOT EXISTS idx_mango_tasks_stale_claimed
-    ON mango_swarm_tasks (task_type, claimed_at)
+    ON mango_swarm_tasks (task_type, claimed_at, last_progress_at)
     WHERE status IN ('claimed', 'in_progress');
 
 CREATE INDEX IF NOT EXISTS idx_mango_tasks_claimed_by
