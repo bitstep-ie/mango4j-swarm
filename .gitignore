@@ -25,3 +25,4 @@ replay_pid*
 /.idea/
 /target/
 /examples/reference-email-app/target/
+/mango-swarm.iml
