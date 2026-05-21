@@ -419,6 +419,6 @@ Run the test suite:
 mvn test
 ```
 
-Integration tests use Testcontainers PostgreSQL. This project uses the Testcontainers 2.x BOM to work with newer Docker Engine versions, including Docker 29 where older docker-java stacks may try an unsupported Docker API level.
+Integration tests use Testcontainers PostgreSQL. This project uses the Testcontainers 2.x BOM to work with newer Docker Engine versions, including Docker 29 where older docker-java stacks may result in an unsupported Docker API level.
 
 ***
