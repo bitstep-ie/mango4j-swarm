@@ -141,6 +141,10 @@ class MangoTasksTest {
         }
 
         @Override
+        public void requeueClaimed(UUID taskId, UUID workerId, Instant now, Instant availableAt, String reason) {
+        }
+
+        @Override
         public int reclaimTimedOut(String taskType, Duration timeout, Instant now) {
             return 0;
         }

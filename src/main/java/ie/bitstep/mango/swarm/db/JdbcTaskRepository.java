@@ -55,7 +55,14 @@ public class JdbcTaskRepository implements TaskRepository {
 
     @Override
     public UUID queueInNextSlot(String taskType, JsonNode payload, Instant requestedAt, Duration slotSpacing) {
+        if (slotSpacing == null || slotSpacing.isZero() || slotSpacing.isNegative()) {
+            return queue(taskType, payload, requestedAt);
+        }
         return jdbcTemplate.execute((ConnectionCallback<UUID>) connection -> {
+            boolean localTransaction = connection.getAutoCommit();
+            if (localTransaction) {
+                connection.setAutoCommit(false);
+            }
             try {
                 try (PreparedStatement lock = connection.prepareStatement("SELECT pg_advisory_lock(hashtext(?)::bigint)")) {
                     lock.setString(1, taskType);
@@ -72,12 +79,23 @@ public class JdbcTaskRepository implements TaskRepository {
                     statement.setObject(3, jsonb(payload), Types.OTHER);
                     statement.setTimestamp(4, Timestamp.from(availableAt));
                     statement.executeUpdate();
+                    if (localTransaction) {
+                        connection.commit();
+                    }
                     return taskId;
                 }
+            } catch (Exception ex) {
+                if (localTransaction) {
+                    connection.rollback();
+                }
+                throw ex;
             } finally {
                 try (PreparedStatement unlock = connection.prepareStatement("SELECT pg_advisory_unlock(hashtext(?)::bigint)")) {
                     unlock.setString(1, taskType);
                     unlock.execute();
+                }
+                if (localTransaction) {
+                    connection.setAutoCommit(true);
                 }
             }
         });
@@ -90,7 +108,13 @@ public class JdbcTaskRepository implements TaskRepository {
             Instant requestedAt,
             Duration slotSpacing) throws SQLException {
         Instant candidate = requestedAt;
+        int attempts = 0;
         while (true) {
+            attempts++;
+            if (attempts > 50_000) {
+                throw new SQLException("Unable to reserve slot after %d attempts for taskType=%s requestedAt=%s"
+                        .formatted(attempts, taskType, requestedAt));
+            }
             Instant before = findSlot(connection, taskType, candidate, true);
             if (before != null && candidate.isBefore(before.plus(slotSpacing))) {
                 candidate = before.plus(slotSpacing);
@@ -239,6 +263,28 @@ public class JdbcTaskRepository implements TaskRepository {
                 Timestamp.from(availableAt),
                 Timestamp.from(now),
                 truncate(errorMessage),
+                taskId,
+                workerId);
+    }
+
+    @Override
+    public void requeueClaimed(UUID taskId, UUID workerId, Instant now, Instant availableAt, String reason) {
+        jdbcTemplate.update("""
+                UPDATE %s
+                SET status = 'queued',
+                    available_at = ?,
+                    claimed_by = NULL,
+                    claimed_at = NULL,
+                    progress_percent = NULL,
+                    progress_description = NULL,
+                    last_progress_at = NULL,
+                    updated_at = ?,
+                    last_error_message = ?
+                WHERE id = ? AND claimed_by = ? AND status = 'claimed'
+                """.formatted(tables.tasks()),
+                Timestamp.from(availableAt),
+                Timestamp.from(now),
+                truncate(reason),
                 taskId,
                 workerId);
     }

@@ -92,7 +92,7 @@ public class MangoSwarmDaemon {
         heartbeatIfNeeded(now);
         reclaimTimedOut(now);
         Duration nextRateLimitedPoll = null;
-        boolean claimedAnyTasks = false;
+        boolean dispatchedAnyTasks = false;
         for (Map.Entry<String, MangoSwarmProperties.TaskType> entry : properties.getTaskTypes().entrySet()) {
             String taskType = entry.getKey();
             MangoSwarmProperties.TaskType config = entry.getValue();
@@ -127,14 +127,13 @@ public class MangoSwarmDaemon {
                     decision.claimLimit(),
                     claimed.size(),
                     claimed.stream().map(TaskRecord::id).toList());
-            if (!claimed.isEmpty()) {
-                claimedAnyTasks = true;
-            }
             for (TaskRecord task : claimed) {
-                dispatch(task);
+                if (dispatch(task, now)) {
+                    dispatchedAnyTasks = true;
+                }
             }
         }
-        if (claimedAnyTasks) {
+        if (dispatchedAnyTasks) {
             return Duration.ZERO;
         }
         return nextRateLimitedPoll == null ? properties.getExecutor().getPollInterval() : nextRateLimitedPoll;
@@ -300,23 +299,35 @@ public class MangoSwarmDaemon {
         });
     }
 
-    private void dispatch(TaskRecord task) {
+    private boolean dispatch(TaskRecord task, Instant now) {
         if (!taskConcurrencyTracker.tryAcquire(task.taskType())) {
+            taskRepository.requeueClaimed(
+                    task.id(),
+                    workerId,
+                    now,
+                    now,
+                    "Local task-type concurrency unavailable; returned to queue");
             log.debug(
-                    "swarm dispatch waiting: taskType={}, taskId={}, workerId={}, reason=task-type-concurrency",
+                    "swarm dispatch deferred: taskType={}, taskId={}, workerId={}, reason=task-type-concurrency",
                     task.taskType(),
                     task.id(),
                     workerId);
-            return;
+            return false;
         }
         if (!executorCapacity.tryAcquire()) {
             taskConcurrencyTracker.release(task.taskType());
+            taskRepository.requeueClaimed(
+                    task.id(),
+                    workerId,
+                    now,
+                    now,
+                    "Local executor capacity unavailable; returned to queue");
             log.debug(
-                    "swarm dispatch waiting: taskType={}, taskId={}, workerId={}, reason=executor-capacity",
+                    "swarm dispatch deferred: taskType={}, taskId={}, workerId={}, reason=executor-capacity",
                     task.taskType(),
                     task.id(),
                     workerId);
-            return;
+            return false;
         }
         log.debug(
                 "swarm dispatch submitted: taskType={}, taskId={}, workerId={}, attempt={}",
@@ -333,6 +344,7 @@ public class MangoSwarmDaemon {
                 executorCapacity.release();
             }
         });
+        return true;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

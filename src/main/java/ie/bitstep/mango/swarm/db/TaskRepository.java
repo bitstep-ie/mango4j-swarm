@@ -42,6 +42,9 @@ public interface TaskRepository {
     /** Reschedules a failed attempt for retry using the same task row. */
     void rescheduleAfterFailure(UUID taskId, UUID workerId, Instant now, Instant availableAt, String errorMessage);
 
+    /** Returns a claimed task back to queued when the local worker cannot dispatch it. */
+    void requeueClaimed(UUID taskId, UUID workerId, Instant now, Instant availableAt, String reason);
+
     /** Requeues timed-out tasks for retry. */
     int reclaimTimedOut(String taskType, Duration timeout, Instant now);
 
