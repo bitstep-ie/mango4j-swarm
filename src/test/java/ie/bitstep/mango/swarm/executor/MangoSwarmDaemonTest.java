@@ -128,6 +128,24 @@ class MangoSwarmDaemonTest {
     }
 
     @Test
+    void runsCleanupUsingConfiguredRetentions() {
+        MangoSwarmProperties properties = properties(10, 1, 1);
+        properties.getCleanup().setInterval(Duration.ofMinutes(1));
+        properties.getCleanup().setCompletedRetention(Duration.ofDays(30));
+        properties.getCleanup().setFailedRetention(Duration.ofDays(90));
+        FakeRepository repository = new FakeRepository(0);
+        MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+
+        daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+        daemon.pollOnce(Instant.parse("2026-05-20T10:00:30Z"));
+        daemon.pollOnce(Instant.parse("2026-05-20T10:01:00Z"));
+
+        assertThat(repository.deleteCompletedCalls).isEqualTo(2);
+        assertThat(repository.deleteFailedCalls).isEqualTo(2);
+        daemon.stop();
+    }
+
+    @Test
     void retriesFailedTaskWhenAttemptsRemain() throws Exception {
         MangoSwarmProperties properties = properties(10, 1, 1);
         properties.getTaskTypes().get("email").setMaxAttempts(3);
@@ -329,6 +347,8 @@ class MangoSwarmDaemonTest {
         private int lastProgressPercent;
         private String lastProgressDescription;
         private Instant retryAvailableAt;
+        private int deleteCompletedCalls;
+        private int deleteFailedCalls;
 
         private FakeRepository(int available) {
             this.available = available;
@@ -414,6 +434,18 @@ class MangoSwarmDaemonTest {
         @Override
         public int markTimedOutFailed(String taskType, Duration timeout, Instant now) {
             failTimedOutCalls++;
+            return 0;
+        }
+
+        @Override
+        public int deleteCompletedOlderThan(Duration retention, Instant now) {
+            deleteCompletedCalls++;
+            return 0;
+        }
+
+        @Override
+        public int deleteFailedOlderThan(Duration retention, Instant now) {
+            deleteFailedCalls++;
             return 0;
         }
     }

@@ -46,6 +46,7 @@ public class MangoSwarmDaemon {
     private Thread daemonThread;
     private volatile int activeWorkers = 1;
     private volatile Instant lastHeartbeat = Instant.EPOCH;
+    private volatile Instant lastCleanup = Instant.EPOCH;
 
     public MangoSwarmDaemon(
             WorkerRegistry workerRegistry,
@@ -90,6 +91,7 @@ public class MangoSwarmDaemon {
 
     Duration pollOnce(Instant now) {
         heartbeatIfNeeded(now);
+        cleanupIfNeeded(now);
         reclaimTimedOut(now);
         Duration nextRateLimitedPoll = null;
         boolean dispatchedAnyTasks = false;
@@ -258,6 +260,39 @@ public class MangoSwarmDaemon {
         activeWorkers = workerRegistry.heartbeat(workerId, hostname, startedAt, now);
         lastHeartbeat = now;
         logRateAndBatchRecalculation(now);
+    }
+
+    private void cleanupIfNeeded(Instant now) {
+        MangoSwarmProperties.Cleanup cleanup = properties.getCleanup();
+        if (cleanup == null || !cleanup.isEnabled()) {
+            return;
+        }
+        Duration interval = cleanup.getInterval();
+        if (interval == null || interval.isNegative() || interval.isZero()) {
+            return;
+        }
+        if (lastCleanup.plus(interval).isAfter(now)) {
+            return;
+        }
+        Duration completedRetention = cleanup.getCompletedRetention();
+        Duration failedRetention = cleanup.getFailedRetention();
+        if (completedRetention != null && !completedRetention.isNegative() && !completedRetention.isZero()) {
+            int deletedCompleted = taskRepository.deleteCompletedOlderThan(completedRetention, now);
+            log.debug(
+                    "swarm cleanup completed-tasks: workerId={}, retention={}, deleted={}",
+                    workerId,
+                    completedRetention,
+                    deletedCompleted);
+        }
+        if (failedRetention != null && !failedRetention.isNegative() && !failedRetention.isZero()) {
+            int deletedFailed = taskRepository.deleteFailedOlderThan(failedRetention, now);
+            log.debug(
+                    "swarm cleanup failed-tasks: workerId={}, retention={}, deleted={}",
+                    workerId,
+                    failedRetention,
+                    deletedFailed);
+        }
+        lastCleanup = now;
     }
 
     private void logRateAndBatchRecalculation(Instant now) {

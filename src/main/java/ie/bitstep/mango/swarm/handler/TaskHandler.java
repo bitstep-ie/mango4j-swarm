@@ -10,8 +10,14 @@ import ie.bitstep.mango.swarm.payload.PayloadExtractor;
  * @param <T> extracted payload type consumed by this handler
  */
 public interface TaskHandler<T> {
-    /** @return configured task type key handled by this bean */
-    String taskType();
+    /**
+     * @return configured task type key handled by this bean
+     * @deprecated Prefer {@link SwarmHandler} annotation on the handler class.
+     */
+    @Deprecated
+    default String taskType() {
+        return null;
+    }
 
     /** @return payload extractor used to evolve durable JSON payloads into the current Java model */
     PayloadExtractor<T> payloadExtractor();

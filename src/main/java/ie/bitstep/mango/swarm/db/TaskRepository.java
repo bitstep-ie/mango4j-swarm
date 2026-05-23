@@ -50,4 +50,10 @@ public interface TaskRepository {
 
     /** Marks timed-out tasks as failed when reclaim is disabled. */
     int markTimedOutFailed(String taskType, Duration timeout, Instant now);
+
+    /** Deletes completed tasks older than the retention window. */
+    int deleteCompletedOlderThan(Duration retention, Instant now);
+
+    /** Deletes failed tasks older than the retention window. */
+    int deleteFailedOlderThan(Duration retention, Instant now);
 }

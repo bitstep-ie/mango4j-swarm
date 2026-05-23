@@ -153,5 +153,15 @@ class MangoTasksTest {
         public int markTimedOutFailed(String taskType, Duration timeout, Instant now) {
             return 0;
         }
+
+        @Override
+        public int deleteCompletedOlderThan(Duration retention, Instant now) {
+            return 0;
+        }
+
+        @Override
+        public int deleteFailedOlderThan(Duration retention, Instant now) {
+            return 0;
+        }
     }
 }

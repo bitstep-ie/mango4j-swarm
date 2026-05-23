@@ -321,6 +321,26 @@ public class JdbcTaskRepository implements TaskRepository {
                 """.formatted(tables.tasks()), Timestamp.from(now), Timestamp.from(now), taskType, Timestamp.from(now.minus(timeout)));
     }
 
+    @Override
+    public int deleteCompletedOlderThan(Duration retention, Instant now) {
+        return jdbcTemplate.update("""
+                DELETE FROM %s
+                WHERE status = 'completed'
+                  AND completed_at IS NOT NULL
+                  AND completed_at < ?
+                """.formatted(tables.tasks()), Timestamp.from(now.minus(retention)));
+    }
+
+    @Override
+    public int deleteFailedOlderThan(Duration retention, Instant now) {
+        return jdbcTemplate.update("""
+                DELETE FROM %s
+                WHERE status = 'failed'
+                  AND failed_at IS NOT NULL
+                  AND failed_at < ?
+                """.formatted(tables.tasks()), Timestamp.from(now.minus(retention)));
+    }
+
     private PGobject jsonb(JsonNode payload) throws SQLException {
         PGobject object = new PGobject();
         object.setType("jsonb");

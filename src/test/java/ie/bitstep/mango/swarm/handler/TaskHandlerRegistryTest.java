@@ -35,6 +35,25 @@ class TaskHandlerRegistryTest {
                 .hasMessageContaining("unconfigured");
     }
 
+    @Test
+    void acceptsAnnotatedHandlerWithoutTaskTypeMethod() {
+        TaskHandler<?> handler = new AnnotatedEmailHandler();
+        new TaskHandlerRegistry(List.of(handler), Set.of("email"), false);
+    }
+
+    @Test
+    void annotationOverridesTaskTypeMethod() {
+        TaskHandler<?> handler = new AnnotatedWithDifferentMethodHandler();
+        new TaskHandlerRegistry(List.of(handler), Set.of("email"), false);
+    }
+
+    @Test
+    void rejectsHandlerWithoutAnnotationOrTaskType() {
+        assertThatThrownBy(() -> new TaskHandlerRegistry(List.of(new MissingTypeHandler()), Set.of("email"), false))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("must define task type");
+    }
+
     private static TaskHandler<String> handler(String type) {
         return new TaskHandler<>() {
             @Override
@@ -52,5 +71,48 @@ class TaskHandlerRegistryTest {
                 return TaskExecutionResult.completed();
             }
         };
+    }
+
+    @SwarmHandler("email")
+    private static final class AnnotatedEmailHandler implements TaskHandler<String> {
+        @Override
+        public PayloadExtractor<String> payloadExtractor() {
+            return reader -> "";
+        }
+
+        @Override
+        public TaskExecutionResult execute(TaskExecutionContext<String> context) {
+            return TaskExecutionResult.completed();
+        }
+    }
+
+    @SwarmHandler("email")
+    private static final class AnnotatedWithDifferentMethodHandler implements TaskHandler<String> {
+        @Override
+        public String taskType() {
+            return "wrong-value";
+        }
+
+        @Override
+        public PayloadExtractor<String> payloadExtractor() {
+            return reader -> "";
+        }
+
+        @Override
+        public TaskExecutionResult execute(TaskExecutionContext<String> context) {
+            return TaskExecutionResult.completed();
+        }
+    }
+
+    private static final class MissingTypeHandler implements TaskHandler<String> {
+        @Override
+        public PayloadExtractor<String> payloadExtractor() {
+            return reader -> "";
+        }
+
+        @Override
+        public TaskExecutionResult execute(TaskExecutionContext<String> context) {
+            return TaskExecutionResult.completed();
+        }
     }
 }

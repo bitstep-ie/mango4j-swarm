@@ -3,7 +3,6 @@ package ie.bitstep.mango.swarm.handler;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 public final class TaskHandlerRegistry {
@@ -12,7 +11,7 @@ public final class TaskHandlerRegistry {
     public TaskHandlerRegistry(Collection<TaskHandler<?>> handlers, Set<String> configuredTypes, boolean allowUnconfiguredHandlers) {
         Map<String, TaskHandler<?>> discovered = new LinkedHashMap<>();
         for (TaskHandler<?> handler : handlers) {
-            String type = Objects.requireNonNull(handler.taskType(), "taskType");
+            String type = resolveTaskType(handler);
             TaskHandler<?> previous = discovered.putIfAbsent(type, handler);
             if (previous != null) {
                 throw new IllegalStateException("Duplicate TaskHandler for task type '" + type + "'");
@@ -43,5 +42,24 @@ public final class TaskHandlerRegistry {
 
     public Set<String> taskTypes() {
         return handlers.keySet();
+    }
+
+    private static String resolveTaskType(TaskHandler<?> handler) {
+        SwarmHandler annotation = handler.getClass().getAnnotation(SwarmHandler.class);
+        if (annotation != null) {
+            String value = annotation.value();
+            if (value == null || value.isBlank()) {
+                throw new IllegalStateException("@" + SwarmHandler.class.getSimpleName()
+                        + " value must not be blank for handler " + handler.getClass().getName());
+            }
+            return value.trim();
+        }
+        String type = handler.taskType();
+        if (type == null || type.isBlank()) {
+            throw new IllegalStateException(
+                    "TaskHandler must define task type via @" + SwarmHandler.class.getSimpleName()
+                            + " or taskType(): " + handler.getClass().getName());
+        }
+        return type;
     }
 }

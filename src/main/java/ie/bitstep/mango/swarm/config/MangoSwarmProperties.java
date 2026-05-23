@@ -17,6 +17,7 @@ public class MangoSwarmProperties {
     private boolean allowUnconfiguredHandlers = false;
     private Database database = new Database();
     private Worker worker = new Worker();
+    private Cleanup cleanup = new Cleanup();
     private Executor executor = new Executor();
     private Retry retry = new Retry();
     private Map<String, TaskType> taskTypes = new LinkedHashMap<>();
@@ -61,6 +62,14 @@ public class MangoSwarmProperties {
         this.executor = executor;
     }
 
+    public Cleanup getCleanup() {
+        return cleanup;
+    }
+
+    public void setCleanup(Cleanup cleanup) {
+        this.cleanup = cleanup;
+    }
+
     public Retry getRetry() {
         return retry;
     }
@@ -96,6 +105,46 @@ public class MangoSwarmProperties {
 
         public void setStaleAfter(Duration staleAfter) {
             this.staleAfter = staleAfter;
+        }
+    }
+
+    /** Periodic cleanup retention and cadence settings. */
+    public static class Cleanup {
+        private boolean enabled = true;
+        private Duration interval = Duration.ofMinutes(10);
+        private Duration completedRetention = Duration.ofDays(30);
+        private Duration failedRetention = Duration.ofDays(90);
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public Duration getInterval() {
+            return interval;
+        }
+
+        public void setInterval(Duration interval) {
+            this.interval = interval;
+        }
+
+        public Duration getCompletedRetention() {
+            return completedRetention;
+        }
+
+        public void setCompletedRetention(Duration completedRetention) {
+            this.completedRetention = completedRetention;
+        }
+
+        public Duration getFailedRetention() {
+            return failedRetention;
+        }
+
+        public void setFailedRetention(Duration failedRetention) {
+            this.failedRetention = failedRetention;
         }
     }
 
