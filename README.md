@@ -122,16 +122,11 @@ class EmailTaskService {
 }
 ```
 
-Implement a handler as a Spring bean:
+Implement a handler:
 
 ```java
-@Component
+@SwarmHandler("send-email")
 class SendEmailTaskHandler implements TaskHandler<EmailPayload> {
-
-    @Override
-    public String taskType() {
-        return "send-email";
-    }
 
     @Override
     public PayloadExtractor<EmailPayload> payloadExtractor() {
@@ -164,6 +159,157 @@ progress_description = finished
 ```
 
 Handlers can still report `100` themselves if they want a custom final description before returning, but the default successful completion state is always `100` / `finished`.
+
+***
+
+# Configuration Reference
+
+All configuration is under `mango.swarm`.
+
+## Full Example
+
+```yaml
+mango:
+  swarm:
+    enabled: true
+    allow-unconfigured-handlers: false
+
+    database:
+      schema: application_schema
+      apply-schema-to-hibernate-default: true
+
+    worker:
+      heartbeat-interval: 10s
+      stale-after: 30s
+
+    cleanup:
+      enabled: true
+      interval: 10m
+      completed-retention: 30d
+      failed-retention: 90d
+
+    executor:
+      max-threads: auto        # auto or explicit integer string (e.g. "16")
+      poll-interval: 100ms
+      queue-strategy: CALLER_RUNS   # CALLER_RUNS | ABORT
+      virtual-threads: auto    # auto | enabled | disabled
+
+    retry:
+      base-delay: 5s
+      multiplier: 2.0
+      max-delay: 30m
+
+    task-types:
+      send-email:
+        rate: 100
+        period: 1s
+        concurrency: 5
+        timeout: 30s
+        reclaim-on-timeout: true
+        idempotent: true
+        batch-size: 20
+        max-attempts: 3
+        retry-base-delay: 10s
+        retry-multiplier: 3.0
+        retry-max-delay: 10m
+        # retry-delay: 10s   # backward-compatible alias for first retry delay
+```
+
+## Property List
+
+### Root
+
+* `mango.swarm.enabled` (default `true`): enables the library.
+* `mango.swarm.allow-unconfigured-handlers` (default `false`): when `false`, startup fails if a discovered handler has no matching configured task type.
+
+### Database
+
+* `mango.swarm.database.schema` (optional): schema prefix for native SQL table access.
+* `mango.swarm.database.apply-schema-to-hibernate-default` (default `true`): if `true` and `hibernate.default_schema` is not set, swarm can set it to `database.schema`.
+
+### Worker
+
+* `mango.swarm.worker.heartbeat-interval` (default `10s`): worker heartbeat cadence.
+* `mango.swarm.worker.stale-after` (default `30s`): worker considered stale after this silence window.
+
+### Cleanup
+
+* `mango.swarm.cleanup.enabled` (default `true`): enables periodic cleanup of terminal tasks.
+* `mango.swarm.cleanup.interval` (default `10m`): cleanup run cadence.
+* `mango.swarm.cleanup.completed-retention` (default `30d`): completed tasks older than this are deleted.
+* `mango.swarm.cleanup.failed-retention` (default `90d`): failed tasks older than this are deleted.
+
+### Executor
+
+* `mango.swarm.executor.max-threads` (default `auto`): global local execution cap.
+* `mango.swarm.executor.poll-interval` (default `100ms`): fallback poll delay when no rate-gated wakeup applies.
+* `mango.swarm.executor.queue-strategy` (default `CALLER_RUNS`): overload behavior (`CALLER_RUNS` or `ABORT`).
+* `mango.swarm.executor.virtual-threads` (default `auto`): virtual thread runtime policy (`auto`, `enabled`, `disabled`).
+
+### Retry Defaults
+
+* `mango.swarm.retry.base-delay` (default `0s`)
+* `mango.swarm.retry.multiplier` (default `2.0`)
+* `mango.swarm.retry.max-delay` (default `30m`)
+
+### Per Task Type (`mango.swarm.task-types.<task-type>.*`)
+
+Required:
+* `rate`: permits per period for the whole application.
+
+Optional:
+* `period` (default `1s`)
+* `concurrency` (default `1`)
+* `timeout` (default `1m`)
+* `reclaim-on-timeout` (default `false`)
+* `idempotent` (default `false`)
+* `batch-size` (derived when omitted)
+* `max-attempts` (default `1`)
+* `retry-base-delay` (override)
+* `retry-multiplier` (override)
+* `retry-max-delay` (override)
+* `retry-delay` (legacy alias for first retry delay)
+
+## Minimal Example
+
+```yaml
+mango:
+  swarm:
+    task-types:
+      send-email:
+        rate: 20
+```
+
+## Recommended Production Baseline
+
+```yaml
+mango:
+  swarm:
+    worker:
+      heartbeat-interval: 10s
+      stale-after: 30s
+    cleanup:
+      interval: 10m
+      completed-retention: 30d
+      failed-retention: 90d
+    executor:
+      max-threads: "16"
+      poll-interval: 100ms
+      virtual-threads: auto
+    retry:
+      base-delay: 5s
+      multiplier: 2.0
+      max-delay: 30m
+    task-types:
+      send-email:
+        rate: 100
+        period: 1s
+        concurrency: 5
+        timeout: 30s
+        reclaim-on-timeout: true
+        idempotent: true
+        max-attempts: 3
+```
 
 ***
 
