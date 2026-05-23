@@ -28,6 +28,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Core swarm runtime loop.
+ * <p>
+ * Coordinates worker heartbeat, rate recalculation, task claiming, dispatch to executor threads,
+ * timeout handling, retry scheduling, and retention cleanup.
+ */
 public class MangoSwarmDaemon {
     private static final Logger log = LoggerFactory.getLogger(MangoSwarmDaemon.class);
 

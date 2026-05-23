@@ -21,6 +21,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+/**
+ * Spring Boot auto-configuration for mango-swarm runtime beans.
+ */
 @AutoConfiguration
 @EnableConfigurationProperties(MangoSwarmProperties.class)
 @ConditionalOnProperty(prefix = "mango.swarm", name = "enabled", havingValue = "true", matchIfMissing = true)

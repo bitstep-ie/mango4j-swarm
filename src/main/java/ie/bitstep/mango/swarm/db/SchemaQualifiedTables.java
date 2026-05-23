@@ -2,6 +2,9 @@ package ie.bitstep.mango.swarm.db;
 
 import java.util.regex.Pattern;
 
+/**
+ * Resolves and validates schema-qualified table names for swarm SQL queries.
+ */
 public final class SchemaQualifiedTables {
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 

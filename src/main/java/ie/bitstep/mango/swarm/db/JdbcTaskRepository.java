@@ -19,6 +19,12 @@ import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
+/**
+ * JDBC/PostgreSQL implementation of {@link TaskRepository}.
+ * <p>
+ * Uses SQL row locking and task-state updates to support safe multi-worker claiming,
+ * progress tracking, retry rescheduling, timeout recovery, and retention cleanup.
+ */
 public class JdbcTaskRepository implements TaskRepository {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;

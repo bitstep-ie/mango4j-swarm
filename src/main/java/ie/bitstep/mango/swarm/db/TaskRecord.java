@@ -5,6 +5,9 @@ import ie.bitstep.mango.swarm.TaskStatus;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Immutable task row projection used by repository claim/load operations.
+ */
 public record TaskRecord(
         UUID id,
         String taskType,

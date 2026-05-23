@@ -9,6 +9,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+/**
+ * JDBC/PostgreSQL implementation of {@link WorkerRegistry}.
+ */
 public class JdbcWorkerRegistry implements WorkerRegistry {
     private static final Logger log = LoggerFactory.getLogger(JdbcWorkerRegistry.class);
 

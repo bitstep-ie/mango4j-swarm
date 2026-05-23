@@ -5,6 +5,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Immutable registry of discovered task handlers keyed by task type.
+ */
 public final class TaskHandlerRegistry {
     private final Map<String, TaskHandler<?>> handlers;
 

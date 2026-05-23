@@ -4,6 +4,9 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * UUIDv7 generator used for task identifiers.
+ */
 public final class UuidV7 {
     private static final SecureRandom RANDOM = new SecureRandom();
 

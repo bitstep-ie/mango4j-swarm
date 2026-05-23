@@ -3,6 +3,9 @@ package ie.bitstep.mango.swarm.rate;
 import java.time.Duration;
 import java.time.Instant;
 
+/**
+ * Time-slot based local rate limiter that spaces permits smoothly.
+ */
 public final class SmoothRateLimiter {
     private Instant nextSlot = Instant.EPOCH;
     private Duration spacing = Duration.ofSeconds(1);
