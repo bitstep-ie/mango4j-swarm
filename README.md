@@ -149,7 +149,17 @@ class SendEmailTaskHandler implements TaskHandler<EmailPayload> {
 
 On startup, mango-swarm discovers all `TaskHandler` beans, verifies the configured task types, starts a worker heartbeat, and begins claiming available tasks.
 
-Handlers receive a `TaskExecutionContext<T>` containing task metadata, the extracted payload, and a progress reporter. Calling `context.progress(percent)` or `context.progress(percent, description)` records progress from `0` to `100` and also acts as task liveness. Each progress call extends the stale-task timeout window for that task. The optional description can be used for human-readable stages such as `connecting`, `sending`, or `completing`.
+Handlers receive a `TaskExecutionContext<T>` containing:
+
+- `taskId`: persisted task UUID from `mango_swarm_tasks.id`
+- `taskType`: configured task type key
+- `workerId`: worker UUID executing the attempt
+- `attemptCount`: current attempt number
+- `claimedAt`: claim timestamp for the current attempt
+- `payload`: extracted typed payload
+- progress API: `progress(percent)` and `progress(percent, description)`
+
+Calling `context.progress(percent)` or `context.progress(percent, description)` records progress from `0` to `100` and also acts as task liveness. Each progress call extends the stale-task timeout window for that task. The optional description can be used for human-readable stages such as `connecting`, `sending`, or `completing`.
 
 When a task completes successfully, mango-swarm records a final progress state automatically:
 
@@ -238,6 +248,43 @@ mango:
 * `mango.swarm.cleanup.interval` (default `10m`): cleanup run cadence.
 * `mango.swarm.cleanup.completed-retention` (default `30d`): completed tasks older than this are deleted.
 * `mango.swarm.cleanup.failed-retention` (default `90d`): failed tasks older than this are deleted.
+
+## Cleanup Task
+
+mango-swarm runs a built-in periodic cleanup task in the daemon loop (no separate handler needed).
+
+Behavior:
+
+* cleanup runs every `mango.swarm.cleanup.interval`
+* completed rows are deleted when `completed_at < now - completed-retention`
+* failed rows are deleted when `failed_at < now - failed-retention`
+* only terminal states are deleted (`completed`, `failed`)
+* `queued`, `claimed`, and `in_progress` rows are never removed by cleanup
+
+Defaults:
+
+* `completed-retention: 30d`
+* `failed-retention: 90d`
+
+Disable cleanup entirely:
+
+```yaml
+mango:
+  swarm:
+    cleanup:
+      enabled: false
+```
+
+Tune cleanup cadence/retention:
+
+```yaml
+mango:
+  swarm:
+    cleanup:
+      interval: 15m
+      completed-retention: 14d
+      failed-retention: 60d
+```
 
 ### Executor
 

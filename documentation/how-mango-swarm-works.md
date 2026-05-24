@@ -12,7 +12,7 @@ This document explains the runtime model of `mango-swarm`, the table interaction
 ## Core components
 
 - `MangoTasks`: high-level API for `queue(...)`, `at(...)`, and `after(...)`.
-- `MangoSwarmDaemon`: worker loop that heartbeats, claims, dispatches, retries, and reclaims.
+- `MangoSwarmDaemon`: worker loop that heartbeats, claims, dispatches, retries, reclaims, and cleans up old terminal tasks.
 - `TaskHandler<T>`: application task logic.
 - `TaskExecutionContext<T>`: metadata + payload + progress reporting callback.
 - `TaskRepository`: PostgreSQL persistence contract used by the daemon.
@@ -54,6 +54,7 @@ sequenceDiagram
 
     loop Poll cycle
         D->>DB: heartbeat worker + prune stale workers
+        D->>DB: cleanup old completed/failed rows (interval-based)
         D->>D: recalc effective rate = app rate / active workers
         D->>DB: claim batch (FOR UPDATE SKIP LOCKED)
         D->>DB: mark claimed rows
@@ -137,6 +138,15 @@ Handlers receive `TaskExecutionContext<T>` and can call:
 - `progress(percent)`
 - `progress(percent, description)`
 
+`TaskExecutionContext<T>` contains:
+
+- `taskId`: persisted task UUID from `mango_swarm_tasks.id`
+- `taskType`: configured task type key
+- `workerId`: worker UUID executing the attempt
+- `attemptCount`: current attempt number
+- `claimedAt`: claim timestamp for the current attempt
+- `payload`: extracted typed payload
+
 Effects of each call:
 
 - updates `progress_percent`
@@ -168,6 +178,25 @@ Timeout reclaim:
   - `idempotent = true`
 - otherwise timeout path marks tasks as failed
 
+## Cleanup task
+
+The daemon also runs a built-in retention cleanup pass. No application `TaskHandler` is required.
+
+Cleanup config:
+
+- `mango.swarm.cleanup.enabled` (default `true`)
+- `mango.swarm.cleanup.interval` (default `10m`)
+- `mango.swarm.cleanup.completed-retention` (default `30d`)
+- `mango.swarm.cleanup.failed-retention` (default `90d`)
+
+Cleanup behavior:
+
+- delete from `mango_swarm_tasks` where `status='completed'` and `completed_at < now - completed-retention`
+- delete from `mango_swarm_tasks` where `status='failed'` and `failed_at < now - failed-retention`
+- never deletes `queued`, `claimed`, or `in_progress` rows
+
+This keeps the task table bounded while preserving recent execution history for diagnostics.
+
 ## Threading model
 
 - Global executor capacity is independent of per-task-type concurrency.
@@ -181,4 +210,3 @@ Timeout reclaim:
 - Table creation and migration lifecycle.
 - Task handler implementations.
 - Task-type config (`rate`, `period`, `concurrency`, `timeout`, retries, reclaim/idempotency).
-
