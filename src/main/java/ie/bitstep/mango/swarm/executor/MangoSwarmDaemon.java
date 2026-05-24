@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
  */
 public class MangoSwarmDaemon {
     private static final Logger log = LoggerFactory.getLogger(MangoSwarmDaemon.class);
+    private static final Duration MAX_EMPTY_QUEUE_BACKOFF = Duration.ofSeconds(5);
 
     private final WorkerRegistry workerRegistry;
     private final TaskRepository taskRepository;
@@ -53,6 +54,7 @@ public class MangoSwarmDaemon {
     private volatile int activeWorkers = 1;
     private volatile Instant lastHeartbeat = Instant.EPOCH;
     private volatile Instant lastCleanup = Instant.EPOCH;
+    private int consecutiveEmptyPolls = 0;
 
     public MangoSwarmDaemon(
             WorkerRegistry workerRegistry,
@@ -100,6 +102,8 @@ public class MangoSwarmDaemon {
         cleanupIfNeeded(now);
         reclaimTimedOut(now);
         Duration nextRateLimitedPoll = null;
+        boolean attemptedAnyClaim = false;
+        boolean claimedAnyTasks = false;
         boolean dispatchedAnyTasks = false;
         for (Map.Entry<String, MangoSwarmProperties.TaskType> entry : properties.getTaskTypes().entrySet()) {
             String taskType = entry.getKey();
@@ -127,6 +131,7 @@ public class MangoSwarmDaemon {
                     decision.rateCapacity(),
                     decision.remainingTypeCapacity(),
                     decision.remainingExecutorCapacity());
+            attemptedAnyClaim = true;
             List<TaskRecord> claimed = taskRepository.claimBatch(taskType, workerId, now, decision.claimLimit());
             log.debug(
                     "swarm claimed batch: taskType={}, workerId={}, requested={}, claimed={}, taskIds={}",
@@ -135,6 +140,9 @@ public class MangoSwarmDaemon {
                     decision.claimLimit(),
                     claimed.size(),
                     claimed.stream().map(TaskRecord::id).toList());
+            if (!claimed.isEmpty()) {
+                claimedAnyTasks = true;
+            }
             for (TaskRecord task : claimed) {
                 if (dispatch(task, now)) {
                     dispatchedAnyTasks = true;
@@ -142,9 +150,46 @@ public class MangoSwarmDaemon {
             }
         }
         if (dispatchedAnyTasks) {
+            consecutiveEmptyPolls = 0;
             return Duration.ZERO;
         }
-        return nextRateLimitedPoll == null ? properties.getExecutor().getPollInterval() : nextRateLimitedPoll;
+        if (claimedAnyTasks) {
+            consecutiveEmptyPolls = 0;
+            return properties.getExecutor().getPollInterval();
+        }
+        if (attemptedAnyClaim) {
+            consecutiveEmptyPolls++;
+            Duration backoff = emptyQueueBackoff(properties.getExecutor().getPollInterval(), consecutiveEmptyPolls);
+            log.debug(
+                    "swarm empty-queue backoff: workerId={}, consecutiveEmptyPolls={}, base={}, sleep={}",
+                    workerId,
+                    consecutiveEmptyPolls,
+                    properties.getExecutor().getPollInterval(),
+                    backoff);
+            return backoff;
+        }
+        if (nextRateLimitedPoll != null) {
+            return nextRateLimitedPoll;
+        }
+        return properties.getExecutor().getPollInterval();
+    }
+
+    private static Duration emptyQueueBackoff(Duration base, int consecutiveEmptyPolls) {
+        if (base == null || base.isNegative() || base.isZero()) {
+            return Duration.ZERO;
+        }
+        Duration delay = base;
+        int steps = Math.max(0, consecutiveEmptyPolls - 1);
+        for (int i = 0; i < steps; i++) {
+            if (delay.compareTo(MAX_EMPTY_QUEUE_BACKOFF) >= 0) {
+                return MAX_EMPTY_QUEUE_BACKOFF;
+            }
+            delay = delay.multipliedBy(2);
+            if (delay.compareTo(MAX_EMPTY_QUEUE_BACKOFF) >= 0) {
+                return MAX_EMPTY_QUEUE_BACKOFF;
+            }
+        }
+        return delay;
     }
 
     int calculateBatchSize(String taskType, MangoSwarmProperties.TaskType config, double effectiveRate, Instant now) {

@@ -1,5 +1,8 @@
 package ie.bitstep.mango.swarm.handler;
 
+import org.springframework.aop.support.AopUtils;
+import org.springframework.core.annotation.AnnotationUtils;
+
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -48,7 +51,10 @@ public final class TaskHandlerRegistry {
     }
 
     private static String resolveTaskType(TaskHandler<?> handler) {
-        SwarmHandler annotation = handler.getClass().getAnnotation(SwarmHandler.class);
+        Class<?> targetClass = AopUtils.getTargetClass(handler);
+        SwarmHandler annotation =
+                AnnotationUtils.findAnnotation(targetClass, SwarmHandler.class);
+
         if (annotation != null) {
             String value = annotation.value();
             if (value == null || value.isBlank()) {

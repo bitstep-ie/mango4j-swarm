@@ -128,6 +128,48 @@ class MangoSwarmDaemonTest {
     }
 
     @Test
+    void backsOffPollingWhenQueueIsEmpty() {
+        MangoSwarmProperties properties = properties(10, 1, 1);
+        properties.getExecutor().setPollInterval(Duration.ofMillis(100));
+        FakeRepository repository = new FakeRepository(0);
+        MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+        Duration first = daemon.pollOnce(now);
+        Duration second = daemon.pollOnce(now.plusMillis(100));
+        Duration third = daemon.pollOnce(now.plusMillis(200));
+        Duration fourth = daemon.pollOnce(now.plusMillis(300));
+
+        assertThat(first).isEqualTo(Duration.ofMillis(100));
+        assertThat(second).isEqualTo(Duration.ofMillis(200));
+        assertThat(third).isEqualTo(Duration.ofMillis(400));
+        assertThat(fourth).isEqualTo(Duration.ofMillis(800));
+        daemon.stop();
+    }
+
+    @Test
+    void emptyClaimBackoffResetsOnlyAfterNonEmptyClaim() {
+        MangoSwarmProperties properties = properties(10, 1, 1);
+        properties.getExecutor().setPollInterval(Duration.ofMillis(100));
+        FakeRepository repository = new FakeRepository(0);
+        MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+        Duration first = daemon.pollOnce(now);
+        Duration second = daemon.pollOnce(now.plusMillis(100));
+        repository.setAvailable(1);
+        Duration afterWork = daemon.pollOnce(now.plusMillis(200));
+        repository.setAvailable(0);
+        Duration reset = daemon.pollOnce(now.plusMillis(300));
+
+        assertThat(first).isEqualTo(Duration.ofMillis(100));
+        assertThat(second).isEqualTo(Duration.ofMillis(200));
+        assertThat(afterWork).isEqualTo(Duration.ZERO);
+        assertThat(reset).isEqualTo(Duration.ofMillis(100));
+        daemon.stop();
+    }
+
+    @Test
     void runsCleanupUsingConfiguredRetentions() {
         MangoSwarmProperties properties = properties(10, 1, 1);
         properties.getCleanup().setInterval(Duration.ofMinutes(1));
@@ -336,7 +378,7 @@ class MangoSwarmDaemonTest {
 
     private static final class FakeRepository implements TaskRepository {
         private final AtomicInteger nextId = new AtomicInteger(1);
-        private final int available;
+        private int available;
         private final List<Integer> claimLimits = new ArrayList<>();
         private int lastClaimLimit;
         private int reclaimCalls;
@@ -351,6 +393,10 @@ class MangoSwarmDaemonTest {
         private int deleteFailedCalls;
 
         private FakeRepository(int available) {
+            this.available = available;
+        }
+
+        private void setAvailable(int available) {
             this.available = available;
         }
 

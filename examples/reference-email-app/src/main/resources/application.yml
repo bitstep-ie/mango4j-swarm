@@ -50,5 +50,12 @@ mango:
 
 reference:
   email:
-    seed-on-startup: true
-    seed-count: 2000
+    seed-enabled: true
+    seed-count: 20
+    seed-initial-delay: 3s
+    seed-interval: 15s
+    schedule-future-task: false
+
+logging:
+  level:
+    root: DEBUG

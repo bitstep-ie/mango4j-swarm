@@ -2,14 +2,17 @@ package ie.bitstep.mango.swarm.executor;
 
 import ie.bitstep.mango.swarm.config.MangoSwarmProperties;
 import java.lang.reflect.Method;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 final class ExecutorFactory {
+    private static final String WORKER_THREAD_PREFIX = "swarm-worker-";
+
     private ExecutorFactory() {
     }
 
@@ -17,7 +20,7 @@ final class ExecutorFactory {
         boolean virtual = useVirtualThreads(config.getVirtualThreads());
         int maxThreads = resolveMaxThreads(config.getMaxThreads(), virtual);
         if (virtual) {
-            ThreadFactory factory = virtualThreadFactory();
+            ThreadFactory factory = namingFactory(virtualThreadFactory());
             if (factory != null) {
                 ExecutorService service = newThreadPerTaskExecutor(factory);
                 if (service != null) {
@@ -32,7 +35,7 @@ final class ExecutorFactory {
                 30L,
                 TimeUnit.SECONDS,
                 new ArrayBlockingQueue<>(maxThreads),
-                Executors.defaultThreadFactory(),
+                namingFactory(Executors.defaultThreadFactory()),
                 config.getQueueStrategy() == MangoSwarmProperties.QueueStrategy.ABORT
                         ? abortPolicy
                         : new ThreadPoolExecutor.CallerRunsPolicy());
@@ -75,5 +78,19 @@ final class ExecutorFactory {
         } catch (ReflectiveOperationException ex) {
             return null;
         }
+    }
+
+    private static ThreadFactory namingFactory(ThreadFactory delegate) {
+        if (delegate == null) {
+            return null;
+        }
+        AtomicLong sequence = new AtomicLong(0);
+        return runnable -> {
+            Thread thread = delegate.newThread(runnable);
+            if (thread != null) {
+                thread.setName(WORKER_THREAD_PREFIX + sequence.incrementAndGet());
+            }
+            return thread;
+        };
     }
 }
