@@ -18,7 +18,7 @@ spring:
     default-schema: mango_reference
     schemas: mango_reference
 
-mango:
+mango4j:
   swarm:
     database:
       schema: mango_reference

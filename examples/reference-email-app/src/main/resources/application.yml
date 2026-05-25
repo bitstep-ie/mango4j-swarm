@@ -19,7 +19,7 @@ spring:
     properties:
       hibernate.default_schema: mango_reference
 
-mango:
+mango4j:
   swarm:
     enabled: true
     database:

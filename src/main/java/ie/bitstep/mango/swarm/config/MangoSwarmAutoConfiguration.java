@@ -26,7 +26,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  */
 @AutoConfiguration
 @EnableConfigurationProperties(MangoSwarmProperties.class)
-@ConditionalOnProperty(prefix = "mango.swarm", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "mango4j.swarm", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class MangoSwarmAutoConfiguration {
 
     @Bean

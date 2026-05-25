@@ -27,6 +27,6 @@ class SchemaQualifiedTablesTest {
     void rejectsUnsafeSchemaNames() {
         assertThatThrownBy(() -> new SchemaQualifiedTables("bad.schema"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid mango.swarm.database.schema");
+                .hasMessageContaining("Invalid mango4j.swarm.database.schema");
     }
 }

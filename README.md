@@ -68,7 +68,7 @@ Add the library:
 Configure a task type:
 
 ```yaml
-mango:
+mango4j:
   swarm:
     enabled: true
 
@@ -174,12 +174,12 @@ Handlers can still report `100` themselves if they want a custom final descripti
 
 # Configuration Reference
 
-All configuration is under `mango.swarm`.
+All configuration is under `mango4j.swarm`.
 
 ## Full Example
 
 ```yaml
-mango:
+mango4j:
   swarm:
     enabled: true
     allow-unconfigured-handlers: false
@@ -229,25 +229,25 @@ mango:
 
 ### Root
 
-* `mango.swarm.enabled` (default `true`): enables the library.
-* `mango.swarm.allow-unconfigured-handlers` (default `false`): when `false`, startup fails if a discovered handler has no matching configured task type.
+* `mango4j.swarm.enabled` (default `true`): enables the library.
+* `mango4j.swarm.allow-unconfigured-handlers` (default `false`): when `false`, startup fails if a discovered handler has no matching configured task type.
 
 ### Database
 
-* `mango.swarm.database.schema` (optional): schema prefix for native SQL table access.
-* `mango.swarm.database.apply-schema-to-hibernate-default` (default `true`): if `true` and `hibernate.default_schema` is not set, swarm can set it to `database.schema`.
+* `mango4j.swarm.database.schema` (optional): schema prefix for native SQL table access.
+* `mango4j.swarm.database.apply-schema-to-hibernate-default` (default `true`): if `true` and `hibernate.default_schema` is not set, swarm can set it to `database.schema`.
 
 ### Worker
 
-* `mango.swarm.worker.heartbeat-interval` (default `10s`): worker heartbeat cadence.
-* `mango.swarm.worker.stale-after` (default `30s`): worker considered stale after this silence window.
+* `mango4j.swarm.worker.heartbeat-interval` (default `10s`): worker heartbeat cadence.
+* `mango4j.swarm.worker.stale-after` (default `30s`): worker considered stale after this silence window.
 
 ### Cleanup
 
-* `mango.swarm.cleanup.enabled` (default `true`): enables periodic cleanup of terminal tasks.
-* `mango.swarm.cleanup.interval` (default `10m`): cleanup run cadence.
-* `mango.swarm.cleanup.completed-retention` (default `30d`): completed tasks older than this are deleted.
-* `mango.swarm.cleanup.failed-retention` (default `90d`): failed tasks older than this are deleted.
+* `mango4j.swarm.cleanup.enabled` (default `true`): enables periodic cleanup of terminal tasks.
+* `mango4j.swarm.cleanup.interval` (default `10m`): cleanup run cadence.
+* `mango4j.swarm.cleanup.completed-retention` (default `30d`): completed tasks older than this are deleted.
+* `mango4j.swarm.cleanup.failed-retention` (default `90d`): failed tasks older than this are deleted.
 
 ## Cleanup Task
 
@@ -255,7 +255,7 @@ mango-swarm runs a built-in periodic cleanup task in the daemon loop (no separat
 
 Behavior:
 
-* cleanup runs every `mango.swarm.cleanup.interval`
+* cleanup runs every `mango4j.swarm.cleanup.interval`
 * completed rows are deleted when `completed_at < now - completed-retention`
 * failed rows are deleted when `failed_at < now - failed-retention`
 * only terminal states are deleted (`completed`, `failed`)
@@ -269,7 +269,7 @@ Defaults:
 Disable cleanup entirely:
 
 ```yaml
-mango:
+mango4j:
   swarm:
     cleanup:
       enabled: false
@@ -278,7 +278,7 @@ mango:
 Tune cleanup cadence/retention:
 
 ```yaml
-mango:
+mango4j:
   swarm:
     cleanup:
       interval: 15m
@@ -288,18 +288,18 @@ mango:
 
 ### Executor
 
-* `mango.swarm.executor.max-threads` (default `auto`): global local execution cap.
-* `mango.swarm.executor.poll-interval` (default `100ms`): fallback poll delay when no rate-gated wakeup applies.
-* `mango.swarm.executor.queue-strategy` (default `CALLER_RUNS`): overload behavior (`CALLER_RUNS` or `ABORT`).
-* `mango.swarm.executor.virtual-threads` (default `auto`): virtual thread runtime policy (`auto`, `enabled`, `disabled`).
+* `mango4j.swarm.executor.max-threads` (default `auto`): global local execution cap.
+* `mango4j.swarm.executor.poll-interval` (default `100ms`): fallback poll delay when no rate-gated wakeup applies.
+* `mango4j.swarm.executor.queue-strategy` (default `CALLER_RUNS`): overload behavior (`CALLER_RUNS` or `ABORT`).
+* `mango4j.swarm.executor.virtual-threads` (default `auto`): virtual thread runtime policy (`auto`, `enabled`, `disabled`).
 
 ### Retry Defaults
 
-* `mango.swarm.retry.base-delay` (default `0s`)
-* `mango.swarm.retry.multiplier` (default `2.0`)
-* `mango.swarm.retry.max-delay` (default `30m`)
+* `mango4j.swarm.retry.base-delay` (default `0s`)
+* `mango4j.swarm.retry.multiplier` (default `2.0`)
+* `mango4j.swarm.retry.max-delay` (default `30m`)
 
-### Per Task Type (`mango.swarm.task-types.<task-type>.*`)
+### Per Task Type (`mango4j.swarm.task-types.<task-type>.*`)
 
 Required:
 * `rate`: permits per period for the whole application.
@@ -320,7 +320,7 @@ Optional:
 ## Minimal Example
 
 ```yaml
-mango:
+mango4j:
   swarm:
     task-types:
       send-email:
@@ -330,7 +330,7 @@ mango:
 ## Recommended Production Baseline
 
 ```yaml
-mango:
+mango4j:
   swarm:
     worker:
       heartbeat-interval: 10s
@@ -429,7 +429,7 @@ Database claiming uses PostgreSQL row locks with `FOR UPDATE SKIP LOCKED`, so mu
 The global executor pool is configured independently from task-type concurrency.
 
 ```yaml
-mango:
+mango4j:
   swarm:
     executor:
       max-threads: 16
@@ -456,7 +456,7 @@ Handler failures are retried by rescheduling the same task row:
 Backoff can be configured globally and overridden per task type:
 
 ```yaml
-mango:
+mango4j:
   swarm:
     retry:
       base-delay: 5s
@@ -544,7 +544,7 @@ spring:
     default-schema: application_schema
     schemas: application_schema
 
-mango:
+mango4j:
   swarm:
     database:
       schema: application_schema
@@ -559,7 +559,7 @@ spring:
       hibernate.default_schema: application_schema
 ```
 
-`mango.swarm.database.schema` is used for native SQL. JPA entity mappings, where used by an application, should rely on Hibernate's `default_schema` rather than hard-coded `@Table(schema = ...)` values.
+`mango4j.swarm.database.schema` is used for native SQL. JPA entity mappings, where used by an application, should rely on Hibernate's `default_schema` rather than hard-coded `@Table(schema = ...)` values.
 
 The library does not ship a runtime migration in its jar. Application teams should create and manage these tables in their own schema/migration pipeline.
 

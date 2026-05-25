@@ -17,7 +17,7 @@ public final class SchemaQualifiedTables {
         if (schema != null && !schema.isBlank()) {
             String normalized = schema.trim();
             if (!IDENTIFIER.matcher(normalized).matches()) {
-                throw new IllegalArgumentException("Invalid mango.swarm.database.schema: " + schema);
+                throw new IllegalArgumentException("Invalid mango4j.swarm.database.schema: " + schema);
             }
             prefix = normalized + ".";
         }

@@ -9,9 +9,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * Spring Boot configuration properties for mango-swarm.
  * <p>
- * Prefix: {@code mango.swarm}
+ * Prefix: {@code mango4j.swarm}
  */
-@ConfigurationProperties(prefix = "mango.swarm")
+@ConfigurationProperties(prefix = "mango4j.swarm")
 public class MangoSwarmProperties {
     private boolean enabled = true;
     private boolean allowUnconfiguredHandlers = false;
