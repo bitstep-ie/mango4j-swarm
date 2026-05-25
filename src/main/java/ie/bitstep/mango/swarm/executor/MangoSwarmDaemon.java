@@ -113,7 +113,6 @@ public class MangoSwarmDaemon {
             limiter.configure(effectiveRate, config.getPeriod(), now);
             BatchDecision decision = decideBatchSize(taskType, config, effectiveRate, now);
             if (decision.claimLimit() <= 0) {
-                logWaitDecision(taskType, config, effectiveRate, decision);
                 if (decision.rateCapacity() <= 0 && isPositive(decision.nextExecutionDelay())) {
                     nextRateLimitedPoll = minPositive(nextRateLimitedPoll, decision.nextExecutionDelay());
                 }
@@ -174,7 +173,7 @@ public class MangoSwarmDaemon {
         return properties.getExecutor().getPollInterval();
     }
 
-    private static Duration emptyQueueBackoff(Duration base, int consecutiveEmptyPolls) {
+    static Duration emptyQueueBackoff(Duration base, int consecutiveEmptyPolls) {
         if (base == null || base.isNegative() || base.isZero()) {
             return Duration.ZERO;
         }
@@ -216,58 +215,6 @@ public class MangoSwarmDaemon {
                 rateLimiter.timeUntilNextPermit(now));
     }
 
-    private void logWaitDecision(
-            String taskType,
-            MangoSwarmProperties.TaskType config,
-            double effectiveRate,
-            BatchDecision decision) {
-        if (decision.rateCapacity() <= 0) {
-            log.debug(
-                    "swarm waiting for next task execution point: taskType={}, workerId={}, activeWorkers={}, effectiveRate={}/{}, configuredBatch={}, typeCapacity={}, executorCapacity={}, wait={}",
-                    taskType,
-                    workerId,
-                    activeWorkers,
-                    effectiveRate,
-                    config.getPeriod(),
-                    decision.configuredBatch(),
-                    decision.remainingTypeCapacity(),
-                    decision.remainingExecutorCapacity(),
-                    decision.nextExecutionDelay());
-            return;
-        }
-        if (decision.remainingTypeCapacity() <= 0) {
-            log.debug(
-                    "swarm waiting for task-type concurrency: taskType={}, workerId={}, configuredBatch={}, rateCapacity={}, executorCapacity={}",
-                    taskType,
-                    workerId,
-                    decision.configuredBatch(),
-                    decision.rateCapacity(),
-                    decision.remainingExecutorCapacity());
-            return;
-        }
-        if (decision.remainingExecutorCapacity() <= 0) {
-            log.debug(
-                    "swarm waiting for executor capacity: taskType={}, workerId={}, configuredBatch={}, rateCapacity={}, typeCapacity={}",
-                    taskType,
-                    workerId,
-                    decision.configuredBatch(),
-                    decision.rateCapacity(),
-                    decision.remainingTypeCapacity());
-            return;
-        }
-        log.debug(
-                "swarm poll waiting: taskType={}, workerId={}, activeWorkers={}, effectiveRate={}/{}, configuredBatch={}, rateCapacity={}, typeCapacity={}, executorCapacity={}",
-                taskType,
-                workerId,
-                activeWorkers,
-                effectiveRate,
-                config.getPeriod(),
-                decision.configuredBatch(),
-                decision.rateCapacity(),
-                decision.remainingTypeCapacity(),
-                decision.remainingExecutorCapacity());
-    }
-
     private void runLoop() {
         while (running.get()) {
             try {
@@ -281,7 +228,7 @@ public class MangoSwarmDaemon {
         }
     }
 
-    private static Duration minPositive(Duration current, Duration candidate) {
+    static Duration minPositive(Duration current, Duration candidate) {
         if (!isPositive(candidate)) {
             return current;
         }
@@ -291,7 +238,7 @@ public class MangoSwarmDaemon {
         return current;
     }
 
-    private static void sleepIfPositive(Duration delay) throws InterruptedException {
+    static void sleepIfPositive(Duration delay) throws InterruptedException {
         if (!isPositive(delay)) {
             return;
         }
@@ -300,7 +247,7 @@ public class MangoSwarmDaemon {
         Thread.sleep(millis, nanos);
     }
 
-    private static boolean isPositive(Duration delay) {
+    static boolean isPositive(Duration delay) {
         return delay != null && delay.compareTo(Duration.ZERO) > 0;
     }
 
@@ -310,7 +257,6 @@ public class MangoSwarmDaemon {
         }
         activeWorkers = workerRegistry.heartbeat(workerId, hostname, startedAt, now);
         lastHeartbeat = now;
-        logRateAndBatchRecalculation(now);
     }
 
     private void cleanupIfNeeded(Instant now) {
@@ -344,28 +290,6 @@ public class MangoSwarmDaemon {
                     deletedFailed);
         }
         lastCleanup = now;
-    }
-
-    private void logRateAndBatchRecalculation(Instant now) {
-        properties.getTaskTypes().forEach((taskType, config) -> {
-            double effectiveRate = Math.max(0.0d, (double) config.getRate() / Math.max(activeWorkers, 1));
-            int configuredBatch = configuredBatch(config, effectiveRate);
-            log.debug(
-                    "swarm recalculated task acquisition: taskType={}, workerId={}, activeWorkers={}, appRate={}/{}, effectiveRate={}/{}, batchSize={}, batchSizeSource={}, concurrency={}, executorCapacity={}, recalculatesEvery={}, recalculatedAt={}",
-                    taskType,
-                    workerId,
-                    activeWorkers,
-                    config.getRate(),
-                    config.getPeriod(),
-                    effectiveRate,
-                    config.getPeriod(),
-                    configuredBatch,
-                    config.getBatchSize() == null ? "derived" : "configured",
-                    config.getConcurrency(),
-                    executorCapacity.availablePermits(),
-                    properties.getWorker().getHeartbeatInterval(),
-                    now);
-        });
     }
 
     private static int configuredBatch(MangoSwarmProperties.TaskType config, double effectiveRate) {

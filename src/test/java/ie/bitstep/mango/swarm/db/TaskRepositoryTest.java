@@ -2,13 +2,22 @@ package ie.bitstep.mango.swarm.db;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import ie.bitstep.mango.swarm.PostgresTestSupport;
+import ie.bitstep.mango.swarm.TaskStatus;
+import java.lang.reflect.Proxy;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,6 +37,41 @@ class TaskRepositoryTest extends PostgresTestSupport {
                 "select count(*) from mango_swarm_tasks where status = 'queued'",
                 Integer.class);
         assertThat(queued).isEqualTo(2);
+    }
+
+    @Test
+    void zeroClaimLimitDoesNotClaimTasks() {
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+        taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+
+        List<TaskRecord> claimed = taskRepository.claimBatch("email", UUID.randomUUID(), now, 0);
+
+        assertThat(claimed).isEmpty();
+        assertThat(jdbcTemplate.queryForObject("select status from mango_swarm_tasks", String.class))
+                .isEqualTo(TaskStatus.queued.name());
+    }
+
+    @Test
+    void mapsUnclaimedTaskRowsWithNullClaimTimestamp() throws Exception {
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+        UUID taskId = UUID.randomUUID();
+        Map<String, Object> row = new HashMap<>();
+        row.put("id", taskId);
+        row.put("task_type", "email");
+        row.put("payload", "{\"subject\":\"hello\"}");
+        row.put("status", TaskStatus.queued.name());
+        row.put("available_at", Timestamp.from(now));
+        row.put("claimed_by", null);
+        row.put("claimed_at", null);
+        row.put("attempt_count", 0);
+        row.put("created_at", Timestamp.from(now.minusSeconds(1)));
+        row.put("updated_at", Timestamp.from(now.plusSeconds(1)));
+
+        TaskRecord record = ((JdbcTaskRepository) taskRepository).mapTask(resultSet(row), 0);
+
+        assertThat(record.id()).isEqualTo(taskId);
+        assertThat(record.claimedAt()).isNull();
+        assertThat(record.payload().get("subject").asText()).isEqualTo("hello");
     }
 
     @Test
@@ -94,6 +138,45 @@ class TaskRepositoryTest extends PostgresTestSupport {
                 """, immediate, beforeFuture);
         assertThat(((java.sql.Timestamp) rows.get(0).get("available_at")).toInstant()).isEqualTo(now);
         assertThat(((java.sql.Timestamp) rows.get(1).get("available_at")).toInstant()).isEqualTo(future.minusSeconds(1));
+    }
+
+    @Test
+    void exactSlotSpacingBoundaryIsAvailable() {
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+        taskRepository.queueInNextSlot(
+                "email",
+                JsonNodeFactory.instance.objectNode().put("i", 1),
+                now,
+                Duration.ofMillis(10));
+
+        UUID boundary = taskRepository.queueInNextSlot(
+                "email",
+                JsonNodeFactory.instance.objectNode().put("i", 2),
+                now.plusMillis(10),
+                Duration.ofMillis(10));
+
+        Instant availableAt = jdbcTemplate.queryForObject(
+                "select available_at from mango_swarm_tasks where id = ?",
+                Instant.class,
+                boundary);
+        assertThat(availableAt).isEqualTo(now.plusMillis(10));
+    }
+
+    @Test
+    void queueInNextSlotParticipatesInExistingTransaction() {
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+        TransactionTemplate transactionTemplate =
+                new TransactionTemplate(new DataSourceTransactionManager(jdbcTemplate.getDataSource()));
+
+        UUID taskId = transactionTemplate.execute(status -> taskRepository.queueInNextSlot(
+                "email",
+                JsonNodeFactory.instance.objectNode().put("i", "transactional"),
+                now,
+                Duration.ofMillis(10)));
+
+        assertThat(taskId).isNotNull();
+        assertThat(jdbcTemplate.queryForObject("select count(*) from mango_swarm_tasks", Integer.class))
+                .isEqualTo(1);
     }
 
     @Test
@@ -202,5 +285,145 @@ class TaskRepositoryTest extends PostgresTestSupport {
         assertThat(row.get("claimed_at")).isNull();
         assertThat(row.get("failed_at")).isNull();
         assertThat(row.get("last_error_message")).isEqualTo("temporary failure");
+    }
+
+    @Test
+    void zeroOrNegativeSlotSpacingQueuesAtRequestedTime() {
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+        UUID zero = taskRepository.queueInNextSlot("email", JsonNodeFactory.instance.objectNode(), now, Duration.ZERO);
+        UUID negative = taskRepository.queueInNextSlot(
+                "email",
+                JsonNodeFactory.instance.objectNode(),
+                now.plusSeconds(1),
+                Duration.ofMillis(-1));
+
+        var rows = jdbcTemplate.queryForList("""
+                select id, available_at
+                from mango_swarm_tasks
+                where id in (?, ?)
+                order by available_at
+                """, zero, negative);
+        assertThat(((java.sql.Timestamp) rows.get(0).get("available_at")).toInstant()).isEqualTo(now);
+        assertThat(((java.sql.Timestamp) rows.get(1).get("available_at")).toInstant()).isEqualTo(now.plusSeconds(1));
+    }
+
+    @Test
+    void markTimedOutFailedReturnsUpdatedRows() {
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+        UUID workerId = UUID.randomUUID();
+        UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now.minusSeconds(60));
+        taskRepository.claimBatch("email", workerId, now.minusSeconds(60), 1);
+        taskRepository.markInProgress(taskId, workerId, now.minusSeconds(60));
+
+        int failed = taskRepository.markTimedOutFailed("email", Duration.ofSeconds(30), now);
+
+        assertThat(failed).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("select status from mango_swarm_tasks where id = ?", String.class, taskId))
+                .isEqualTo(TaskStatus.failed.name());
+    }
+
+    @Test
+    void deletesTerminalTasksOlderThanRetention() {
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+        UUID workerId = UUID.randomUUID();
+        UUID completedOld = completeTask(workerId, now.minus(Duration.ofDays(40)));
+        UUID completedRecent = completeTask(workerId, now.minus(Duration.ofDays(5)));
+        UUID failedOld = failTask(workerId, now.minus(Duration.ofDays(40)));
+        UUID failedRecent = failTask(workerId, now.minus(Duration.ofDays(5)));
+
+        int deletedCompleted = taskRepository.deleteCompletedOlderThan(Duration.ofDays(30), now);
+        int deletedFailed = taskRepository.deleteFailedOlderThan(Duration.ofDays(30), now);
+
+        assertThat(deletedCompleted).isEqualTo(1);
+        assertThat(deletedFailed).isEqualTo(1);
+        assertThat(existingTaskIds()).containsExactlyInAnyOrder(completedRecent, failedRecent);
+        assertThat(existingTaskIds()).doesNotContain(completedOld, failedOld);
+    }
+
+    @Test
+    void longMessagesAreTruncated() {
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+        UUID workerId = UUID.randomUUID();
+        UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+        taskRepository.claimBatch("email", workerId, now, 1);
+        String longMessage = "x".repeat(4_100);
+
+        taskRepository.requeueClaimed(taskId, workerId, now, now, longMessage);
+
+        String stored = jdbcTemplate.queryForObject(
+                "select last_error_message from mango_swarm_tasks where id = ?",
+                String.class,
+                taskId);
+        assertThat(stored).hasSize(4_000).isEqualTo("x".repeat(4_000));
+    }
+
+    @Test
+    void nullAndShortMessagesAreStoredAsProvided() {
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+        UUID workerId = UUID.randomUUID();
+        UUID nullMessageTask = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+        taskRepository.claimBatch("email", workerId, now, 1);
+        taskRepository.markFailed(nullMessageTask, workerId, now, null);
+
+        UUID shortMessageTask = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+        taskRepository.claimBatch("email", workerId, now, 1);
+        taskRepository.markFailed(shortMessageTask, workerId, now, "short");
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select last_error_message from mango_swarm_tasks where id = ?",
+                String.class,
+                nullMessageTask)).isNull();
+        assertThat(jdbcTemplate.queryForObject(
+                "select last_error_message from mango_swarm_tasks where id = ?",
+                String.class,
+                shortMessageTask)).isEqualTo("short");
+    }
+
+    @Test
+    void exactLimitMessagesAreNotTruncated() {
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+        UUID workerId = UUID.randomUUID();
+        UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+        taskRepository.claimBatch("email", workerId, now, 1);
+        String exactLimitMessage = "x".repeat(4_000);
+
+        taskRepository.markFailed(taskId, workerId, now, exactLimitMessage);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select last_error_message from mango_swarm_tasks where id = ?",
+                String.class,
+                taskId)).isEqualTo(exactLimitMessage);
+    }
+
+    private UUID completeTask(UUID workerId, Instant completedAt) {
+        UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), completedAt);
+        taskRepository.claimBatch("email", workerId, completedAt, 1);
+        taskRepository.markCompleted(taskId, workerId, completedAt);
+        return taskId;
+    }
+
+    private UUID failTask(UUID workerId, Instant failedAt) {
+        UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), failedAt);
+        taskRepository.claimBatch("email", workerId, failedAt, 1);
+        taskRepository.markFailed(taskId, workerId, failedAt, "failed");
+        return taskId;
+    }
+
+    private List<UUID> existingTaskIds() {
+        return jdbcTemplate.query("select id from mango_swarm_tasks", (rs, rowNum) -> rs.getObject("id", UUID.class));
+    }
+
+    private static ResultSet resultSet(Map<String, Object> row) {
+        return (ResultSet) Proxy.newProxyInstance(
+                ResultSet.class.getClassLoader(),
+                new Class<?>[] {ResultSet.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getTimestamp" -> row.get((String) args[0]);
+                    case "getString" -> row.get((String) args[0]);
+                    case "getInt" -> row.get((String) args[0]);
+                    case "getObject" -> row.get((String) args[0]);
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
     }
 }

@@ -133,6 +133,10 @@
                     <plugin>
                         <groupId>org.pitest</groupId>
                         <artifactId>pitest-maven</artifactId>
+                        <configuration>
+                            <mutationThreshold>90</mutationThreshold>
+                            <coverageThreshold>90</coverageThreshold>
+                        </configuration>
                         <dependencies>
                             <dependency>
                                 <groupId>org.pitest</groupId>

@@ -42,4 +42,14 @@ class WorkerRegistryTest extends PostgresTestSupport {
         assertThat(activeCount).isEqualTo(1);
         assertThat(rows).isEqualTo(1);
     }
+
+    @Test
+    void countsMultipleActiveWorkersAndFallsBackToOneWhenNoRowsMatch() {
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+        workerRegistry.heartbeat(UUID.randomUUID(), "node-a", now, now);
+        workerRegistry.heartbeat(UUID.randomUUID(), "node-b", now, now);
+
+        assertThat(workerRegistry.countActiveWorkers(now)).isEqualTo(2);
+        assertThat(workerRegistry.countActiveWorkers(now.plusSeconds(60))).isEqualTo(1);
+    }
 }

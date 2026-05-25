@@ -7,9 +7,17 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TaskHandlerRegistryTest {
+
+    @Test
+    void defaultTaskTypeIsAbsentWhenAnnotationIsUsed() {
+        TaskHandler<String> handler = new AnnotatedEmailHandler();
+
+        assertThat(handler.taskType()).isNull();
+    }
 
     @Test
     void rejectsDuplicateHandlers() {
@@ -45,6 +53,26 @@ class TaskHandlerRegistryTest {
     void annotationOverridesTaskTypeMethod() {
         TaskHandler<?> handler = new AnnotatedWithDifferentMethodHandler();
         new TaskHandlerRegistry(List.of(handler), Set.of("email"), false);
+    }
+
+    @Test
+    void exposesRegisteredTaskTypesAndHandlers() {
+        TaskHandler<String> handler = handler("email");
+        TaskHandlerRegistry registry = new TaskHandlerRegistry(List.of(handler), Set.of("email"), false);
+
+        assertThat(registry.taskTypes()).containsExactly("email");
+        assertThat(registry.get("email")).isSameAs(handler);
+        assertThatThrownBy(() -> registry.get("missing"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No TaskHandler registered");
+    }
+
+    @Test
+    void canAllowUnconfiguredHandlers() {
+        TaskHandler<String> handler = handler("email");
+        TaskHandlerRegistry registry = new TaskHandlerRegistry(List.of(handler), Set.of(), true);
+
+        assertThat(registry.taskTypes()).containsExactly("email");
     }
 
     @Test

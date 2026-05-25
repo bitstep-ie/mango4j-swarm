@@ -14,6 +14,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MangoTasksTest {
 
@@ -71,9 +73,64 @@ class MangoTasksTest {
         MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties());
         Instant before = Instant.now().plusSeconds(29);
 
-        tasks.after(Duration.ofSeconds(30), "email", new EmailRequest("customer-1", "x@example.com"));
+        UUID taskId = tasks.after(Duration.ofSeconds(30), "email", new EmailRequest("customer-1", "x@example.com"));
 
+        assertThat(taskId).isEqualTo(RecordingRepository.TASK_ID);
         assertThat(repository.availableAt).isAfterOrEqualTo(before);
+    }
+
+    @Test
+    void schedulesJsonPayloadAfterDelay() {
+        RecordingRepository repository = new RecordingRepository();
+        MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties());
+        ObjectNode payload = JsonNodeFactory.instance.objectNode().put("customerId", "customer-3");
+        Instant before = Instant.now().plusSeconds(4);
+
+        UUID taskId = tasks.after(Duration.ofSeconds(5), "email", payload);
+
+        assertThat(taskId).isEqualTo(RecordingRepository.TASK_ID);
+        assertThat(repository.payload).isSameAs(payload);
+        assertThat(repository.availableAt).isAfterOrEqualTo(before);
+    }
+
+    @Test
+    void rejectsNullDelayTaskTypePayloadAndTime() {
+        MangoTasks tasks = new MangoTasks(new RecordingRepository(), new ObjectMapper(), properties());
+        ObjectNode payload = JsonNodeFactory.instance.objectNode();
+
+        assertThatNullPointerException()
+                .isThrownBy(() -> tasks.after(null, "email", payload))
+                .withMessage("delay must not be null");
+        assertThatNullPointerException()
+                .isThrownBy(() -> tasks.after(null, "email", new EmailRequest("customer-1", "x@example.com")))
+                .withMessage("delay must not be null");
+        assertThatNullPointerException()
+                .isThrownBy(() -> tasks.at(Instant.now(), null, payload))
+                .withMessage("taskType must not be null");
+        assertThatNullPointerException()
+                .isThrownBy(() -> tasks.at(Instant.now(), "email", (JsonNode) null))
+                .withMessage("payload must not be null");
+        assertThatNullPointerException()
+                .isThrownBy(() -> tasks.at(null, "email", payload))
+                .withMessage("at must not be null");
+        assertThatNullPointerException()
+                .isThrownBy(() -> tasks.at(Instant.now(), "email", (Object) null))
+                .withMessage("payload must not be null");
+    }
+
+    @Test
+    void rejectsUnconfiguredTaskTypeAndUsesZeroSpacingWhenRateIsNotPositive() {
+        RecordingRepository repository = new RecordingRepository();
+        MangoSwarmProperties properties = properties();
+        properties.getTaskTypes().get("email").setRate(0);
+        MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties);
+
+        tasks.queue("email", JsonNodeFactory.instance.objectNode());
+
+        assertThat(repository.slotSpacing).isEqualTo(Duration.ZERO);
+        assertThatThrownBy(() -> tasks.queue("unknown", JsonNodeFactory.instance.objectNode()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Task type is not configured: unknown");
     }
 
     private static MangoSwarmProperties properties() {

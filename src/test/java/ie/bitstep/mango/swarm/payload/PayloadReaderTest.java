@@ -35,7 +35,48 @@ class PayloadReaderTest {
 
         assertThatThrownBy(() -> reader.required(String.class, "customerId", "userId"))
                 .isInstanceOf(PayloadExtractionException.class)
-                .hasMessageContaining("Missing required payload field");
+                .hasMessageContaining("Missing required payload field")
+                .hasMessageContaining("[customerId, userId]");
+    }
+
+    @Test
+    void optionalValueCanBeInspectedValidatedAndRequired() throws Exception {
+        PayloadReader reader = new PayloadReader(objectMapper.readTree("""
+                {
+                  "priority": 8
+                }
+                """));
+
+        PayloadReader.OptionalValue<Integer> priority = reader.optional(Integer.class, "priority");
+        PayloadReader.OptionalValue<String> template = reader.optional(String.class, "template");
+
+        assertThat(priority.asOptional()).contains(8);
+        assertThat(priority.validate(value -> value > 0, "must be positive")).isSameAs(priority);
+        assertThat(priority.orElseThrow("priority required")).isEqualTo(8);
+        assertThat(template.asOptional()).isEmpty();
+        assertThat(template.orDefault("default")).isEqualTo("default");
+        assertThatThrownBy(() -> template.orElseThrow("template required"))
+                .isInstanceOf(PayloadExtractionException.class)
+                .hasMessage("template required");
+    }
+
+    @Test
+    void rejectsInvalidOptionalValueAndConversionFailures() throws Exception {
+        PayloadReader invalid = new PayloadReader(objectMapper.readTree("""
+                {
+                  "priority": -1,
+                  "count": "not-a-number"
+                }
+                """));
+
+        assertThatThrownBy(() -> invalid.optional(Integer.class, "priority")
+                        .validate(value -> value > 0, "must be positive"))
+                .isInstanceOf(PayloadExtractionException.class)
+                .hasMessageContaining("Invalid payload field 'priority' as Integer: must be positive");
+
+        assertThatThrownBy(() -> invalid.required(Integer.class, "count"))
+                .isInstanceOf(PayloadExtractionException.class)
+                .hasMessageContaining("Payload field 'count' cannot be converted to Integer");
     }
 
     private record EmailPayload(String customerId, String email, String templateId, int priority, boolean trackOpens) {

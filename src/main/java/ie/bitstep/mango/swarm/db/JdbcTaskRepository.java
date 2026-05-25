@@ -169,7 +169,7 @@ public class JdbcTaskRepository implements TaskRepository {
 
     @Override
     public List<TaskRecord> claimBatch(String taskType, UUID workerId, Instant now, int limit) {
-        if (limit <= 0) {
+        if (limit < 1) {
             return List.of();
         }
         return jdbcTemplate.query("""
@@ -358,7 +358,7 @@ public class JdbcTaskRepository implements TaskRepository {
         return object;
     }
 
-    private TaskRecord mapTask(ResultSet rs, int rowNum) throws SQLException {
+    TaskRecord mapTask(ResultSet rs, int rowNum) throws SQLException {
         try {
             Timestamp claimedAt = rs.getTimestamp("claimed_at");
             return new TaskRecord(
@@ -381,6 +381,6 @@ public class JdbcTaskRepository implements TaskRepository {
         if (message == null) {
             return null;
         }
-        return message.length() <= 4000 ? message : message.substring(0, 4000);
+        return message.length() > 4000 ? message.substring(0, 4000) : message;
     }
 }

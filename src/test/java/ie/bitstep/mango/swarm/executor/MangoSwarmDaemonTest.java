@@ -10,19 +10,40 @@ import ie.bitstep.mango.swarm.handler.TaskHandler;
 import ie.bitstep.mango.swarm.handler.TaskHandlerRegistry;
 import ie.bitstep.mango.swarm.payload.PayloadExtractor;
 import ie.bitstep.mango.swarm.worker.WorkerRegistry;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MangoSwarmDaemonTest {
+
+    @Test
+    void startIsIdempotentAndStopInterruptsSleepingLoop() throws Exception {
+        MangoSwarmProperties properties = properties(0, 1, 1);
+        properties.getExecutor().setPollInterval(Duration.ofSeconds(30));
+        FakeRepository repository = new FakeRepository(0);
+        MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+
+        daemon.start();
+        daemon.start();
+        Thread daemonThread = (Thread) fieldValue(daemon, "daemonThread");
+        assertThat(daemonThread.isAlive()).isTrue();
+        daemon.stop();
+
+        assertThat(((AtomicBoolean) fieldValue(daemon, "running")).get()).isFalse();
+        assertThat(repository.claimLimits).isEmpty();
+    }
 
     @Test
     void dividesRateByActiveWorkerCountForBatchAcquisition() {
@@ -188,6 +209,49 @@ class MangoSwarmDaemonTest {
     }
 
     @Test
+    void skipsCleanupWhenDisabledOrIntervalIsInvalid() {
+        MangoSwarmProperties disabled = properties(10, 1, 1);
+        disabled.getCleanup().setEnabled(false);
+        FakeRepository disabledRepository = new FakeRepository(0);
+        MangoSwarmDaemon disabledDaemon = daemon(disabled, disabledRepository, 1, new CompletingHandler());
+
+        disabledDaemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+        disabledDaemon.stop();
+
+        MangoSwarmProperties invalidInterval = properties(10, 1, 1);
+        invalidInterval.getCleanup().setInterval(Duration.ZERO);
+        FakeRepository invalidIntervalRepository = new FakeRepository(0);
+        MangoSwarmDaemon invalidIntervalDaemon =
+                daemon(invalidInterval, invalidIntervalRepository, 1, new CompletingHandler());
+
+        invalidIntervalDaemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+        invalidIntervalDaemon.stop();
+
+        assertThat(disabledRepository.deleteCompletedCalls).isZero();
+        assertThat(disabledRepository.deleteFailedCalls).isZero();
+        assertThat(invalidIntervalRepository.deleteCompletedCalls).isZero();
+        assertThat(invalidIntervalRepository.deleteFailedCalls).isZero();
+    }
+
+    @Test
+    void calculatesDerivedBatchSizeFromRateAndConcurrency() {
+        MangoSwarmProperties properties = properties(3, 10, 1);
+        MangoSwarmProperties.TaskType config = properties.getTaskTypes().get("email");
+        config.setBatchSize(null);
+        FakeRepository repository = new FakeRepository(0);
+        MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+
+        int claimLimit = daemon.calculateBatchSize(
+                "email",
+                config,
+                3.2d,
+                Instant.parse("2026-05-20T10:00:00Z"));
+
+        assertThat(claimLimit).isEqualTo(4);
+        daemon.stop();
+    }
+
+    @Test
     void retriesFailedTaskWhenAttemptsRemain() throws Exception {
         MangoSwarmProperties properties = properties(10, 1, 1);
         properties.getTaskTypes().get("email").setMaxAttempts(3);
@@ -199,6 +263,7 @@ class MangoSwarmDaemonTest {
         daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
 
         assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
+        awaitCounter(() -> repository.rescheduleAfterFailureCalls, 1);
         assertThat(repository.rescheduleAfterFailureCalls).isEqualTo(1);
         assertThat(repository.failedTaskCalls).isZero();
         assertThat(repository.retryAvailableAt).isNotNull();
@@ -216,6 +281,7 @@ class MangoSwarmDaemonTest {
         daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
 
         assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
+        awaitCounter(() -> repository.failedTaskCalls, 1);
         assertThat(repository.rescheduleAfterFailureCalls).isZero();
         assertThat(repository.failedTaskCalls).isEqualTo(1);
         daemon.stop();
@@ -231,9 +297,147 @@ class MangoSwarmDaemonTest {
         daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
 
         assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
+        awaitCounter(() -> repository.progressCalls, 2);
         assertThat(repository.progressCalls).isEqualTo(2);
         assertThat(repository.lastProgressPercent).isEqualTo(100);
         assertThat(repository.lastProgressDescription).isEqualTo("completed");
+        daemon.stop();
+    }
+
+    @Test
+    void completedTaskIsMarkedInProgressAndCompleted() throws Exception {
+        MangoSwarmProperties properties = properties(10, 1, 1);
+        properties.getExecutor().setMaxThreads("1");
+        CountDownLatch executed = new CountDownLatch(1);
+        FakeRepository repository = new FakeRepository(1);
+        MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CountingCompletingHandler(executed));
+
+        daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+
+        assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
+        awaitCounter(() -> repository.completedTaskCalls, 1);
+        assertThat(repository.markInProgressCalls).isEqualTo(1);
+        assertThat(repository.completedTaskCalls).isEqualTo(1);
+        assertThat(((TaskConcurrencyTracker) fieldValue(daemon, "taskConcurrencyTracker")).remaining("email"))
+                .isEqualTo(1);
+        assertThat(((Semaphore) fieldValue(daemon, "executorCapacity")).availablePermits()).isEqualTo(1);
+        daemon.stop();
+    }
+
+    @Test
+    void nullHandlerResultCompletesTaskAndPayloadComesFromExtractor() throws Exception {
+        MangoSwarmProperties properties = properties(10, 1, 1);
+        CountDownLatch executed = new CountDownLatch(1);
+        FakeRepository repository = new FakeRepository(1);
+        MangoSwarmDaemon daemon = daemon(properties, repository, 1, new NullResultHandler(executed));
+
+        daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+
+        assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
+        awaitCounter(() -> repository.completedTaskCalls, 1);
+        assertThat(repository.completedTaskCalls).isEqualTo(1);
+        daemon.stop();
+    }
+
+    @Test
+    void handlerExceptionsFailTaskWhenNoAttemptsRemain() throws Exception {
+        MangoSwarmProperties properties = properties(10, 1, 1);
+        properties.getTaskTypes().get("email").setMaxAttempts(1);
+        CountDownLatch executed = new CountDownLatch(1);
+        FakeRepository repository = new FakeRepository(1);
+        MangoSwarmDaemon daemon = daemon(properties, repository, 1, new ThrowingHandler(executed));
+
+        daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+
+        assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
+        awaitCounter(() -> repository.failedTaskCalls, 1);
+        assertThat(repository.failedTaskCalls).isEqualTo(1);
+        assertThat(repository.lastFailureMessage).isEqualTo("boom");
+        daemon.stop();
+    }
+
+    @Test
+    void dispatchRequeuesWhenLocalTaskCapacityIsUnavailable() throws Exception {
+        MangoSwarmProperties properties = properties(10, 1, 1);
+        FakeRepository repository = new FakeRepository(0);
+        MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+        TaskConcurrencyTracker tracker = (TaskConcurrencyTracker) fieldValue(daemon, "taskConcurrencyTracker");
+        assertThat(tracker.tryAcquire("email")).isTrue();
+        TaskRecord task = taskRecord("email", Instant.parse("2026-05-20T10:00:00Z"));
+
+        boolean dispatched = (boolean) invokeInstance(
+                daemon,
+                "dispatch",
+                new Class<?>[] {TaskRecord.class, Instant.class},
+                task,
+                Instant.parse("2026-05-20T10:00:00Z"));
+
+        assertThat(dispatched).isFalse();
+        assertThat(repository.requeueCalls).isEqualTo(1);
+        assertThat(repository.lastRequeueReason).contains("task-type concurrency");
+        tracker.release("email");
+        daemon.stop();
+    }
+
+    @Test
+    void dispatchRequeuesAndReleasesTypeCapacityWhenExecutorCapacityIsUnavailable() throws Exception {
+        MangoSwarmProperties properties = properties(10, 1, 1);
+        properties.getExecutor().setMaxThreads("1");
+        FakeRepository repository = new FakeRepository(0);
+        MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+        Semaphore executorCapacity = (Semaphore) fieldValue(daemon, "executorCapacity");
+        assertThat(executorCapacity.tryAcquire()).isTrue();
+        TaskRecord task = taskRecord("email", Instant.parse("2026-05-20T10:00:00Z"));
+
+        boolean dispatched = (boolean) invokeInstance(
+                daemon,
+                "dispatch",
+                new Class<?>[] {TaskRecord.class, Instant.class},
+                task,
+                Instant.parse("2026-05-20T10:00:00Z"));
+
+        assertThat(dispatched).isFalse();
+        assertThat(repository.requeueCalls).isEqualTo(1);
+        assertThat(repository.lastRequeueReason).contains("executor capacity");
+        assertThat(((TaskConcurrencyTracker) fieldValue(daemon, "taskConcurrencyTracker")).remaining("email"))
+                .isEqualTo(1);
+        executorCapacity.release();
+        daemon.stop();
+    }
+
+    @Test
+    void skipsHeartbeatUntilIntervalHasElapsed() {
+        MangoSwarmProperties properties = properties(10, 1, 1);
+        properties.getTaskTypes().get("email").setBatchSize(null);
+        properties.getTaskTypes().get("email").setConcurrency(10);
+        properties.getWorker().setHeartbeatInterval(Duration.ofSeconds(10));
+        TestWorkerRegistry workers = new TestWorkerRegistry(3);
+        FakeRepository repository = new FakeRepository(0);
+        MangoSwarmDaemon daemon = daemon(properties, repository, workers, new CompletingHandler());
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+        daemon.pollOnce(now);
+        daemon.pollOnce(now.plusSeconds(9));
+        daemon.pollOnce(now.plusSeconds(10));
+
+        assertThat(workers.heartbeatCalls).isEqualTo(2);
+        assertThat(repository.claimLimits).containsExactly(4, 4, 4);
+        daemon.stop();
+    }
+
+    @Test
+    void returnsRateLimiterDelayWhenNoPermitIsCurrentlyAvailable() {
+        MangoSwarmProperties properties = properties(1, 1, 1);
+        properties.getTaskTypes().get("email").setPeriod(Duration.ofSeconds(1));
+        FakeRepository repository = new FakeRepository(0);
+        MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+        Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+        assertThat(daemon.pollOnce(now)).isEqualTo(Duration.ofMillis(100));
+        Duration rateLimitedDelay = daemon.pollOnce(now.minusMillis(100));
+
+        assertThat(rateLimitedDelay).isEqualTo(Duration.ofMillis(1100));
+        assertThat(repository.claimLimits).containsExactly(1);
         daemon.stop();
     }
 
@@ -276,22 +480,73 @@ class MangoSwarmDaemonTest {
         assertThat(MangoSwarmDaemon.retryDelay(3, config, properties.getRetry())).isEqualTo(Duration.ofMinutes(30));
     }
 
+    @Test
+    void retryBackoffHandlesZeroNegativeAndOverflowingValues() {
+        MangoSwarmProperties properties = new MangoSwarmProperties();
+        MangoSwarmProperties.TaskType config = new MangoSwarmProperties.TaskType();
+
+        properties.getRetry().setBaseDelay(Duration.ofSeconds(-1));
+        properties.getRetry().setMultiplier(0.5d);
+        assertThat(MangoSwarmDaemon.retryDelay(5, config, properties.getRetry())).isEqualTo(Duration.ZERO);
+
+        properties.getRetry().setBaseDelay(Duration.ofSeconds(5));
+        properties.getRetry().setMaxDelay(Duration.ZERO);
+        assertThat(MangoSwarmDaemon.retryDelay(1, config, properties.getRetry())).isEqualTo(Duration.ZERO);
+
+        properties.getRetry().setBaseDelay(Duration.ofNanos(Long.MAX_VALUE));
+        properties.getRetry().setMultiplier(Double.MAX_VALUE);
+        properties.getRetry().setMaxDelay(Duration.ofHours(1));
+        assertThat(MangoSwarmDaemon.retryDelay(3, config, properties.getRetry())).isEqualTo(Duration.ofHours(1));
+    }
+
+    @Test
+    void retryBackoffUsesLegacyDelayAndTaskMaxDelayOverrides() {
+        MangoSwarmProperties properties = new MangoSwarmProperties();
+        properties.getRetry().setBaseDelay(Duration.ofSeconds(5));
+        properties.getRetry().setMaxDelay(Duration.ofMinutes(5));
+        MangoSwarmProperties.TaskType config = new MangoSwarmProperties.TaskType();
+        config.setRetryDelay(Duration.ofSeconds(7));
+        config.setRetryMaxDelay(Duration.ofSeconds(10));
+
+        assertThat(MangoSwarmDaemon.retryDelay(1, config, properties.getRetry())).isEqualTo(Duration.ofSeconds(7));
+        assertThat(MangoSwarmDaemon.retryDelay(4, config, properties.getRetry())).isEqualTo(Duration.ofSeconds(10));
+    }
+
+    @Test
+    void privateTimingHelpersHandleNullZeroAndPositiveDurations() throws Exception {
+        assertThat(MangoSwarmDaemon.emptyQueueBackoff(null, 1)).isEqualTo(Duration.ZERO);
+        assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofMillis(-1), 1)).isEqualTo(Duration.ZERO);
+        assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofSeconds(3), 2)).isEqualTo(Duration.ofSeconds(5));
+        assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofMillis(1), 20)).isEqualTo(Duration.ofSeconds(5));
+
+        assertThat(MangoSwarmDaemon.minPositive(null, Duration.ZERO)).isNull();
+        assertThat(MangoSwarmDaemon.minPositive(null, Duration.ofMillis(5))).isEqualTo(Duration.ofMillis(5));
+        assertThat(MangoSwarmDaemon.minPositive(Duration.ofMillis(10), Duration.ofMillis(5)))
+                .isEqualTo(Duration.ofMillis(5));
+        assertThat(MangoSwarmDaemon.minPositive(Duration.ofMillis(10), Duration.ofMillis(50)))
+                .isEqualTo(Duration.ofMillis(10));
+
+        assertThat(MangoSwarmDaemon.isPositive(null)).isEqualTo(false);
+        assertThat(MangoSwarmDaemon.isPositive(Duration.ZERO)).isEqualTo(false);
+        assertThat(MangoSwarmDaemon.isPositive(Duration.ofNanos(1))).isEqualTo(true);
+
+        MangoSwarmDaemon.sleepIfPositive(Duration.ZERO);
+        MangoSwarmDaemon.sleepIfPositive(Duration.ofNanos(1));
+    }
+
     private static MangoSwarmDaemon daemon(
             MangoSwarmProperties properties,
             FakeRepository repository,
             int activeWorkers,
             TaskHandler<?> handler) {
-        WorkerRegistry workers = new WorkerRegistry() {
-            @Override
-            public int heartbeat(UUID workerId, String hostname, Instant startedAt, Instant now) {
-                return activeWorkers;
-            }
+        return daemon(properties, repository, new TestWorkerRegistry(activeWorkers), handler);
+    }
 
-            @Override
-            public int countActiveWorkers(Instant now) {
-                return activeWorkers;
-            }
-        };
+    private static MangoSwarmDaemon daemon(
+            MangoSwarmProperties properties,
+            FakeRepository repository,
+            WorkerRegistry workers,
+            TaskHandler<?> handler) {
         TaskHandlerRegistry registry = new TaskHandlerRegistry(List.of(handler), properties.getTaskTypes().keySet(), false);
         return new MangoSwarmDaemon(workers, repository, registry, properties);
     }
@@ -311,6 +566,40 @@ class MangoSwarmDaemonTest {
         return properties;
     }
 
+    private static void awaitCounter(java.util.function.IntSupplier supplier, int expected) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (supplier.getAsInt() < expected && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+    }
+
+    private static Object invokeInstance(Object target, String name, Class<?>[] parameterTypes, Object... args)
+            throws Exception {
+        Method method = MangoSwarmDaemon.class.getDeclaredMethod(name, parameterTypes);
+        method.setAccessible(true);
+        return method.invoke(target, args);
+    }
+
+    private static Object fieldValue(Object target, String name) throws Exception {
+        Field field = MangoSwarmDaemon.class.getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(target);
+    }
+
+    private static TaskRecord taskRecord(String taskType, Instant now) {
+        return new TaskRecord(
+                UUID.nameUUIDFromBytes(("task-" + taskType).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                taskType,
+                JsonNodeFactory.instance.objectNode(),
+                ie.bitstep.mango.swarm.TaskStatus.claimed,
+                now,
+                UUID.randomUUID(),
+                now,
+                1,
+                now,
+                now);
+    }
+
     private static class CompletingHandler implements TaskHandler<String> {
         @Override
         public String taskType() {
@@ -326,6 +615,41 @@ class MangoSwarmDaemonTest {
         public TaskExecutionResult execute(TaskExecutionContext<String> context) throws Exception {
             context.progress(100);
             return TaskExecutionResult.completed();
+        }
+    }
+
+    private static final class CountingCompletingHandler extends CompletingHandler {
+        private final CountDownLatch executed;
+
+        private CountingCompletingHandler(CountDownLatch executed) {
+            this.executed = executed;
+        }
+
+        @Override
+        public TaskExecutionResult execute(TaskExecutionContext<String> context) {
+            assertThat(context.payload()).isEqualTo("ok");
+            executed.countDown();
+            return TaskExecutionResult.completed();
+        }
+    }
+
+    private static final class NullResultHandler extends CompletingHandler {
+        private final CountDownLatch executed;
+
+        private NullResultHandler(CountDownLatch executed) {
+            this.executed = executed;
+        }
+
+        @Override
+        public PayloadExtractor<String> payloadExtractor() {
+            return reader -> "payload";
+        }
+
+        @Override
+        public TaskExecutionResult execute(TaskExecutionContext<String> context) {
+            assertThat(context.payload()).isEqualTo("payload");
+            executed.countDown();
+            return null;
         }
     }
 
@@ -360,6 +684,20 @@ class MangoSwarmDaemonTest {
         }
     }
 
+    private static final class ThrowingHandler extends CompletingHandler {
+        private final CountDownLatch executed;
+
+        private ThrowingHandler(CountDownLatch executed) {
+            this.executed = executed;
+        }
+
+        @Override
+        public TaskExecutionResult execute(TaskExecutionContext<String> context) {
+            executed.countDown();
+            throw new IllegalStateException("boom");
+        }
+    }
+
     private static final class ProgressHandler extends CompletingHandler {
         private final CountDownLatch executed;
 
@@ -376,6 +714,26 @@ class MangoSwarmDaemonTest {
         }
     }
 
+    private static final class TestWorkerRegistry implements WorkerRegistry {
+        private final int activeWorkers;
+        private int heartbeatCalls;
+
+        private TestWorkerRegistry(int activeWorkers) {
+            this.activeWorkers = activeWorkers;
+        }
+
+        @Override
+        public int heartbeat(UUID workerId, String hostname, Instant startedAt, Instant now) {
+            heartbeatCalls++;
+            return activeWorkers;
+        }
+
+        @Override
+        public int countActiveWorkers(Instant now) {
+            return activeWorkers;
+        }
+    }
+
     private static final class FakeRepository implements TaskRepository {
         private final AtomicInteger nextId = new AtomicInteger(1);
         private int available;
@@ -384,10 +742,15 @@ class MangoSwarmDaemonTest {
         private int reclaimCalls;
         private int failTimedOutCalls;
         private int failedTaskCalls;
+        private int completedTaskCalls;
         private int rescheduleAfterFailureCalls;
         private int progressCalls;
+        private int markInProgressCalls;
+        private int requeueCalls;
         private int lastProgressPercent;
         private String lastProgressDescription;
+        private String lastFailureMessage;
+        private String lastRequeueReason;
         private Instant retryAvailableAt;
         private int deleteCompletedCalls;
         private int deleteFailedCalls;
@@ -438,6 +801,7 @@ class MangoSwarmDaemonTest {
 
         @Override
         public void markInProgress(UUID taskId, UUID workerId, Instant now) {
+            markInProgressCalls++;
         }
 
         @Override
@@ -449,11 +813,13 @@ class MangoSwarmDaemonTest {
 
         @Override
         public void markCompleted(UUID taskId, UUID workerId, Instant now) {
+            completedTaskCalls++;
         }
 
         @Override
         public void markFailed(UUID taskId, UUID workerId, Instant now, String errorMessage) {
             failedTaskCalls++;
+            lastFailureMessage = errorMessage;
         }
 
         @Override
@@ -469,6 +835,8 @@ class MangoSwarmDaemonTest {
 
         @Override
         public void requeueClaimed(UUID taskId, UUID workerId, Instant now, Instant availableAt, String reason) {
+            requeueCalls++;
+            lastRequeueReason = reason;
         }
 
         @Override

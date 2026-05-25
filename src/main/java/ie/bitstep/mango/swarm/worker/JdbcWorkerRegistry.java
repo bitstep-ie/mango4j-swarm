@@ -41,20 +41,12 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
         Instant staleBefore = now.minus(staleAfter);
         int prunedWorkers = jdbcTemplate.update("DELETE FROM " + tables.workers() + " WHERE last_heartbeat_at < ?",
                 Timestamp.from(staleBefore));
-        if (prunedWorkers > 0) {
-            log.debug(
-                    "swarm pruned stale workers: table={}, staleBefore={}, staleAfter={}, pruned={}",
-                    tables.workers(),
-                    staleBefore,
-                    staleAfter,
-                    prunedWorkers);
-        } else {
-            log.debug(
-                    "swarm worker cleanup complete: table={}, staleBefore={}, staleAfter={}, pruned=0",
-                    tables.workers(),
-                    staleBefore,
-                    staleAfter);
-        }
+        log.debug(
+                "swarm pruned stale workers: table={}, staleBefore={}, staleAfter={}, pruned={}",
+                tables.workers(),
+                staleBefore,
+                staleAfter,
+                prunedWorkers);
         return countActiveWorkers(now);
     }
 

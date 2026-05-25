@@ -13,13 +13,13 @@ public final class SmoothRateLimiter {
     private boolean disabled;
 
     public synchronized void configure(double permits, Duration period, Instant now) {
-        if (permits <= 0) {
-            spacing = period;
-            disabled = true;
-        } else {
+        if (permits > 0) {
             long nanos = Math.max(1L, (long) (period.toNanos() / permits));
             spacing = Duration.ofNanos(nanos);
             disabled = false;
+        } else {
+            spacing = period;
+            disabled = true;
         }
         if (initialized && nextSlot.isBefore(now.minus(period))) {
             nextSlot = now.minus(period);
