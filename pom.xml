@@ -16,7 +16,10 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.3.7</spring-boot.version>
         <testcontainers.version>2.0.2</testcontainers.version>
+        <pitest.maven.plugin.version>1.25.0</pitest.maven.plugin.version>
         <pitest.junit5.plugin.version>1.2.3</pitest.junit5.plugin.version>
+        <spotless-maven-plugin.version>2.43.0</spotless-maven-plugin.version>
+        <spotless-palantir-maven-plugin.version>2.59.0</spotless-palantir-maven-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -116,13 +119,52 @@
             <build>
                 <defaultGoal>clean verify</defaultGoal>
                 <plugins>
+
+                    <!-- Format source code -->
                     <plugin>
                         <groupId>com.diffplug.spotless</groupId>
                         <artifactId>spotless-maven-plugin</artifactId>
+                        <version>${spotless-maven-plugin.version}</version>
+                        <configuration>
+                            <java>
+                                <includes>
+                                    <include>src/**/*.java</include>
+                                </includes>
+                                <cleanthat/>
+                                <palantirJavaFormat>
+                                    <version>${spotless-palantir-maven-plugin.version}</version>
+                                    <style>PALANTIR</style>
+                                    <formatJavadoc>true</formatJavadoc>
+                                </palantirJavaFormat>
+                                <importOrder>
+                                    <order>java|jakarta, ,|ie.bitstep,\#ie.bitstep,\#</order>
+                                </importOrder>
+                                <indent>
+                                    <tabs>true</tabs>
+                                    <spacesPerTab>4</spacesPerTab>
+                                </indent>
+                                <removeUnusedImports/>
+                                <formatAnnotations/>
+                                <trimTrailingWhitespace/>
+                                <replaceRegex>
+                                    <name>Remove wildcard imports</name>
+                                    <searchRegex>import\s+[^\*\s]+\*;(\r\n|\r|\n)</searchRegex>
+                                    <replacement>$1</replacement>
+                                </replaceRegex>
+                            </java>
+                            <json>
+                                <includes>
+                                    <include>src/**/*.json</include>
+                                </includes>
+                                <simple>
+                                    <indentSpaces>2</indentSpaces>
+                                </simple>
+                            </json>
+                        </configuration>
                         <executions>
                             <execution>
-                                <id>apply-formatting</id>
-                                <phase>validate</phase>
+                                <id>spotless-apply</id>
+                                <phase>process-sources</phase>
                                 <goals>
                                     <goal>apply</goal>
                                 </goals>
@@ -133,6 +175,7 @@
                     <plugin>
                         <groupId>org.pitest</groupId>
                         <artifactId>pitest-maven</artifactId>
+                        <version>${pitest.maven.plugin.version}</version>
                         <configuration>
                             <mutationThreshold>90</mutationThreshold>
                             <coverageThreshold>90</coverageThreshold>
