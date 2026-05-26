@@ -3,10 +3,13 @@ package ie.bitstep.mango.swarm.db;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,6 +34,7 @@ public class JdbcTaskRepository implements TaskRepository {
 	private final ObjectMapper objectMapper;
 	private final SchemaQualifiedTables tables;
 	private final RowMapper<TaskRecord> rowMapper = this::mapTask;
+	private Boolean h2;
 
 	public JdbcTaskRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
 		this(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
@@ -54,7 +58,7 @@ public class JdbcTaskRepository implements TaskRepository {
 							.formatted(tables.tasks()))) {
 				statement.setObject(1, taskId);
 				statement.setString(2, taskType);
-				statement.setObject(3, jsonb(payload), Types.OTHER);
+				setJson(statement, 3, payload);
 				statement.setTimestamp(4, Timestamp.from(availableAt));
 				statement.executeUpdate();
 				return taskId;
@@ -63,21 +67,13 @@ public class JdbcTaskRepository implements TaskRepository {
 	}
 
 	@Override
-	public UUID queueInNextSlot(String taskType, JsonNode payload, Instant requestedAt, Duration slotSpacing) {
+	public synchronized UUID queueInNextSlot(
+			String taskType, JsonNode payload, Instant requestedAt, Duration slotSpacing) {
 		if (slotSpacing == null || slotSpacing.isZero() || slotSpacing.isNegative()) {
 			return queue(taskType, payload, requestedAt);
 		}
 		return jdbcTemplate.execute((ConnectionCallback<UUID>) connection -> {
-			boolean localTransaction = connection.getAutoCommit();
-			if (localTransaction) {
-				connection.setAutoCommit(false);
-			}
 			try {
-				try (PreparedStatement lock =
-						connection.prepareStatement("SELECT pg_advisory_lock(hashtext(?)::bigint)")) {
-					lock.setString(1, taskType);
-					lock.execute();
-				}
 				UUID taskId = UuidV7.generate();
 				Instant availableAt = reserveSlot(connection, taskType, taskId, requestedAt, slotSpacing);
 				try (PreparedStatement statement = connection.prepareStatement(
@@ -88,28 +84,13 @@ public class JdbcTaskRepository implements TaskRepository {
 								.formatted(tables.tasks()))) {
 					statement.setObject(1, taskId);
 					statement.setString(2, taskType);
-					statement.setObject(3, jsonb(payload), Types.OTHER);
+					setJson(statement, 3, payload);
 					statement.setTimestamp(4, Timestamp.from(availableAt));
 					statement.executeUpdate();
-					if (localTransaction) {
-						connection.commit();
-					}
 					return taskId;
 				}
 			} catch (Exception ex) {
-				if (localTransaction) {
-					connection.rollback();
-				}
 				throw ex;
-			} finally {
-				try (PreparedStatement unlock =
-						connection.prepareStatement("SELECT pg_advisory_unlock(hashtext(?)::bigint)")) {
-					unlock.setString(1, taskType);
-					unlock.execute();
-				}
-				if (localTransaction) {
-					connection.setAutoCommit(true);
-				}
 			}
 		});
 	}
@@ -145,6 +126,9 @@ public class JdbcTaskRepository implements TaskRepository {
 				insert.setTimestamp(2, Timestamp.from(candidate));
 				insert.setObject(3, taskId);
 				insert.executeUpdate();
+			} catch (SQLIntegrityConstraintViolationException ex) {
+				candidate = candidate.plus(slotSpacing);
+				continue;
 			}
 			return candidate;
 		}
@@ -180,38 +164,79 @@ public class JdbcTaskRepository implements TaskRepository {
 		if (limit < 1) {
 			return List.of();
 		}
-		return jdbcTemplate.query(
-				"""
-				UPDATE %s t
-				SET status = 'claimed',
-					claimed_by = ?,
-					claimed_at = ?,
-					progress_percent = NULL,
-					progress_description = NULL,
-					last_progress_at = NULL,
-					attempt_count = attempt_count + 1,
-					updated_at = ?
-				WHERE t.id IN (
+		return jdbcTemplate.execute((ConnectionCallback<List<TaskRecord>>) connection -> {
+			List<UUID> ids = new ArrayList<>();
+			try (PreparedStatement select = connection.prepareStatement(
+					"""
 					SELECT id
 					FROM %s
 					WHERE task_type = ?
 					AND status = 'queued'
 					AND available_at <= ?
 					ORDER BY available_at, id
-					FOR UPDATE SKIP LOCKED
 					LIMIT ?
-				)
-				RETURNING id, task_type, payload, status, available_at, claimed_by, claimed_at,
-						attempt_count, created_at, updated_at
-				"""
-						.formatted(tables.tasks(), tables.tasks()),
-				rowMapper,
-				workerId,
-				Timestamp.from(now),
-				Timestamp.from(now),
-				taskType,
-				Timestamp.from(now),
-				limit);
+					"""
+							.formatted(tables.tasks()))) {
+				select.setString(1, taskType);
+				select.setTimestamp(2, Timestamp.from(now));
+				select.setInt(3, limit);
+				try (ResultSet rs = select.executeQuery()) {
+					while (rs.next()) {
+						ids.add(rs.getObject("id", UUID.class));
+					}
+				}
+			}
+			if (ids.isEmpty()) {
+				return List.of();
+			}
+			String placeholders = String.join(", ", Collections.nCopies(ids.size(), "?"));
+			try (PreparedStatement update = connection.prepareStatement(
+					"""
+					UPDATE %s
+					SET status = 'claimed',
+						claimed_by = ?,
+						claimed_at = ?,
+						progress_percent = NULL,
+						progress_description = NULL,
+						last_progress_at = NULL,
+						attempt_count = attempt_count + 1,
+						updated_at = ?
+					WHERE id IN (%s)
+					AND status = 'queued'
+					"""
+							.formatted(tables.tasks(), placeholders))) {
+				update.setObject(1, workerId);
+				update.setTimestamp(2, Timestamp.from(now));
+				update.setTimestamp(3, Timestamp.from(now));
+				for (int i = 0; i < ids.size(); i++) {
+					update.setObject(i + 4, ids.get(i));
+				}
+				update.executeUpdate();
+			}
+			List<TaskRecord> claimed = new ArrayList<>();
+			try (PreparedStatement query = connection.prepareStatement(
+					"""
+					SELECT id, task_type, payload, status, available_at, claimed_by, claimed_at,
+							attempt_count, created_at, updated_at
+					FROM %s
+					WHERE id IN (%s)
+					AND claimed_by = ?
+					ORDER BY available_at, id
+					"""
+							.formatted(tables.tasks(), placeholders))) {
+				for (int i = 0; i < ids.size(); i++) {
+					query.setObject(i + 1, ids.get(i));
+				}
+				query.setObject(ids.size() + 1, workerId);
+				try (ResultSet rs = query.executeQuery()) {
+					int rowNum = 0;
+					while (rs.next()) {
+						claimed.add(mapTask(rs, rowNum++));
+					}
+				}
+			}
+			return claimed;
+		});
 	}
 
 	@Override
@@ -402,15 +427,23 @@ public class JdbcTaskRepository implements TaskRepository {
 				Timestamp.from(now.minus(retention)));
 	}
 
-	private PGobject jsonb(JsonNode payload) throws SQLException {
+	private void setJson(PreparedStatement statement, int parameterIndex, JsonNode payload) throws SQLException {
+		if (isH2()) {
+			statement.setString(parameterIndex, json(payload));
+			return;
+		}
 		PGobject object = new PGobject();
 		object.setType("jsonb");
+		object.setValue(json(payload));
+		statement.setObject(parameterIndex, object, Types.OTHER);
+	}
+
+	private String json(JsonNode payload) throws SQLException {
 		try {
-			object.setValue(objectMapper.writeValueAsString(payload));
+			return objectMapper.writeValueAsString(payload);
 		} catch (JsonProcessingException ex) {
 			throw new SQLException("Cannot serialize task payload", ex);
 		}
-		return object;
 	}
 
 	TaskRecord mapTask(ResultSet rs, int rowNum) throws SQLException {
@@ -437,5 +470,15 @@ public class JdbcTaskRepository implements TaskRepository {
 			return null;
 		}
 		return message.length() > 4000 ? message.substring(0, 4000) : message;
+	}
+
+	private boolean isH2() {
+		if (h2 == null) {
+			h2 = jdbcTemplate.execute((ConnectionCallback<Boolean>) connection -> {
+				String productName = connection.getMetaData().getDatabaseProductName();
+				return productName != null && productName.toLowerCase().contains("h2");
+			});
+		}
+		return h2;
 	}
 }

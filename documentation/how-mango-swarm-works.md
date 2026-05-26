@@ -56,7 +56,7 @@ sequenceDiagram
         D->>DB: heartbeat worker + prune stale workers
         D->>DB: cleanup old completed/failed rows (interval-based)
         D->>D: recalc effective rate = app rate / active workers
-        D->>DB: claim batch (FOR UPDATE SKIP LOCKED)
+        D->>DB: select claimable batch
         D->>DB: mark claimed rows
         D->>DB: mark task in_progress
         D->>H: execute(TaskExecutionContext<T>)
@@ -125,11 +125,7 @@ For each task type and poll cycle, claim limit is bounded by:
 - remaining per-task-type concurrency
 - remaining global executor capacity
 
-Claiming uses PostgreSQL row locking:
-
-- `FOR UPDATE SKIP LOCKED`
-
-This allows safe concurrent claiming across multiple app instances.
+Claiming uses a portable select-and-update flow so repository behavior can be validated against H2. PostgreSQL-specific concurrent row-lock claiming is outside the H2 test surface.
 
 ## Progress and liveness
 

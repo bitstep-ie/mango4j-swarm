@@ -41,7 +41,7 @@ The library provides:
 * worker registration and heartbeat pruning
 * distributed rate division across active instances
 * smooth time-slot based pacing instead of bursty permit release
-* safe batch claiming with `FOR UPDATE SKIP LOCKED`
+* portable batch claiming for PostgreSQL and H2-backed tests
 * per-task-type concurrency limits
 * configurable global worker pool
 * optional Java 21 virtual-thread execution at runtime while keeping a Java 17 baseline
@@ -420,7 +420,7 @@ min(
 
 If no `batch-size` is configured, mango-swarm derives one from the effective local rate, concurrency, and executor capacity.
 
-Database claiming uses PostgreSQL row locks with `FOR UPDATE SKIP LOCKED`, so multiple application instances can safely claim from the same task table.
+Database claiming uses a portable select-and-update flow so the repository can run against PostgreSQL and the H2-backed test suite. PostgreSQL-specific concurrent claim locking is skipped in H2 validation.
 
 ***
 
@@ -614,6 +614,6 @@ Run the test suite:
 mvn test
 ```
 
-Integration tests use Testcontainers PostgreSQL. This project uses the Testcontainers 2.x BOM to work with newer Docker Engine versions, including Docker 29 where older docker-java stacks may result in an unsupported Docker API level.
+Integration tests use an in-memory H2 database in PostgreSQL compatibility mode. PostgreSQL-specific row-lock concurrency behavior is not run in the H2 suite.
 
 ***

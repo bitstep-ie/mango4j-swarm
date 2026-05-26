@@ -4,11 +4,11 @@ import java.time.Instant;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
-import ie.bitstep.mango.swarm.PostgresTestSupport;
+import ie.bitstep.mango.swarm.H2TestSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class WorkerRegistryTest extends PostgresTestSupport {
+class WorkerRegistryTest extends H2TestSupport {
 
 	@Test
 	void registersWorkerAndUpdatesHeartbeat() {

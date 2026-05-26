@@ -30,19 +30,28 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 
 	@Override
 	public int heartbeat(UUID workerId, String hostname, Instant startedAt, Instant now) {
-		jdbcTemplate.update(
+		int updated = jdbcTemplate.update(
 				"""
-				INSERT INTO %s(worker_id, hostname, started_at, last_heartbeat_at)
-				VALUES (?, ?, ?, ?)
-				ON CONFLICT (worker_id) DO UPDATE
-				SET hostname = EXCLUDED.hostname,
-					last_heartbeat_at = EXCLUDED.last_heartbeat_at
+				UPDATE %s
+				SET hostname = ?, last_heartbeat_at = ?
+				WHERE worker_id = ?
 				"""
 						.formatted(tables.workers()),
-				workerId,
 				hostname,
-				Timestamp.from(startedAt),
-				Timestamp.from(now));
+				Timestamp.from(now),
+				workerId);
+		if (updated == 0) {
+			jdbcTemplate.update(
+					"""
+					INSERT INTO %s (worker_id, hostname, started_at, last_heartbeat_at)
+					VALUES (?, ?, ?, ?)
+					"""
+							.formatted(tables.workers()),
+					workerId,
+					hostname,
+					Timestamp.from(startedAt),
+					Timestamp.from(now));
+		}
 		Instant staleBefore = now.minus(staleAfter);
 		int prunedWorkers = jdbcTemplate.update(
 				"DELETE FROM " + tables.workers() + " WHERE last_heartbeat_at < ?", Timestamp.from(staleBefore));
