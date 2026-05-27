@@ -44,7 +44,7 @@ The library provides:
 * portable batch claiming for PostgreSQL and H2-backed tests
 * per-task-type concurrency limits
 * configurable global worker pool
-* optional Java 21 virtual-thread execution at runtime while keeping a Java 17 baseline
+* reserved virtual-thread configuration while keeping a Java 17 baseline
 * timeout reclaim for idempotent task types
 * exponential retry scheduling using the task table itself
 * Spring Boot auto-configuration
@@ -170,6 +170,8 @@ progress_description = finished
 
 Handlers can still report `100` themselves if they want a custom final description before returning, but the default successful completion state is always `100` / `finished`.
 
+Handlers should return `TaskExecutionResult.completed()` for success or `TaskExecutionResult.failed(message)` for an explicit failure. A `null` result is still treated as success for compatibility, but new handlers should not rely on that behavior.
+
 ***
 
 # Configuration Reference
@@ -291,7 +293,7 @@ mango4j:
 * `mango4j.swarm.executor.max-threads` (default `auto`): global local execution cap.
 * `mango4j.swarm.executor.poll-interval` (default `100ms`): fallback poll delay when no rate-gated wakeup applies.
 * `mango4j.swarm.executor.queue-strategy` (default `CALLER_RUNS`): overload behavior (`CALLER_RUNS` or `ABORT`).
-* `mango4j.swarm.executor.virtual-threads` (default `auto`): virtual thread runtime policy (`auto`, `enabled`, `disabled`).
+* `mango4j.swarm.executor.virtual-threads` (default `auto`): reserved virtual-thread policy (`auto`, `enabled`, `disabled`). Current Java 17 builds always use platform threads.
 
 ### Retry Defaults
 
@@ -440,7 +442,7 @@ Task-type concurrency limits how many tasks of that type can run on one worker. 
 
 For example, four task types with concurrency `5` each cannot all run at full concurrency if the global executor has only `5` threads.
 
-Java 17 is the compile baseline. At runtime, `virtual-threads: auto` detects Java 21 virtual-thread support where available. On platform threads, the default cap is conservative; set `max-threads` explicitly for predictable production behavior.
+Java 17 is the compile baseline. The `virtual-threads` setting is reserved for future Java 21+ runtime support; current builds always use platform threads. The default cap is conservative, so set `max-threads` explicitly for predictable production behavior.
 
 ***
 

@@ -10,15 +10,6 @@ import ie.bitstep.mango.swarm.payload.PayloadExtractor;
  * @param <T> extracted payload type consumed by this handler
  */
 public interface TaskHandler<T> {
-	/**
-	 * @return configured task type key handled by this bean
-	 * @deprecated Prefer {@link SwarmHandler} annotation on the handler class.
-	 */
-	@Deprecated
-	default String taskType() {
-		return null;
-	}
-
 	/** @return payload extractor used to evolve durable JSON payloads into the current Java model */
 	PayloadExtractor<T> payloadExtractor();
 
@@ -26,7 +17,8 @@ public interface TaskHandler<T> {
 	 * Executes a task attempt.
 	 *
 	 * @param context execution metadata, typed payload, and progress reporting API
-	 * @return completed or failed result
+	 * @return completed or failed result; returning {@code null} is treated as completed for backward compatibility,
+	 *     but explicit {@link TaskExecutionResult#completed()} is preferred
 	 * @throws Exception unexpected execution failure
 	 */
 	TaskExecutionResult execute(TaskExecutionContext<T> context) throws Exception;

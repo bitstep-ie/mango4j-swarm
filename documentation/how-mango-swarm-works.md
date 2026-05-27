@@ -160,6 +160,8 @@ On successful completion, the library records:
 - `progress_percent = 100`
 - `progress_description = finished`
 
+Handlers should return `TaskExecutionResult.completed()` for success or `TaskExecutionResult.failed(message)` for an explicit failure. A `null` result is still treated as success for compatibility, but new handlers should not rely on that behavior.
+
 ## Retries and reclaim
 
 Failure retry:
@@ -198,7 +200,7 @@ This keeps the task table bounded while preserving recent execution history for 
 - Global executor capacity is independent of per-task-type concurrency.
 - Per-task-type concurrency caps a single type.
 - Global pool caps total parallel work on the worker.
-- Virtual threads can be enabled/auto-detected at runtime (Java 21+), while baseline compile target remains Java 17.
+- The `virtual-threads` setting is reserved for future Java 21+ runtime support; current builds use platform threads while keeping Java 17 as the compile baseline.
 
 ## What application teams own
 

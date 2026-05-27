@@ -20,6 +20,7 @@ import ie.bitstep.mango.swarm.TaskExecutionResult;
 import ie.bitstep.mango.swarm.config.MangoSwarmProperties;
 import ie.bitstep.mango.swarm.db.TaskRecord;
 import ie.bitstep.mango.swarm.db.TaskRepository;
+import ie.bitstep.mango.swarm.handler.SwarmHandler;
 import ie.bitstep.mango.swarm.handler.TaskHandler;
 import ie.bitstep.mango.swarm.handler.TaskHandlerRegistry;
 import ie.bitstep.mango.swarm.payload.PayloadExtractor;
@@ -241,10 +242,37 @@ class MangoSwarmDaemonTest {
 		config.setBatchSize(null);
 		FakeRepository repository = new FakeRepository(0);
 		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
 
-		int claimLimit = daemon.calculateBatchSize("email", config, 3.2d, Instant.parse("2026-05-20T10:00:00Z"));
+		int claimLimit = daemon.calculateBatchSize("email", config, 3.2d, now);
 
 		assertThat(claimLimit).isEqualTo(4);
+		daemon.stop();
+	}
+
+	@Test
+	void batchDecisionReportsEachCapacityInput() throws Exception {
+		MangoSwarmProperties properties = properties(3, 10, 1);
+		properties.getExecutor().setMaxThreads("6");
+		MangoSwarmProperties.TaskType config = properties.getTaskTypes().get("email");
+		config.setBatchSize(null);
+		FakeRepository repository = new FakeRepository(0);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+
+		Object decision = invokeInstance(
+				daemon,
+				"decideBatchSize",
+				new Class<?>[] {String.class, MangoSwarmProperties.TaskType.class, double.class, Instant.class},
+				"email",
+				config,
+				3.2d,
+				Instant.parse("2026-05-20T10:00:00Z"));
+
+		assertThat(invokeAccessor(decision, "configuredBatch")).isEqualTo(4);
+		assertThat(invokeAccessor(decision, "rateCapacity")).isEqualTo(4);
+		assertThat(invokeAccessor(decision, "remainingTypeCapacity")).isEqualTo(10);
+		assertThat(invokeAccessor(decision, "remainingExecutorCapacity")).isEqualTo(6);
+		assertThat(invokeAccessor(decision, "claimLimit")).isEqualTo(4);
 		daemon.stop();
 	}
 
@@ -597,6 +625,12 @@ class MangoSwarmDaemonTest {
 		return field.get(target);
 	}
 
+	private static Object invokeAccessor(Object target, String name) throws Exception {
+		Method method = target.getClass().getDeclaredMethod(name);
+		method.setAccessible(true);
+		return method.invoke(target);
+	}
+
 	private static TaskRecord taskRecord(String taskType, Instant now) {
 		return new TaskRecord(
 				UUID.nameUUIDFromBytes(("task-" + taskType).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
@@ -611,12 +645,8 @@ class MangoSwarmDaemonTest {
 				now);
 	}
 
+	@SwarmHandler("email")
 	private static class CompletingHandler implements TaskHandler<String> {
-		@Override
-		public String taskType() {
-			return "email";
-		}
-
 		@Override
 		public PayloadExtractor<String> payloadExtractor() {
 			return reader -> "ok";

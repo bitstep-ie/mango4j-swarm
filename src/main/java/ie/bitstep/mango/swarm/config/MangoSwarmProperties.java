@@ -216,7 +216,7 @@ public class MangoSwarmProperties {
 		ABORT
 	}
 
-	/** Runtime virtual-thread policy. */
+	/** Reserved virtual-thread policy. Current Java 17 builds use platform threads. */
 	public enum VirtualThreads {
 		ENABLED,
 		DISABLED,

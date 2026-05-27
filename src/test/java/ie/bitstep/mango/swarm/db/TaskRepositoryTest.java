@@ -54,25 +54,55 @@ class TaskRepositoryTest extends H2TestSupport {
 
 	@Test
 	void mapsUnclaimedTaskRowsWithNullClaimTimestamp() throws Exception {
-		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		Instant availableAt = Instant.parse("2026-05-20T10:00:00Z");
+		Instant createdAt = Instant.parse("2026-05-20T09:59:59Z");
+		Instant updatedAt = Instant.parse("2026-05-20T10:00:01Z");
 		UUID taskId = UUID.randomUUID();
+		UUID workerId = UUID.randomUUID();
 		Map<String, Object> row = new HashMap<>();
 		row.put("id", taskId);
 		row.put("task_type", "email");
 		row.put("payload", "{\"subject\":\"hello\"}");
 		row.put("status", TaskStatus.queued.name());
-		row.put("available_at", Timestamp.from(now));
-		row.put("claimed_by", null);
+		row.put("available_at", Timestamp.from(availableAt));
+		row.put("claimed_by", workerId);
 		row.put("claimed_at", null);
 		row.put("attempt_count", 0);
-		row.put("created_at", Timestamp.from(now.minusSeconds(1)));
-		row.put("updated_at", Timestamp.from(now.plusSeconds(1)));
+		row.put("created_at", Timestamp.from(createdAt));
+		row.put("updated_at", Timestamp.from(updatedAt));
 
 		TaskRecord record = ((JdbcTaskRepository) taskRepository).mapTask(resultSet(row), 0);
 
 		assertThat(record.id()).isEqualTo(taskId);
+		assertThat(record.taskType()).isEqualTo("email");
+		assertThat(record.status()).isEqualTo(TaskStatus.queued);
+		assertThat(record.availableAt()).isEqualTo(availableAt);
+		assertThat(record.claimedBy()).isEqualTo(workerId);
 		assertThat(record.claimedAt()).isNull();
+		assertThat(record.attemptCount()).isZero();
+		assertThat(record.createdAt()).isEqualTo(createdAt);
+		assertThat(record.updatedAt()).isEqualTo(updatedAt);
 		assertThat(record.payload().get("subject").asText()).isEqualTo("hello");
+	}
+
+	@Test
+	void mapsClaimedTaskRowsWithClaimTimestamp() throws Exception {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		Map<String, Object> row = new HashMap<>();
+		row.put("id", UUID.randomUUID());
+		row.put("task_type", "email");
+		row.put("payload", "{}");
+		row.put("status", TaskStatus.claimed.name());
+		row.put("available_at", Timestamp.from(now.minusSeconds(1)));
+		row.put("claimed_by", UUID.randomUUID());
+		row.put("claimed_at", Timestamp.from(now));
+		row.put("attempt_count", 1);
+		row.put("created_at", Timestamp.from(now.minusSeconds(2)));
+		row.put("updated_at", Timestamp.from(now));
+
+		TaskRecord record = ((JdbcTaskRepository) taskRepository).mapTask(resultSet(row), 0);
+
+		assertThat(record.claimedAt()).isEqualTo(now);
 	}
 
 	@Test
@@ -413,14 +443,15 @@ class TaskRepositoryTest extends H2TestSupport {
 
 	private static ResultSet resultSet(Map<String, Object> row) {
 		return (ResultSet) Proxy.newProxyInstance(
-				ResultSet.class.getClassLoader(),
-				new Class<?>[] {ResultSet.class},
-				(proxy, method, args) -> switch (method.getName()) {
-					case "getTimestamp" -> row.get((String) args[0]);
-					case "getString" -> row.get((String) args[0]);
-					case "getInt" -> row.get((String) args[0]);
-					case "getObject" -> row.get((String) args[0]);
-					default -> throw new UnsupportedOperationException(method.getName());
+				ResultSet.class.getClassLoader(), new Class<?>[] {ResultSet.class}, (proxy, method, args) -> {
+					String methodName = method.getName();
+					if ("getTimestamp".equals(methodName)
+							|| "getString".equals(methodName)
+							|| "getInt".equals(methodName)
+							|| "getObject".equals(methodName)) {
+						return row.get((String) args[0]);
+					}
+					throw new UnsupportedOperationException(methodName);
 				});
 	}
 }

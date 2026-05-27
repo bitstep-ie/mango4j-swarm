@@ -3,16 +3,16 @@ package ie.bitstep.mango.swarm.rate;
 import java.time.Duration;
 import java.time.Instant;
 
-/** Time-slot based local rate limiter that spaces permits smoothly. */
+/** Time-slot based local rate limiter that spaces claim slots smoothly. */
 public final class SmoothRateLimiter {
 	private Instant nextSlot = Instant.EPOCH;
 	private Duration spacing = Duration.ofSeconds(1);
 	private boolean initialized;
 	private boolean disabled;
 
-	public synchronized void configure(double permits, Duration period, Instant now) {
-		if (permits > 0) {
-			long nanos = Math.max(1L, (long) (period.toNanos() / permits));
+	public synchronized void configure(double permitCount, Duration period, Instant now) {
+		if (permitCount > 0) {
+			long nanos = Math.max(1L, (long) (period.toNanos() / permitCount));
 			spacing = Duration.ofNanos(nanos);
 			disabled = false;
 		} else {
@@ -40,14 +40,14 @@ public final class SmoothRateLimiter {
 		if (latestClaimableSlot.isBefore(nextSlot)) {
 			return 0;
 		}
-		int permits = 0;
+		int availablePermits = 0;
 		Instant cursor = nextSlot;
-		while (permits < max && !cursor.isAfter(latestClaimableSlot)) {
-			permits++;
+		while (availablePermits < max && !cursor.isAfter(latestClaimableSlot)) {
+			availablePermits++;
 			cursor = cursor.plus(spacing);
 		}
 		nextSlot = cursor;
-		return permits;
+		return availablePermits;
 	}
 
 	public synchronized Duration timeUntilNextPermit(Instant now) {

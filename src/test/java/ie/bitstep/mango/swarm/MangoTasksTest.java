@@ -144,7 +144,23 @@ class MangoTasksTest {
 		return properties;
 	}
 
-	private record EmailRequest(String customerId, String email) {}
+	private static final class EmailRequest {
+		private final String customerId;
+		private final String email;
+
+		private EmailRequest(String customerId, String email) {
+			this.customerId = customerId;
+			this.email = email;
+		}
+
+		public String getCustomerId() {
+			return customerId;
+		}
+
+		public String getEmail() {
+			return email;
+		}
+	}
 
 	private static final class RecordingRepository implements TaskRepository {
 		private String taskType;

@@ -8,9 +8,11 @@ import java.util.UUID;
 import com.fasterxml.jackson.databind.JsonNode;
 
 /**
- * Persistence contract for task lifecycle operations.
+ * Internal persistence SPI for task lifecycle operations.
  *
- * <p>Implementations must be safe for concurrent use by multiple workers.
+ * <p>The default implementation is PostgreSQL-backed. Custom implementations may replace the auto-configured bean, but
+ * they must preserve the same concurrent claiming and lifecycle semantics. Implementations must be safe for concurrent
+ * use by multiple workers.
  */
 public interface TaskRepository {
 	/** Persists a task at a concrete availability time. */

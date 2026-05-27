@@ -3,19 +3,14 @@ package ie.bitstep.mango.examples.email;
 import ie.bitstep.mango.swarm.TaskExecutionContext;
 import ie.bitstep.mango.swarm.TaskExecutionResult;
 import ie.bitstep.mango.swarm.handler.TaskHandler;
+import ie.bitstep.mango.swarm.handler.SwarmHandler;
 import ie.bitstep.mango.swarm.payload.PayloadExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
-@Component
+@SwarmHandler("send-email")
 class SendEmailTaskHandler implements TaskHandler<EmailPayload> {
     private static final Logger log = LoggerFactory.getLogger(SendEmailTaskHandler.class);
-
-    @Override
-    public String taskType() {
-        return "send-email";
-    }
 
     @Override
     public PayloadExtractor<EmailPayload> payloadExtractor() {

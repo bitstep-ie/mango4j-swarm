@@ -141,7 +141,7 @@ public class MangoSwarmDaemon {
 					workerId,
 					decision.claimLimit(),
 					claimed.size(),
-					claimed.stream().map(TaskRecord::id).toList());
+					log.isDebugEnabled() ? claimed.stream().map(TaskRecord::id).toList() : List.of());
 			if (!claimed.isEmpty()) {
 				claimedAnyTasks = true;
 			}
@@ -495,11 +495,51 @@ public class MangoSwarmDaemon {
 		}
 	}
 
-	private record BatchDecision(
-			int configuredBatch,
-			int rateCapacity,
-			int remainingTypeCapacity,
-			int remainingExecutorCapacity,
-			int claimLimit,
-			Duration nextExecutionDelay) {}
+	private static final class BatchDecision {
+		private final int configuredBatch;
+		private final int rateCapacity;
+		private final int remainingTypeCapacity;
+		private final int remainingExecutorCapacity;
+		private final int claimLimit;
+		private final Duration nextExecutionDelay;
+
+		private BatchDecision(
+				int configuredBatch,
+				int rateCapacity,
+				int remainingTypeCapacity,
+				int remainingExecutorCapacity,
+				int claimLimit,
+				Duration nextExecutionDelay) {
+			this.configuredBatch = configuredBatch;
+			this.rateCapacity = rateCapacity;
+			this.remainingTypeCapacity = remainingTypeCapacity;
+			this.remainingExecutorCapacity = remainingExecutorCapacity;
+			this.claimLimit = claimLimit;
+			this.nextExecutionDelay = nextExecutionDelay;
+		}
+
+		private int configuredBatch() {
+			return configuredBatch;
+		}
+
+		private int rateCapacity() {
+			return rateCapacity;
+		}
+
+		private int remainingTypeCapacity() {
+			return remainingTypeCapacity;
+		}
+
+		private int remainingExecutorCapacity() {
+			return remainingExecutorCapacity;
+		}
+
+		private int claimLimit() {
+			return claimLimit;
+		}
+
+		private Duration nextExecutionDelay() {
+			return nextExecutionDelay;
+		}
+	}
 }

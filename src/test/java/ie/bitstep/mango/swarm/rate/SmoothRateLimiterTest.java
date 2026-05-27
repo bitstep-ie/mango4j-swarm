@@ -84,8 +84,8 @@ class SmoothRateLimiterTest {
 		limiter.permitsAvailable(first, 1);
 
 		limiter.configure(1, Duration.ofSeconds(1), later);
-		int permits = limiter.permitsAvailable(later, 1);
+		int availablePermits = limiter.permitsAvailable(later, 1);
 
-		assertThat(permits).isEqualTo(1);
+		assertThat(availablePermits).isEqualTo(1);
 	}
 }

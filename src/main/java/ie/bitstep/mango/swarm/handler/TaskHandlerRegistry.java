@@ -54,21 +54,17 @@ public final class TaskHandlerRegistry {
 		Class<?> targetClass = AopUtils.getTargetClass(handler);
 		SwarmHandler annotation = AnnotationUtils.findAnnotation(targetClass, SwarmHandler.class);
 
-		if (annotation != null) {
-			String value = annotation.value();
-			if (value == null || value.isBlank()) {
-				throw new IllegalStateException(
-						"@" + SwarmHandler.class.getSimpleName() + " value must not be blank for handler "
-								+ handler.getClass().getName());
-			}
-			return value.trim();
-		}
-		String type = handler.taskType();
-		if (type == null || type.isBlank()) {
+		if (annotation == null) {
 			throw new IllegalStateException(
-					"TaskHandler must define task type via @" + SwarmHandler.class.getSimpleName() + " or taskType(): "
+					"TaskHandler must declare task type with @" + SwarmHandler.class.getSimpleName() + ": "
 							+ handler.getClass().getName());
 		}
-		return type;
+		String value = annotation.value();
+		if (value == null || value.isBlank()) {
+			throw new IllegalStateException(
+					"@" + SwarmHandler.class.getSimpleName() + " value must not be blank for handler "
+							+ handler.getClass().getName());
+		}
+		return value.trim();
 	}
 }

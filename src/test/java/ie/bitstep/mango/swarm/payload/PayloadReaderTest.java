@@ -1,5 +1,7 @@
 package ie.bitstep.mango.swarm.payload;
 
+import java.util.Objects;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -29,6 +31,19 @@ class PayloadReaderTest {
 				reader.optional(Boolean.class, "trackOpens").orDefault(true));
 
 		assertThat(payload).isEqualTo(new EmailPayload("123", "x@y.com", "default-template", 8, true));
+	}
+
+	@Test
+	void staticExtractorConvenienceWrapsPayloadReader() throws Exception {
+		String customerId = PayloadExtractor.extract(
+				objectMapper.readTree("""
+				{
+				"customerId": "customer-1"
+				}
+				"""),
+				reader -> reader.required(String.class, "customerId"));
+
+		assertThat(customerId).isEqualTo("customer-1");
 	}
 
 	@Test
@@ -82,5 +97,60 @@ class PayloadReaderTest {
 				.hasMessageContaining("Payload field 'count' cannot be converted to Integer");
 	}
 
-	private record EmailPayload(String customerId, String email, String templateId, int priority, boolean trackOpens) {}
+	private static final class EmailPayload {
+		private final String customerId;
+		private final String email;
+		private final String templateId;
+		private final int priority;
+		private final boolean trackOpens;
+
+		private EmailPayload(String customerId, String email, String templateId, int priority, boolean trackOpens) {
+			this.customerId = customerId;
+			this.email = email;
+			this.templateId = templateId;
+			this.priority = priority;
+			this.trackOpens = trackOpens;
+		}
+
+		private String customerId() {
+			return customerId;
+		}
+
+		private String email() {
+			return email;
+		}
+
+		private String templateId() {
+			return templateId;
+		}
+
+		private int priority() {
+			return priority;
+		}
+
+		private boolean trackOpens() {
+			return trackOpens;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof EmailPayload)) {
+				return false;
+			}
+			EmailPayload that = (EmailPayload) other;
+			return priority == that.priority
+					&& trackOpens == that.trackOpens
+					&& Objects.equals(customerId, that.customerId)
+					&& Objects.equals(email, that.email)
+					&& Objects.equals(templateId, that.templateId);
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(customerId, email, templateId, priority, trackOpens);
+		}
+	}
 }

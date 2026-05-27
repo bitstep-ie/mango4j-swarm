@@ -14,16 +14,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TaskHandlerRegistryTest {
 
 	@Test
-	void defaultTaskTypeIsAbsentWhenAnnotationIsUsed() {
-		TaskHandler<String> handler = new AnnotatedEmailHandler();
-
-		assertThat(handler.taskType()).isNull();
-	}
-
-	@Test
 	void rejectsDuplicateHandlers() {
-		TaskHandler<String> first = handler("email");
-		TaskHandler<String> second = handler("email");
+		TaskHandler<String> first = new AnnotatedEmailHandler();
+		TaskHandler<String> second = new AnotherAnnotatedEmailHandler();
 
 		assertThatThrownBy(() -> new TaskHandlerRegistry(List.of(first, second), Set.of("email"), false))
 				.isInstanceOf(IllegalStateException.class)
@@ -39,7 +32,7 @@ class TaskHandlerRegistryTest {
 
 	@Test
 	void rejectsUnconfiguredHandlerByDefault() {
-		assertThatThrownBy(() -> new TaskHandlerRegistry(List.of(handler("email")), Set.of(), false))
+		assertThatThrownBy(() -> new TaskHandlerRegistry(List.of(new AnnotatedEmailHandler()), Set.of(), false))
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("unconfigured");
 	}
@@ -51,14 +44,8 @@ class TaskHandlerRegistryTest {
 	}
 
 	@Test
-	void annotationOverridesTaskTypeMethod() {
-		TaskHandler<?> handler = new AnnotatedWithDifferentMethodHandler();
-		new TaskHandlerRegistry(List.of(handler), Set.of("email"), false);
-	}
-
-	@Test
 	void exposesRegisteredTaskTypesAndHandlers() {
-		TaskHandler<String> handler = handler("email");
+		TaskHandler<String> handler = new AnnotatedEmailHandler();
 		TaskHandlerRegistry registry = new TaskHandlerRegistry(List.of(handler), Set.of("email"), false);
 
 		assertThat(registry.taskTypes()).containsExactly("email");
@@ -70,36 +57,17 @@ class TaskHandlerRegistryTest {
 
 	@Test
 	void canAllowUnconfiguredHandlers() {
-		TaskHandler<String> handler = handler("email");
+		TaskHandler<String> handler = new AnnotatedEmailHandler();
 		TaskHandlerRegistry registry = new TaskHandlerRegistry(List.of(handler), Set.of(), true);
 
 		assertThat(registry.taskTypes()).containsExactly("email");
 	}
 
 	@Test
-	void rejectsHandlerWithoutAnnotationOrTaskType() {
+	void rejectsHandlerWithoutAnnotation() {
 		assertThatThrownBy(() -> new TaskHandlerRegistry(List.of(new MissingTypeHandler()), Set.of("email"), false))
 				.isInstanceOf(IllegalStateException.class)
-				.hasMessageContaining("must define task type");
-	}
-
-	private static TaskHandler<String> handler(String type) {
-		return new TaskHandler<>() {
-			@Override
-			public String taskType() {
-				return type;
-			}
-
-			@Override
-			public PayloadExtractor<String> payloadExtractor() {
-				return reader -> "";
-			}
-
-			@Override
-			public TaskExecutionResult execute(TaskExecutionContext<String> context) {
-				return TaskExecutionResult.completed();
-			}
-		};
+				.hasMessageContaining("must declare task type");
 	}
 
 	@SwarmHandler("email")
@@ -116,12 +84,7 @@ class TaskHandlerRegistryTest {
 	}
 
 	@SwarmHandler("email")
-	private static final class AnnotatedWithDifferentMethodHandler implements TaskHandler<String> {
-		@Override
-		public String taskType() {
-			return "wrong-value";
-		}
-
+	private static final class AnotherAnnotatedEmailHandler implements TaskHandler<String> {
 		@Override
 		public PayloadExtractor<String> payloadExtractor() {
 			return reader -> "";
