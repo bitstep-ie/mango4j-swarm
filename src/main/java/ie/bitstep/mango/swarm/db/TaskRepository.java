@@ -42,15 +42,18 @@ public interface TaskRepository {
 	/** Returns a claimed task back to queued when the local worker cannot dispatch it. */
 	void requeueClaimed(UUID taskId, UUID workerId, Instant now, Instant availableAt, String reason);
 
-	/** Requeues timed-out tasks for retry. */
-	int reclaimTimedOut(String taskType, Duration timeout, Instant now);
+	/** Requeues up to {@code limit} timed-out tasks for retry. */
+	int reclaimTimedOut(String taskType, Duration timeout, Instant now, int limit);
 
-	/** Marks timed-out tasks as failed when reclaim is disabled. */
-	int markTimedOutFailed(String taskType, Duration timeout, Instant now);
+	/** Marks up to {@code limit} timed-out tasks as failed when reclaim is disabled. */
+	int markTimedOutFailed(String taskType, Duration timeout, Instant now, int limit);
 
-	/** Deletes completed tasks older than the retention window. */
-	int deleteCompletedOlderThan(Duration retention, Instant now);
+	/** Deletes up to {@code limit} completed tasks older than the retention window. */
+	int deleteCompletedOlderThan(Duration retention, Instant now, int limit);
 
-	/** Deletes failed tasks older than the retention window. */
-	int deleteFailedOlderThan(Duration retention, Instant now);
+	/** Deletes up to {@code limit} failed tasks older than the retention window. */
+	int deleteFailedOlderThan(Duration retention, Instant now, int limit);
+
+	/** Deletes up to {@code limit} task pacing slots older than the retention window. */
+	int deleteTaskPacersOlderThan(Duration retention, Instant now, int limit);
 }

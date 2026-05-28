@@ -186,11 +186,15 @@ Cleanup config:
 - `mango.swarm.cleanup.interval` (default `10m`)
 - `mango.swarm.cleanup.completed-retention` (default `30d`)
 - `mango.swarm.cleanup.failed-retention` (default `90d`)
+- `mango.swarm.cleanup.pacer-retention` (default `30d`)
+- `mango.swarm.cleanup.batch-size` (default `1000`)
 
 Cleanup behavior:
 
 - delete from `mango_swarm_tasks` where `status='completed'` and `completed_at < now - completed-retention`
 - delete from `mango_swarm_tasks` where `status='failed'` and `failed_at < now - failed-retention`
+- delete from `mango_swarm_task_pacers` where `slot_at < now - pacer-retention`
+- each cleanup category deletes at most `batch-size` rows per pass
 - never deletes `queued`, `claimed`, or `in_progress` rows
 
 This keeps the task table bounded while preserving recent execution history for diagnostics.

@@ -1,6 +1,7 @@
 package ie.bitstep.mango.swarm.db;
 
 import java.lang.reflect.Proxy;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -16,12 +17,16 @@ import java.util.concurrent.TimeUnit;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.postgresql.util.PGobject;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import ie.bitstep.mango.swarm.H2TestSupport;
 import ie.bitstep.mango.swarm.TaskStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class TaskRepositoryTest extends H2TestSupport {
 
@@ -231,7 +236,7 @@ class TaskRepositoryTest extends H2TestSupport {
 		taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now.minusSeconds(60));
 		taskRepository.claimBatch("email", UUID.randomUUID(), now.minusSeconds(60), 1);
 
-		int reclaimed = taskRepository.reclaimTimedOut("email", java.time.Duration.ofSeconds(30), now);
+		int reclaimed = taskRepository.reclaimTimedOut("email", java.time.Duration.ofSeconds(30), now, 10);
 
 		assertThat(reclaimed).isEqualTo(1);
 		String status = jdbcTemplate.queryForObject("select status from mango_swarm_tasks", String.class);
@@ -247,7 +252,7 @@ class TaskRepositoryTest extends H2TestSupport {
 		taskRepository.markInProgress(taskId, workerId, now.minusSeconds(60));
 
 		taskRepository.recordProgress(taskId, workerId, now.minusSeconds(5), 50, "sending");
-		int reclaimed = taskRepository.reclaimTimedOut("email", java.time.Duration.ofSeconds(30), now);
+		int reclaimed = taskRepository.reclaimTimedOut("email", java.time.Duration.ofSeconds(30), now, 10);
 
 		assertThat(reclaimed).isZero();
 		var row = jdbcTemplate.queryForMap(
@@ -345,12 +350,60 @@ class TaskRepositoryTest extends H2TestSupport {
 		taskRepository.claimBatch("email", workerId, now.minusSeconds(60), 1);
 		taskRepository.markInProgress(taskId, workerId, now.minusSeconds(60));
 
-		int failed = taskRepository.markTimedOutFailed("email", Duration.ofSeconds(30), now);
+		int failed = taskRepository.markTimedOutFailed("email", Duration.ofSeconds(30), now, 10);
 
 		assertThat(failed).isEqualTo(1);
 		assertThat(jdbcTemplate.queryForObject(
 						"select status from mango_swarm_tasks where id = ?", String.class, taskId))
 				.isEqualTo(TaskStatus.failed.name());
+	}
+
+	@Test
+	void markTimedOutFailedUpdatesSingleTaskAtBatchLimitBoundary() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now.minusSeconds(60));
+		taskRepository.claimBatch("email", workerId, now.minusSeconds(60), 1);
+
+		int failed = taskRepository.markTimedOutFailed("email", Duration.ofSeconds(30), now, 1);
+
+		assertThat(failed).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject(
+						"select status from mango_swarm_tasks where id = ?", String.class, taskId))
+				.isEqualTo(TaskStatus.failed.name());
+	}
+
+	@Test
+	void timeoutRecoveryUpdatesTasksInBatches() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID first = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now.minusSeconds(60));
+		UUID second = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now.minusSeconds(60));
+		taskRepository.claimBatch("email", workerId, now.minusSeconds(60), 2);
+		taskRepository.markInProgress(first, workerId, now.minusSeconds(60));
+		taskRepository.markInProgress(second, workerId, now.minusSeconds(60));
+
+		int reclaimed = taskRepository.reclaimTimedOut("email", Duration.ofSeconds(30), now, 1);
+
+		assertThat(reclaimed).isEqualTo(1);
+		Integer queued = jdbcTemplate.queryForObject(
+				"select count(*) from mango_swarm_tasks where status = 'queued'", Integer.class);
+		assertThat(queued).isEqualTo(1);
+	}
+
+	@Test
+	void zeroTimeoutRecoveryLimitUpdatesNothing() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now.minusSeconds(60));
+		taskRepository.claimBatch("email", workerId, now.minusSeconds(60), 1);
+
+		int reclaimed = taskRepository.reclaimTimedOut("email", Duration.ofSeconds(30), now, 0);
+
+		assertThat(reclaimed).isZero();
+		assertThat(jdbcTemplate.queryForObject(
+						"select status from mango_swarm_tasks where id = ?", String.class, taskId))
+				.isEqualTo(TaskStatus.claimed.name());
 	}
 
 	@Test
@@ -362,13 +415,71 @@ class TaskRepositoryTest extends H2TestSupport {
 		UUID failedOld = failTask(workerId, now.minus(Duration.ofDays(40)));
 		UUID failedRecent = failTask(workerId, now.minus(Duration.ofDays(5)));
 
-		int deletedCompleted = taskRepository.deleteCompletedOlderThan(Duration.ofDays(30), now);
-		int deletedFailed = taskRepository.deleteFailedOlderThan(Duration.ofDays(30), now);
+		int deletedCompleted = taskRepository.deleteCompletedOlderThan(Duration.ofDays(30), now, 10);
+		int deletedFailed = taskRepository.deleteFailedOlderThan(Duration.ofDays(30), now, 10);
 
 		assertThat(deletedCompleted).isEqualTo(1);
 		assertThat(deletedFailed).isEqualTo(1);
 		assertThat(existingTaskIds()).containsExactlyInAnyOrder(completedRecent, failedRecent);
 		assertThat(existingTaskIds()).doesNotContain(completedOld, failedOld);
+	}
+
+	@Test
+	void deletesOneFailedTaskAtBatchLimitBoundary() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID firstOld = failTask(workerId, now.minus(Duration.ofDays(40)));
+		UUID secondOld = failTask(workerId, now.minus(Duration.ofDays(39)));
+
+		int deleted = taskRepository.deleteFailedOlderThan(Duration.ofDays(30), now, 1);
+
+		assertThat(deleted).isEqualTo(1);
+		assertThat(existingTaskIds()).contains(secondOld);
+		assertThat(existingTaskIds()).doesNotContain(firstOld);
+	}
+
+	@Test
+	void cleanupDeletesTerminalTasksInBatches() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID firstOld = completeTask(workerId, now.minus(Duration.ofDays(40)));
+		UUID secondOld = completeTask(workerId, now.minus(Duration.ofDays(39)));
+		UUID recent = completeTask(workerId, now.minus(Duration.ofDays(5)));
+
+		int deleted = taskRepository.deleteCompletedOlderThan(Duration.ofDays(30), now, 1);
+
+		assertThat(deleted).isEqualTo(1);
+		assertThat(existingTaskIds()).contains(secondOld, recent);
+		assertThat(existingTaskIds()).doesNotContain(firstOld);
+	}
+
+	@Test
+	void zeroCleanupLimitDeletesNothing() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID old = completeTask(workerId, now.minus(Duration.ofDays(40)));
+
+		int deleted = taskRepository.deleteCompletedOlderThan(Duration.ofDays(30), now, 0);
+
+		assertThat(deleted).isZero();
+		assertThat(existingTaskIds()).contains(old);
+	}
+
+	@Test
+	void deletesOldTaskPacerSlotsInBatches() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		taskRepository.queueInNextSlot(
+				"email", JsonNodeFactory.instance.objectNode(), now.minus(Duration.ofDays(40)), Duration.ofMillis(10));
+		taskRepository.queueInNextSlot(
+				"email", JsonNodeFactory.instance.objectNode(), now.minus(Duration.ofDays(39)), Duration.ofMillis(10));
+		taskRepository.queueInNextSlot(
+				"email", JsonNodeFactory.instance.objectNode(), now.minus(Duration.ofDays(5)), Duration.ofMillis(10));
+
+		int deleted = taskRepository.deleteTaskPacersOlderThan(Duration.ofDays(30), now, 1);
+
+		assertThat(deleted).isEqualTo(1);
+		Integer remaining = jdbcTemplate.queryForObject("select count(*) from mango_swarm_task_pacers", Integer.class);
+		assertThat(remaining).isEqualTo(2);
 	}
 
 	@Test
@@ -421,6 +532,26 @@ class TaskRepositoryTest extends H2TestSupport {
 		assertThat(jdbcTemplate.queryForObject(
 						"select last_error_message from mango_swarm_tasks where id = ?", String.class, taskId))
 				.isEqualTo(exactLimitMessage);
+	}
+
+	@Test
+	void postgresJsonPayloadsAreBoundAsJsonbObjects() throws Exception {
+		JdbcTaskRepository repository = (JdbcTaskRepository) taskRepository;
+		var h2 = JdbcTaskRepository.class.getDeclaredField("h2");
+		h2.setAccessible(true);
+		h2.set(repository, false);
+		PreparedStatement statement = mock(PreparedStatement.class);
+
+		var method = JdbcTaskRepository.class.getDeclaredMethod(
+				"setJson", PreparedStatement.class, int.class, com.fasterxml.jackson.databind.JsonNode.class);
+		method.setAccessible(true);
+		method.invoke(
+				repository, statement, 3, JsonNodeFactory.instance.objectNode().put("subject", "hello"));
+
+		var captor = org.mockito.ArgumentCaptor.forClass(PGobject.class);
+		verify(statement).setObject(eq(3), captor.capture(), eq(java.sql.Types.OTHER));
+		assertThat(captor.getValue().getType()).isEqualTo("jsonb");
+		assertThat(captor.getValue().getValue()).isEqualTo("{\"subject\":\"hello\"}");
 	}
 
 	private UUID completeTask(UUID workerId, Instant completedAt) {

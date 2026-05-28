@@ -1,5 +1,7 @@
 package ie.bitstep.mango.swarm.worker;
 
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -13,6 +15,21 @@ import ie.bitstep.mango.swarm.db.SchemaQualifiedTables;
 /** JDBC/PostgreSQL implementation of {@link WorkerRegistry}. */
 public class JdbcWorkerRegistry implements WorkerRegistry {
 	private static final Logger log = LoggerFactory.getLogger(JdbcWorkerRegistry.class);
+	private static final String UPDATE_WORKER_SQL =
+			"""
+			UPDATE mango_swarm_workers
+			SET hostname = ?, last_heartbeat_at = ?
+			WHERE worker_id = ?
+			""";
+	private static final String INSERT_WORKER_SQL =
+			"""
+			INSERT INTO mango_swarm_workers (worker_id, hostname, started_at, last_heartbeat_at)
+			VALUES (?, ?, ?, ?)
+			""";
+	private static final String DELETE_STALE_WORKERS_SQL =
+			"DELETE FROM mango_swarm_workers WHERE last_heartbeat_at < ?";
+	private static final String COUNT_ACTIVE_WORKERS_SQL =
+			"SELECT count(*) FROM mango_swarm_workers WHERE last_heartbeat_at >= ?";
 
 	private final JdbcTemplate jdbcTemplate;
 	private final Duration staleAfter;
@@ -30,34 +47,37 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 
 	@Override
 	public int heartbeat(UUID workerId, String hostname, Instant startedAt, Instant now) {
-		int updated = jdbcTemplate.update(
-				"""
-				UPDATE %s
-				SET hostname = ?, last_heartbeat_at = ?
-				WHERE worker_id = ?
-				"""
-						.formatted(tables.workers()),
-				hostname,
-				Timestamp.from(now),
-				workerId);
+		int updated = jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<Integer>)
+				connection -> tables.withSearchPath(connection, scoped -> {
+					try (PreparedStatement statement = scoped.prepareStatement(UPDATE_WORKER_SQL)) {
+						statement.setString(1, hostname);
+						statement.setTimestamp(2, Timestamp.from(now));
+						statement.setObject(3, workerId);
+						return statement.executeUpdate();
+					}
+				}));
 		if (updated == 0) {
-			jdbcTemplate.update(
-					"""
-					INSERT INTO %s (worker_id, hostname, started_at, last_heartbeat_at)
-					VALUES (?, ?, ?, ?)
-					"""
-							.formatted(tables.workers()),
-					workerId,
-					hostname,
-					Timestamp.from(startedAt),
-					Timestamp.from(now));
+			jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<Integer>)
+					connection -> tables.withSearchPath(connection, scoped -> {
+						try (PreparedStatement statement = scoped.prepareStatement(INSERT_WORKER_SQL)) {
+							statement.setObject(1, workerId);
+							statement.setString(2, hostname);
+							statement.setTimestamp(3, Timestamp.from(startedAt));
+							statement.setTimestamp(4, Timestamp.from(now));
+							return statement.executeUpdate();
+						}
+					}));
 		}
 		Instant staleBefore = now.minus(staleAfter);
-		int prunedWorkers = jdbcTemplate.update(
-				"DELETE FROM " + tables.workers() + " WHERE last_heartbeat_at < ?", Timestamp.from(staleBefore));
+		int prunedWorkers = jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<Integer>)
+				connection -> tables.withSearchPath(connection, scoped -> {
+					try (PreparedStatement statement = scoped.prepareStatement(DELETE_STALE_WORKERS_SQL)) {
+						statement.setTimestamp(1, Timestamp.from(staleBefore));
+						return statement.executeUpdate();
+					}
+				}));
 		log.debug(
-				"swarm pruned stale workers: table={}, staleBefore={}, staleAfter={}, pruned={}",
-				tables.workers(),
+				"swarm pruned stale workers: staleBefore={}, staleAfter={}, pruned={}",
 				staleBefore,
 				staleAfter,
 				prunedWorkers);
@@ -66,10 +86,16 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 
 	@Override
 	public int countActiveWorkers(Instant now) {
-		Integer count = jdbcTemplate.queryForObject(
-				"SELECT count(*) FROM " + tables.workers() + " WHERE last_heartbeat_at >= ?",
-				Integer.class,
-				Timestamp.from(now.minus(staleAfter)));
+		Integer count = jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<Integer>)
+				connection -> tables.withSearchPath(connection, scoped -> {
+					try (PreparedStatement statement = scoped.prepareStatement(COUNT_ACTIVE_WORKERS_SQL)) {
+						statement.setTimestamp(1, Timestamp.from(now.minus(staleAfter)));
+						try (ResultSet rs = statement.executeQuery()) {
+							rs.next();
+							return rs.getInt(1);
+						}
+					}
+				}));
 		return Math.max(count == null ? 0 : count, 1);
 	}
 }

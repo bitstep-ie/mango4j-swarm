@@ -1,38 +1,80 @@
 package ie.bitstep.mango.swarm.db;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.regex.Pattern;
 
-/** Resolves and validates schema-qualified table names for swarm SQL queries. */
+/** Validates and applies the optional schema used by static swarm SQL queries. */
 public final class SchemaQualifiedTables {
 	private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
-	private final String tasksTable;
-	private final String workersTable;
-	private final String taskPacersTable;
+	private final String schema;
 
 	public SchemaQualifiedTables(String schema) {
-		String prefix = "";
 		if (schema != null && !schema.isBlank()) {
 			String normalized = schema.trim();
 			if (!IDENTIFIER.matcher(normalized).matches()) {
 				throw new IllegalArgumentException("Invalid mango4j.swarm.database.schema: " + schema);
 			}
-			prefix = normalized + ".";
+			this.schema = normalized;
+		} else {
+			this.schema = null;
 		}
-		this.tasksTable = prefix + "mango_swarm_tasks";
-		this.workersTable = prefix + "mango_swarm_workers";
-		this.taskPacersTable = prefix + "mango_swarm_task_pacers";
+	}
+
+	public String schema() {
+		return schema;
 	}
 
 	public String tasks() {
-		return tasksTable;
+		return "mango_swarm_tasks";
 	}
 
 	public String workers() {
-		return workersTable;
+		return "mango_swarm_workers";
 	}
 
 	public String taskPacers() {
-		return taskPacersTable;
+		return "mango_swarm_task_pacers";
+	}
+
+	public <T> T withSearchPath(Connection connection, SqlWork<T> work) throws SQLException {
+		if (schema == null) {
+			return work.execute(connection);
+		}
+		boolean autoCommit = connection.getAutoCommit();
+		if (autoCommit) {
+			connection.setAutoCommit(false);
+		}
+		try {
+			applySearchPath(connection);
+			T result = work.execute(connection);
+			if (autoCommit) {
+				connection.commit();
+			}
+			return result;
+		} catch (SQLException | RuntimeException ex) {
+			if (autoCommit) {
+				connection.rollback();
+			}
+			throw ex;
+		} finally {
+			if (autoCommit) {
+				connection.setAutoCommit(true);
+			}
+		}
+	}
+
+	private void applySearchPath(Connection connection) throws SQLException {
+		try (PreparedStatement statement = connection.prepareStatement("SELECT set_config('search_path', ?, true)")) {
+			statement.setString(1, schema);
+			statement.execute();
+		}
+	}
+
+	@FunctionalInterface
+	public interface SqlWork<T> {
+		T execute(Connection connection) throws SQLException;
 	}
 }

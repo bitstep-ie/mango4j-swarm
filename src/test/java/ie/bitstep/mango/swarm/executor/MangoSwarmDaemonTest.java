@@ -141,12 +141,30 @@ class MangoSwarmDaemonTest {
 	void marksTimedOutFailedWhenReclaimDisabled() {
 		MangoSwarmProperties properties = properties(10, 1, 1);
 		properties.getTaskTypes().get("email").setReclaimOnTimeout(false);
+		properties.getCleanup().setBatchSize(25);
 		FakeRepository repository = new FakeRepository(0);
 		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
 
 		daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
 
 		assertThat(repository.failTimedOutCalls).isEqualTo(1);
+		assertThat(repository.lastTimeoutRecoveryLimit).isEqualTo(25);
+		daemon.stop();
+	}
+
+	@Test
+	void throttlesTimeoutRecoveryScans() {
+		MangoSwarmProperties properties = properties(10, 1, 1);
+		properties.getTaskTypes().get("email").setReclaimOnTimeout(false);
+		FakeRepository repository = new FakeRepository(0);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+		daemon.pollOnce(now);
+		daemon.pollOnce(now.plusMillis(500));
+		daemon.pollOnce(now.plusSeconds(1));
+
+		assertThat(repository.failTimedOutCalls).isEqualTo(2);
 		daemon.stop();
 	}
 
@@ -198,6 +216,8 @@ class MangoSwarmDaemonTest {
 		properties.getCleanup().setInterval(Duration.ofMinutes(1));
 		properties.getCleanup().setCompletedRetention(Duration.ofDays(30));
 		properties.getCleanup().setFailedRetention(Duration.ofDays(90));
+		properties.getCleanup().setPacerRetention(Duration.ofDays(7));
+		properties.getCleanup().setBatchSize(25);
 		FakeRepository repository = new FakeRepository(0);
 		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
 
@@ -207,6 +227,8 @@ class MangoSwarmDaemonTest {
 
 		assertThat(repository.deleteCompletedCalls).isEqualTo(2);
 		assertThat(repository.deleteFailedCalls).isEqualTo(2);
+		assertThat(repository.deletePacerCalls).isEqualTo(2);
+		assertThat(repository.lastDeleteLimit).isEqualTo(25);
 		daemon.stop();
 	}
 
@@ -231,8 +253,10 @@ class MangoSwarmDaemonTest {
 
 		assertThat(disabledRepository.deleteCompletedCalls).isZero();
 		assertThat(disabledRepository.deleteFailedCalls).isZero();
+		assertThat(disabledRepository.deletePacerCalls).isZero();
 		assertThat(invalidIntervalRepository.deleteCompletedCalls).isZero();
 		assertThat(invalidIntervalRepository.deleteFailedCalls).isZero();
+		assertThat(invalidIntervalRepository.deletePacerCalls).isZero();
 	}
 
 	@Test
@@ -782,6 +806,7 @@ class MangoSwarmDaemonTest {
 		private int lastClaimLimit;
 		private int reclaimCalls;
 		private int failTimedOutCalls;
+		private int lastTimeoutRecoveryLimit;
 		private int failedTaskCalls;
 		private int completedTaskCalls;
 		private int rescheduleAfterFailureCalls;
@@ -795,6 +820,8 @@ class MangoSwarmDaemonTest {
 		private Instant retryAvailableAt;
 		private int deleteCompletedCalls;
 		private int deleteFailedCalls;
+		private int deletePacerCalls;
+		private int lastDeleteLimit;
 
 		private FakeRepository(int available) {
 			this.available = available;
@@ -878,26 +905,37 @@ class MangoSwarmDaemonTest {
 		}
 
 		@Override
-		public int reclaimTimedOut(String taskType, Duration timeout, Instant now) {
+		public int reclaimTimedOut(String taskType, Duration timeout, Instant now, int limit) {
 			reclaimCalls++;
+			lastTimeoutRecoveryLimit = limit;
 			return 0;
 		}
 
 		@Override
-		public int markTimedOutFailed(String taskType, Duration timeout, Instant now) {
+		public int markTimedOutFailed(String taskType, Duration timeout, Instant now, int limit) {
 			failTimedOutCalls++;
+			lastTimeoutRecoveryLimit = limit;
 			return 0;
 		}
 
 		@Override
-		public int deleteCompletedOlderThan(Duration retention, Instant now) {
+		public int deleteCompletedOlderThan(Duration retention, Instant now, int limit) {
 			deleteCompletedCalls++;
+			lastDeleteLimit = limit;
 			return 0;
 		}
 
 		@Override
-		public int deleteFailedOlderThan(Duration retention, Instant now) {
+		public int deleteFailedOlderThan(Duration retention, Instant now, int limit) {
 			deleteFailedCalls++;
+			lastDeleteLimit = limit;
+			return 0;
+		}
+
+		@Override
+		public int deleteTaskPacersOlderThan(Duration retention, Instant now, int limit) {
+			deletePacerCalls++;
+			lastDeleteLimit = limit;
 			return 0;
 		}
 	}

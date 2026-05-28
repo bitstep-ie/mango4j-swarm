@@ -50,11 +50,6 @@ public abstract class H2TestSupport {
 				""");
 		jdbcTemplate.execute(
 				"""
-				CREATE INDEX idx_mango_workers_last_heartbeat
-					ON mango_swarm_workers (last_heartbeat_at)
-				""");
-		jdbcTemplate.execute(
-				"""
 				CREATE TABLE mango_swarm_task_pacers (
 					task_type text NOT NULL,
 					slot_at timestamp NOT NULL,
@@ -62,11 +57,6 @@ public abstract class H2TestSupport {
 					created_at timestamp NOT NULL DEFAULT now(),
 					PRIMARY KEY (task_type, slot_at)
 				)
-				""");
-		jdbcTemplate.execute(
-				"""
-				CREATE INDEX idx_mango_task_pacers_task_type_slot
-					ON mango_swarm_task_pacers (task_type, slot_at)
 				""");
 		jdbcTemplate.execute(
 				"""
@@ -96,13 +86,18 @@ public abstract class H2TestSupport {
 				""");
 		jdbcTemplate.execute(
 				"""
-				CREATE INDEX idx_mango_tasks_stale_claimed
-					ON mango_swarm_tasks (task_type, status, claimed_at, last_progress_at)
+				CREATE INDEX idx_mango_tasks_timeout_due
+					ON mango_swarm_tasks (task_type, status, last_progress_at, claimed_at, id)
 				""");
 		jdbcTemplate.execute(
 				"""
-				CREATE INDEX idx_mango_tasks_claimed_by
-					ON mango_swarm_tasks (claimed_by, status)
+				CREATE INDEX idx_mango_tasks_completed_cleanup
+					ON mango_swarm_tasks (status, completed_at, id)
+				""");
+		jdbcTemplate.execute(
+				"""
+				CREATE INDEX idx_mango_tasks_failed_cleanup
+					ON mango_swarm_tasks (status, failed_at, id)
 				""");
 	}
 }

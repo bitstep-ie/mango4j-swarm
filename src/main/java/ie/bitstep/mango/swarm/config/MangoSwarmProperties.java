@@ -114,6 +114,8 @@ public class MangoSwarmProperties {
 		private Duration interval = Duration.ofMinutes(10);
 		private Duration completedRetention = Duration.ofDays(30);
 		private Duration failedRetention = Duration.ofDays(90);
+		private Duration pacerRetention = Duration.ofDays(30);
+		private int batchSize = 1_000;
 
 		public boolean isEnabled() {
 			return enabled;
@@ -145,6 +147,22 @@ public class MangoSwarmProperties {
 
 		public void setFailedRetention(Duration failedRetention) {
 			this.failedRetention = failedRetention;
+		}
+
+		public Duration getPacerRetention() {
+			return pacerRetention;
+		}
+
+		public void setPacerRetention(Duration pacerRetention) {
+			this.pacerRetention = pacerRetention;
+		}
+
+		public int getBatchSize() {
+			return batchSize;
+		}
+
+		public void setBatchSize(int batchSize) {
+			this.batchSize = batchSize;
 		}
 	}
 

@@ -38,6 +38,7 @@ import ie.bitstep.mango.swarm.worker.WorkerRegistry;
 public class MangoSwarmDaemon {
 	private static final Logger log = LoggerFactory.getLogger(MangoSwarmDaemon.class);
 	private static final Duration MAX_EMPTY_QUEUE_BACKOFF = Duration.ofSeconds(5);
+	private static final Duration TIMEOUT_RECOVERY_INTERVAL = Duration.ofSeconds(1);
 
 	private final WorkerRegistry workerRegistry;
 	private final TaskRepository taskRepository;
@@ -55,6 +56,7 @@ public class MangoSwarmDaemon {
 	private volatile int activeWorkers = 1;
 	private volatile Instant lastHeartbeat = Instant.EPOCH;
 	private volatile Instant lastCleanup = Instant.EPOCH;
+	private volatile Instant lastTimeoutRecovery = Instant.EPOCH;
 	private int consecutiveEmptyPolls = 0;
 
 	public MangoSwarmDaemon(
@@ -274,21 +276,31 @@ public class MangoSwarmDaemon {
 		}
 		Duration completedRetention = cleanup.getCompletedRetention();
 		Duration failedRetention = cleanup.getFailedRetention();
-		if (completedRetention != null && !completedRetention.isNegative() && !completedRetention.isZero()) {
-			int deletedCompleted = taskRepository.deleteCompletedOlderThan(completedRetention, now);
+		Duration pacerRetention = cleanup.getPacerRetention();
+		int batchSize = maintenanceBatchSize();
+		if (isRetentionEnabled(completedRetention)) {
+			int deletedCompleted = taskRepository.deleteCompletedOlderThan(completedRetention, now, batchSize);
 			log.debug(
 					"swarm cleanup completed-tasks: workerId={}, retention={}, deleted={}",
 					workerId,
 					completedRetention,
 					deletedCompleted);
 		}
-		if (failedRetention != null && !failedRetention.isNegative() && !failedRetention.isZero()) {
-			int deletedFailed = taskRepository.deleteFailedOlderThan(failedRetention, now);
+		if (isRetentionEnabled(failedRetention)) {
+			int deletedFailed = taskRepository.deleteFailedOlderThan(failedRetention, now, batchSize);
 			log.debug(
 					"swarm cleanup failed-tasks: workerId={}, retention={}, deleted={}",
 					workerId,
 					failedRetention,
 					deletedFailed);
+		}
+		if (isRetentionEnabled(pacerRetention)) {
+			int deletedPacers = taskRepository.deleteTaskPacersOlderThan(pacerRetention, now, batchSize);
+			log.debug(
+					"swarm cleanup task-pacers: workerId={}, retention={}, deleted={}",
+					workerId,
+					pacerRetention,
+					deletedPacers);
 		}
 		lastCleanup = now;
 	}
@@ -301,13 +313,30 @@ public class MangoSwarmDaemon {
 	}
 
 	private void reclaimTimedOut(Instant now) {
+		if (lastTimeoutRecovery.plus(TIMEOUT_RECOVERY_INTERVAL).isAfter(now)) {
+			return;
+		}
+		int batchSize = maintenanceBatchSize();
 		properties.getTaskTypes().forEach((type, config) -> {
 			if (config.isReclaimOnTimeout() && config.isIdempotent()) {
-				taskRepository.reclaimTimedOut(type, config.getTimeout(), now);
+				taskRepository.reclaimTimedOut(type, config.getTimeout(), now, batchSize);
 			} else if (!config.isReclaimOnTimeout()) {
-				taskRepository.markTimedOutFailed(type, config.getTimeout(), now);
+				taskRepository.markTimedOutFailed(type, config.getTimeout(), now, batchSize);
 			}
 		});
+		lastTimeoutRecovery = now;
+	}
+
+	private int maintenanceBatchSize() {
+		MangoSwarmProperties.Cleanup cleanup = properties.getCleanup();
+		if (cleanup == null) {
+			return 1_000;
+		}
+		return Math.max(1, cleanup.getBatchSize());
+	}
+
+	private static boolean isRetentionEnabled(Duration retention) {
+		return retention != null && !retention.isNegative() && !retention.isZero();
 	}
 
 	private boolean dispatch(TaskRecord task, Instant now) {

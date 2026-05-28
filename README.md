@@ -199,6 +199,8 @@ mango4j:
       interval: 10m
       completed-retention: 30d
       failed-retention: 90d
+      pacer-retention: 30d
+      batch-size: 1000
 
     executor:
       max-threads: auto        # auto or explicit integer string (e.g. "16")
@@ -250,6 +252,8 @@ mango4j:
 * `mango4j.swarm.cleanup.interval` (default `10m`): cleanup run cadence.
 * `mango4j.swarm.cleanup.completed-retention` (default `30d`): completed tasks older than this are deleted.
 * `mango4j.swarm.cleanup.failed-retention` (default `90d`): failed tasks older than this are deleted.
+* `mango4j.swarm.cleanup.pacer-retention` (default `30d`): task pacing slots older than this are deleted.
+* `mango4j.swarm.cleanup.batch-size` (default `1000`): maximum rows deleted per cleanup category per pass.
 
 ## Cleanup Task
 
@@ -260,6 +264,8 @@ Behavior:
 * cleanup runs every `mango4j.swarm.cleanup.interval`
 * completed rows are deleted when `completed_at < now - completed-retention`
 * failed rows are deleted when `failed_at < now - failed-retention`
+* task pacing slots are deleted when `slot_at < now - pacer-retention`
+* each cleanup category deletes at most `batch-size` rows per pass
 * only terminal states are deleted (`completed`, `failed`)
 * `queued`, `claimed`, and `in_progress` rows are never removed by cleanup
 
@@ -267,6 +273,8 @@ Defaults:
 
 * `completed-retention: 30d`
 * `failed-retention: 90d`
+* `pacer-retention: 30d`
+* `batch-size: 1000`
 
 Disable cleanup entirely:
 
@@ -286,6 +294,8 @@ mango4j:
       interval: 15m
       completed-retention: 14d
       failed-retention: 60d
+      pacer-retention: 14d
+      batch-size: 500
 ```
 
 ### Executor
@@ -341,6 +351,8 @@ mango4j:
       interval: 10m
       completed-retention: 30d
       failed-retention: 90d
+      pacer-retention: 30d
+      batch-size: 1000
     executor:
       max-threads: "16"
       poll-interval: 100ms

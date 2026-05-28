@@ -23,6 +23,8 @@ class MangoSwarmPropertiesTest {
 		assertThat(properties.getCleanup().getInterval()).isEqualTo(Duration.ofMinutes(10));
 		assertThat(properties.getCleanup().getCompletedRetention()).isEqualTo(Duration.ofDays(30));
 		assertThat(properties.getCleanup().getFailedRetention()).isEqualTo(Duration.ofDays(90));
+		assertThat(properties.getCleanup().getPacerRetention()).isEqualTo(Duration.ofDays(30));
+		assertThat(properties.getCleanup().getBatchSize()).isEqualTo(1_000);
 		assertThat(properties.getExecutor().getMaxThreads()).isEqualTo("auto");
 		assertThat(properties.getExecutor().getPollInterval()).isEqualTo(Duration.ofMillis(100));
 		assertThat(properties.getExecutor().getQueueStrategy())
@@ -78,6 +80,8 @@ class MangoSwarmPropertiesTest {
 		cleanup.setInterval(Duration.ofMinutes(2));
 		cleanup.setCompletedRetention(Duration.ofDays(7));
 		cleanup.setFailedRetention(Duration.ofDays(8));
+		cleanup.setPacerRetention(Duration.ofDays(9));
+		cleanup.setBatchSize(500);
 
 		MangoSwarmProperties.Executor executor = new MangoSwarmProperties.Executor();
 		executor.setMaxThreads("32");
@@ -98,6 +102,8 @@ class MangoSwarmPropertiesTest {
 		assertThat(cleanup.getInterval()).isEqualTo(Duration.ofMinutes(2));
 		assertThat(cleanup.getCompletedRetention()).isEqualTo(Duration.ofDays(7));
 		assertThat(cleanup.getFailedRetention()).isEqualTo(Duration.ofDays(8));
+		assertThat(cleanup.getPacerRetention()).isEqualTo(Duration.ofDays(9));
+		assertThat(cleanup.getBatchSize()).isEqualTo(500);
 		assertThat(executor.getMaxThreads()).isEqualTo("32");
 		assertThat(executor.getPollInterval()).isEqualTo(Duration.ofMillis(25));
 		assertThat(executor.getQueueStrategy()).isEqualTo(MangoSwarmProperties.QueueStrategy.ABORT);

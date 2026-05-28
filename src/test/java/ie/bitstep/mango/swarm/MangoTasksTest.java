@@ -209,22 +209,27 @@ class MangoTasksTest {
 		public void requeueClaimed(UUID taskId, UUID workerId, Instant now, Instant availableAt, String reason) {}
 
 		@Override
-		public int reclaimTimedOut(String taskType, Duration timeout, Instant now) {
+		public int reclaimTimedOut(String taskType, Duration timeout, Instant now, int limit) {
 			return 0;
 		}
 
 		@Override
-		public int markTimedOutFailed(String taskType, Duration timeout, Instant now) {
+		public int markTimedOutFailed(String taskType, Duration timeout, Instant now, int limit) {
 			return 0;
 		}
 
 		@Override
-		public int deleteCompletedOlderThan(Duration retention, Instant now) {
+		public int deleteCompletedOlderThan(Duration retention, Instant now, int limit) {
 			return 0;
 		}
 
 		@Override
-		public int deleteFailedOlderThan(Duration retention, Instant now) {
+		public int deleteFailedOlderThan(Duration retention, Instant now, int limit) {
+			return 0;
+		}
+
+		@Override
+		public int deleteTaskPacersOlderThan(Duration retention, Instant now, int limit) {
 			return 0;
 		}
 	}

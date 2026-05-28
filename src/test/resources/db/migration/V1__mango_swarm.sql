@@ -5,9 +5,6 @@ CREATE TABLE IF NOT EXISTS mango_swarm_workers (
     last_heartbeat_at timestamptz NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_mango_workers_last_heartbeat
-    ON mango_swarm_workers (last_heartbeat_at);
-
 CREATE TABLE IF NOT EXISTS mango_swarm_task_pacers (
     task_type text NOT NULL,
     slot_at timestamptz NOT NULL,
@@ -15,9 +12,6 @@ CREATE TABLE IF NOT EXISTS mango_swarm_task_pacers (
     created_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (task_type, slot_at)
 );
-
-CREATE INDEX IF NOT EXISTS idx_mango_task_pacers_task_type_slot
-    ON mango_swarm_task_pacers (task_type, slot_at);
 
 CREATE TABLE IF NOT EXISTS mango_swarm_tasks (
     id uuid PRIMARY KEY,
@@ -42,12 +36,14 @@ CREATE INDEX IF NOT EXISTS idx_mango_tasks_queue_claim
     ON mango_swarm_tasks (task_type, available_at, id)
     WHERE status = 'queued';
 
-CREATE INDEX IF NOT EXISTS idx_mango_tasks_type_available
-    ON mango_swarm_tasks (task_type, status, available_at);
-
-CREATE INDEX IF NOT EXISTS idx_mango_tasks_stale_claimed
-    ON mango_swarm_tasks (task_type, claimed_at, last_progress_at)
+CREATE INDEX IF NOT EXISTS idx_mango_tasks_timeout_due
+    ON mango_swarm_tasks (task_type, (COALESCE(last_progress_at, claimed_at)), id)
     WHERE status IN ('claimed', 'in_progress');
 
-CREATE INDEX IF NOT EXISTS idx_mango_tasks_claimed_by
-    ON mango_swarm_tasks (claimed_by, status);
+CREATE INDEX IF NOT EXISTS idx_mango_tasks_completed_cleanup
+    ON mango_swarm_tasks (completed_at, id)
+    WHERE status = 'completed';
+
+CREATE INDEX IF NOT EXISTS idx_mango_tasks_failed_cleanup
+    ON mango_swarm_tasks (failed_at, id)
+    WHERE status = 'failed';
