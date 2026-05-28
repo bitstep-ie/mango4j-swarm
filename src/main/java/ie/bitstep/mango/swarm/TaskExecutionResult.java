@@ -7,7 +7,7 @@ package ie.bitstep.mango.swarm;
  * flow based on task-type configuration.
  */
 public final class TaskExecutionResult {
-	private static final TaskExecutionResult COMPLETED = new TaskExecutionResult(true, null);
+	private static final TaskExecutionResult COMPLETED_RESULT = new TaskExecutionResult(true, null);
 
 	private final boolean completed;
 	private final String message;
@@ -19,7 +19,7 @@ public final class TaskExecutionResult {
 
 	/** @return successful execution result */
 	public static TaskExecutionResult completed() {
-		return COMPLETED;
+		return COMPLETED_RESULT;
 	}
 
 	/**

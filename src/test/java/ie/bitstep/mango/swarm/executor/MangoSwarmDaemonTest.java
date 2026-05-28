@@ -27,6 +27,7 @@ import ie.bitstep.mango.swarm.payload.PayloadExtractor;
 import ie.bitstep.mango.swarm.worker.WorkerRegistry;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 class MangoSwarmDaemonTest {
 
@@ -594,8 +595,11 @@ class MangoSwarmDaemonTest {
 		assertThat(MangoSwarmDaemon.isPositive(Duration.ZERO)).isEqualTo(false);
 		assertThat(MangoSwarmDaemon.isPositive(Duration.ofNanos(1))).isEqualTo(true);
 
-		MangoSwarmDaemon.sleepIfPositive(Duration.ZERO);
-		MangoSwarmDaemon.sleepIfPositive(Duration.ofNanos(1));
+		assertThatCode(() -> {
+					MangoSwarmDaemon.sleepIfPositive(Duration.ZERO);
+					MangoSwarmDaemon.sleepIfPositive(Duration.ofNanos(1));
+				})
+				.doesNotThrowAnyException();
 	}
 
 	private static MangoSwarmDaemon daemon(

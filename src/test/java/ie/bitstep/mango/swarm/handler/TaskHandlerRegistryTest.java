@@ -9,6 +9,7 @@ import ie.bitstep.mango.swarm.TaskExecutionResult;
 import ie.bitstep.mango.swarm.payload.PayloadExtractor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TaskHandlerRegistryTest {
@@ -40,7 +41,9 @@ class TaskHandlerRegistryTest {
 	@Test
 	void acceptsAnnotatedHandlerWithoutTaskTypeMethod() {
 		TaskHandler<?> handler = new AnnotatedEmailHandler();
-		new TaskHandlerRegistry(List.of(handler), Set.of("email"), false);
+
+		assertThatCode(() -> new TaskHandlerRegistry(List.of(handler), Set.of("email"), false))
+				.doesNotThrowAnyException();
 	}
 
 	@Test
