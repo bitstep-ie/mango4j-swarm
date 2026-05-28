@@ -5,10 +5,12 @@ import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import ie.bitstep.mango.swarm.db.SchemaQualifiedTables;
 
@@ -47,18 +49,19 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 
 	@Override
 	public int heartbeat(UUID workerId, String hostname, Instant startedAt, Instant now) {
-		int updated = jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<Integer>)
-				connection -> tables.withSearchPath(connection, scoped -> {
+		int updated = executeRequired(
+				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(UPDATE_WORKER_SQL)) {
 						statement.setString(1, hostname);
 						statement.setTimestamp(2, Timestamp.from(now));
 						statement.setObject(3, workerId);
 						return statement.executeUpdate();
 					}
-				}));
+				}),
+				"update worker heartbeat");
 		if (updated == 0) {
-			jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<Integer>)
-					connection -> tables.withSearchPath(connection, scoped -> {
+			executeRequired(
+					(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
 						try (PreparedStatement statement = scoped.prepareStatement(INSERT_WORKER_SQL)) {
 							statement.setObject(1, workerId);
 							statement.setString(2, hostname);
@@ -66,16 +69,18 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 							statement.setTimestamp(4, Timestamp.from(now));
 							return statement.executeUpdate();
 						}
-					}));
+					}),
+					"insert worker heartbeat");
 		}
 		Instant staleBefore = now.minus(staleAfter);
-		int prunedWorkers = jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<Integer>)
-				connection -> tables.withSearchPath(connection, scoped -> {
+		int prunedWorkers = executeRequired(
+				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(DELETE_STALE_WORKERS_SQL)) {
 						statement.setTimestamp(1, Timestamp.from(staleBefore));
 						return statement.executeUpdate();
 					}
-				}));
+				}),
+				"delete stale workers");
 		log.debug(
 				"swarm pruned stale workers: staleBefore={}, staleAfter={}, pruned={}",
 				staleBefore,
@@ -86,8 +91,8 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 
 	@Override
 	public int countActiveWorkers(Instant now) {
-		Integer count = jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<Integer>)
-				connection -> tables.withSearchPath(connection, scoped -> {
+		int count = executeRequired(
+				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(COUNT_ACTIVE_WORKERS_SQL)) {
 						statement.setTimestamp(1, Timestamp.from(now.minus(staleAfter)));
 						try (ResultSet rs = statement.executeQuery()) {
@@ -95,7 +100,13 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 							return rs.getInt(1);
 						}
 					}
-				}));
-		return Math.max(count == null ? 0 : count, 1);
+				}),
+				"count active workers");
+		return Math.max(count, 1);
+	}
+
+	private <T> T executeRequired(ConnectionCallback<T> callback, String operation) {
+		return Objects.requireNonNull(
+				jdbcTemplate.execute(callback), () -> "JdbcTemplate.execute returned null for " + operation);
 	}
 }

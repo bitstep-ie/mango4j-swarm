@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -241,7 +242,7 @@ public class JdbcTaskRepository implements TaskRepository {
 
 	@Override
 	public UUID queue(String taskType, JsonNode payload, Instant availableAt) {
-		return jdbcTemplate.execute(
+		return executeRequired(
 				(ConnectionCallback<UUID>) connection -> tables.withSearchPath(connection, scoped -> {
 					UUID taskId = UuidV7.generate();
 					try (PreparedStatement statement = scoped.prepareStatement(INSERT_TASK_SQL)) {
@@ -252,7 +253,8 @@ public class JdbcTaskRepository implements TaskRepository {
 						statement.executeUpdate();
 						return taskId;
 					}
-				}));
+				}),
+				"queue task");
 	}
 
 	@Override
@@ -261,7 +263,7 @@ public class JdbcTaskRepository implements TaskRepository {
 		if (slotSpacing == null || slotSpacing.isZero() || slotSpacing.isNegative()) {
 			return queue(taskType, payload, requestedAt);
 		}
-		return jdbcTemplate.execute(
+		return executeRequired(
 				(ConnectionCallback<UUID>) connection -> tables.withSearchPath(connection, scoped -> {
 					UUID taskId = UuidV7.generate();
 					Instant availableAt = reserveSlot(scoped, taskType, taskId, requestedAt, slotSpacing);
@@ -273,7 +275,8 @@ public class JdbcTaskRepository implements TaskRepository {
 						statement.executeUpdate();
 						return taskId;
 					}
-				}));
+				}),
+				"queue task in next slot");
 	}
 
 	private Instant reserveSlot(
@@ -351,7 +354,7 @@ public class JdbcTaskRepository implements TaskRepository {
 		if (limit < 1) {
 			return List.of();
 		}
-		return jdbcTemplate.execute(
+		return executeRequired(
 				(ConnectionCallback<List<TaskRecord>>) connection -> tables.withSearchPath(connection, scoped -> {
 					List<UUID> ids = new ArrayList<>();
 					try (PreparedStatement select = scoped.prepareStatement(SELECT_QUEUED_TASK_IDS_SQL)) {
@@ -389,92 +392,105 @@ public class JdbcTaskRepository implements TaskRepository {
 						}
 					}
 					return claimed;
-				}));
+				}),
+				"claim task batch");
 	}
 
 	@Override
 	public void markInProgress(UUID taskId, UUID workerId, Instant now) {
-		jdbcTemplate.execute((ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
-			try (PreparedStatement statement = scoped.prepareStatement(MARK_IN_PROGRESS_SQL)) {
-				statement.setTimestamp(1, Timestamp.from(now));
-				statement.setTimestamp(2, Timestamp.from(now));
-				statement.setObject(3, taskId);
-				statement.setObject(4, workerId);
-				return statement.executeUpdate();
-			}
-		}));
+		executeRequired(
+				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
+					try (PreparedStatement statement = scoped.prepareStatement(MARK_IN_PROGRESS_SQL)) {
+						statement.setTimestamp(1, Timestamp.from(now));
+						statement.setTimestamp(2, Timestamp.from(now));
+						statement.setObject(3, taskId);
+						statement.setObject(4, workerId);
+						return statement.executeUpdate();
+					}
+				}),
+				"mark task in progress");
 	}
 
 	@Override
 	public void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description) {
-		jdbcTemplate.execute((ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
-			try (PreparedStatement statement = scoped.prepareStatement(RECORD_PROGRESS_SQL)) {
-				statement.setInt(1, progressPercent);
-				statement.setString(2, truncate(description));
-				statement.setTimestamp(3, Timestamp.from(now));
-				statement.setTimestamp(4, Timestamp.from(now));
-				statement.setObject(5, taskId);
-				statement.setObject(6, workerId);
-				return statement.executeUpdate();
-			}
-		}));
+		executeRequired(
+				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
+					try (PreparedStatement statement = scoped.prepareStatement(RECORD_PROGRESS_SQL)) {
+						statement.setInt(1, progressPercent);
+						statement.setString(2, truncate(description));
+						statement.setTimestamp(3, Timestamp.from(now));
+						statement.setTimestamp(4, Timestamp.from(now));
+						statement.setObject(5, taskId);
+						statement.setObject(6, workerId);
+						return statement.executeUpdate();
+					}
+				}),
+				"record task progress");
 	}
 
 	@Override
 	public void markCompleted(UUID taskId, UUID workerId, Instant now) {
-		jdbcTemplate.execute((ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
-			try (PreparedStatement statement = scoped.prepareStatement(MARK_COMPLETED_SQL)) {
-				statement.setTimestamp(1, Timestamp.from(now));
-				statement.setTimestamp(2, Timestamp.from(now));
-				statement.setTimestamp(3, Timestamp.from(now));
-				statement.setObject(4, taskId);
-				statement.setObject(5, workerId);
-				return statement.executeUpdate();
-			}
-		}));
+		executeRequired(
+				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
+					try (PreparedStatement statement = scoped.prepareStatement(MARK_COMPLETED_SQL)) {
+						statement.setTimestamp(1, Timestamp.from(now));
+						statement.setTimestamp(2, Timestamp.from(now));
+						statement.setTimestamp(3, Timestamp.from(now));
+						statement.setObject(4, taskId);
+						statement.setObject(5, workerId);
+						return statement.executeUpdate();
+					}
+				}),
+				"mark task completed");
 	}
 
 	@Override
 	public void markFailed(UUID taskId, UUID workerId, Instant now, String errorMessage) {
-		jdbcTemplate.execute((ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
-			try (PreparedStatement statement = scoped.prepareStatement(MARK_FAILED_SQL)) {
-				statement.setTimestamp(1, Timestamp.from(now));
-				statement.setTimestamp(2, Timestamp.from(now));
-				statement.setString(3, truncate(errorMessage));
-				statement.setObject(4, taskId);
-				statement.setObject(5, workerId);
-				return statement.executeUpdate();
-			}
-		}));
+		executeRequired(
+				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
+					try (PreparedStatement statement = scoped.prepareStatement(MARK_FAILED_SQL)) {
+						statement.setTimestamp(1, Timestamp.from(now));
+						statement.setTimestamp(2, Timestamp.from(now));
+						statement.setString(3, truncate(errorMessage));
+						statement.setObject(4, taskId);
+						statement.setObject(5, workerId);
+						return statement.executeUpdate();
+					}
+				}),
+				"mark task failed");
 	}
 
 	@Override
 	public void rescheduleAfterFailure(
 			UUID taskId, UUID workerId, Instant now, Instant availableAt, String errorMessage) {
-		jdbcTemplate.execute((ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
-			try (PreparedStatement statement = scoped.prepareStatement(RESCHEDULE_AFTER_FAILURE_SQL)) {
-				statement.setTimestamp(1, Timestamp.from(availableAt));
-				statement.setTimestamp(2, Timestamp.from(now));
-				statement.setString(3, truncate(errorMessage));
-				statement.setObject(4, taskId);
-				statement.setObject(5, workerId);
-				return statement.executeUpdate();
-			}
-		}));
+		executeRequired(
+				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
+					try (PreparedStatement statement = scoped.prepareStatement(RESCHEDULE_AFTER_FAILURE_SQL)) {
+						statement.setTimestamp(1, Timestamp.from(availableAt));
+						statement.setTimestamp(2, Timestamp.from(now));
+						statement.setString(3, truncate(errorMessage));
+						statement.setObject(4, taskId);
+						statement.setObject(5, workerId);
+						return statement.executeUpdate();
+					}
+				}),
+				"reschedule failed task");
 	}
 
 	@Override
 	public void requeueClaimed(UUID taskId, UUID workerId, Instant now, Instant availableAt, String reason) {
-		jdbcTemplate.execute((ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
-			try (PreparedStatement statement = scoped.prepareStatement(REQUEUE_CLAIMED_SQL)) {
-				statement.setTimestamp(1, Timestamp.from(availableAt));
-				statement.setTimestamp(2, Timestamp.from(now));
-				statement.setString(3, truncate(reason));
-				statement.setObject(4, taskId);
-				statement.setObject(5, workerId);
-				return statement.executeUpdate();
-			}
-		}));
+		executeRequired(
+				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
+					try (PreparedStatement statement = scoped.prepareStatement(REQUEUE_CLAIMED_SQL)) {
+						statement.setTimestamp(1, Timestamp.from(availableAt));
+						statement.setTimestamp(2, Timestamp.from(now));
+						statement.setString(3, truncate(reason));
+						statement.setObject(4, taskId);
+						statement.setObject(5, workerId);
+						return statement.executeUpdate();
+					}
+				}),
+				"requeue claimed task");
 	}
 
 	@Override
@@ -482,7 +498,7 @@ public class JdbcTaskRepository implements TaskRepository {
 		if (limit < 1) {
 			return 0;
 		}
-		return jdbcTemplate.execute(
+		return executeRequired(
 				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(RECLAIM_TIMED_OUT_SQL)) {
 						statement.setTimestamp(1, Timestamp.from(now));
@@ -491,7 +507,8 @@ public class JdbcTaskRepository implements TaskRepository {
 						statement.setInt(4, limit);
 						return statement.executeUpdate();
 					}
-				}));
+				}),
+				"reclaim timed out tasks");
 	}
 
 	@Override
@@ -499,7 +516,7 @@ public class JdbcTaskRepository implements TaskRepository {
 		if (limit < 1) {
 			return 0;
 		}
-		return jdbcTemplate.execute(
+		return executeRequired(
 				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(MARK_TIMED_OUT_FAILED_SQL)) {
 						statement.setTimestamp(1, Timestamp.from(now));
@@ -509,7 +526,8 @@ public class JdbcTaskRepository implements TaskRepository {
 						statement.setInt(5, limit);
 						return statement.executeUpdate();
 					}
-				}));
+				}),
+				"mark timed out tasks failed");
 	}
 
 	@Override
@@ -517,14 +535,15 @@ public class JdbcTaskRepository implements TaskRepository {
 		if (limit < 1) {
 			return 0;
 		}
-		return jdbcTemplate.execute(
+		return executeRequired(
 				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(DELETE_COMPLETED_SQL)) {
 						statement.setTimestamp(1, Timestamp.from(now.minus(retention)));
 						statement.setInt(2, limit);
 						return statement.executeUpdate();
 					}
-				}));
+				}),
+				"delete completed tasks");
 	}
 
 	@Override
@@ -532,14 +551,15 @@ public class JdbcTaskRepository implements TaskRepository {
 		if (limit < 1) {
 			return 0;
 		}
-		return jdbcTemplate.execute(
+		return executeRequired(
 				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(DELETE_FAILED_SQL)) {
 						statement.setTimestamp(1, Timestamp.from(now.minus(retention)));
 						statement.setInt(2, limit);
 						return statement.executeUpdate();
 					}
-				}));
+				}),
+				"delete failed tasks");
 	}
 
 	@Override
@@ -547,14 +567,15 @@ public class JdbcTaskRepository implements TaskRepository {
 		if (limit < 1) {
 			return 0;
 		}
-		return jdbcTemplate.execute(
+		return executeRequired(
 				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(DELETE_PACERS_SQL)) {
 						statement.setTimestamp(1, Timestamp.from(now.minus(retention)));
 						statement.setInt(2, limit);
 						return statement.executeUpdate();
 					}
-				}));
+				}),
+				"delete task pacers");
 	}
 
 	private void setJson(PreparedStatement statement, int parameterIndex, JsonNode payload) throws SQLException {
@@ -604,11 +625,18 @@ public class JdbcTaskRepository implements TaskRepository {
 
 	private boolean isH2() {
 		if (h2 == null) {
-			h2 = jdbcTemplate.execute((ConnectionCallback<Boolean>) connection -> {
-				String productName = connection.getMetaData().getDatabaseProductName();
-				return productName != null && productName.toLowerCase().contains("h2");
-			});
+			h2 = executeRequired(
+					(ConnectionCallback<Boolean>) connection -> {
+						String productName = connection.getMetaData().getDatabaseProductName();
+						return productName != null && productName.toLowerCase().contains("h2");
+					},
+					"detect database product");
 		}
 		return h2;
+	}
+
+	private <T> T executeRequired(ConnectionCallback<T> callback, String operation) {
+		return Objects.requireNonNull(
+				jdbcTemplate.execute(callback), () -> "JdbcTemplate.execute returned null for " + operation);
 	}
 }

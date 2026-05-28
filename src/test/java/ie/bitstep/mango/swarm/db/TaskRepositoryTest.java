@@ -18,15 +18,19 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PGobject;
+import org.springframework.jdbc.core.ConnectionCallback;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import ie.bitstep.mango.swarm.H2TestSupport;
 import ie.bitstep.mango.swarm.TaskStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class TaskRepositoryTest extends H2TestSupport {
 
@@ -552,6 +556,20 @@ class TaskRepositoryTest extends H2TestSupport {
 		verify(statement).setObject(eq(3), captor.capture(), eq(java.sql.Types.OTHER));
 		assertThat(captor.getValue().getType()).isEqualTo("jsonb");
 		assertThat(captor.getValue().getValue()).isEqualTo("{\"subject\":\"hello\"}");
+	}
+
+	@Test
+	void rejectsNullJdbcTemplateExecuteResult() {
+		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+		JdbcTaskRepository repository =
+				new JdbcTaskRepository(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
+		when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<UUID>>any()))
+				.thenReturn(null);
+
+		assertThatThrownBy(() -> repository.queue(
+						"email", JsonNodeFactory.instance.objectNode(), Instant.parse("2026-05-20T10:00:00Z")))
+				.isInstanceOf(NullPointerException.class)
+				.hasMessage("JdbcTemplate.execute returned null for queue task");
 	}
 
 	private UUID completeTask(UUID workerId, Instant completedAt) {
