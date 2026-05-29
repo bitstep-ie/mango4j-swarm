@@ -576,6 +576,9 @@ class TaskRepositoryTest extends H2TestSupport {
 		var h2 = JdbcTaskRepository.class.getDeclaredField("h2");
 		h2.setAccessible(true);
 		h2.set(repository, false);
+		var h2Initialized = JdbcTaskRepository.class.getDeclaredField("h2Initialized");
+		h2Initialized.setAccessible(true);
+		h2Initialized.set(repository, true);
 		PreparedStatement statement = mock(PreparedStatement.class);
 
 		var method = JdbcTaskRepository.class.getDeclaredMethod(

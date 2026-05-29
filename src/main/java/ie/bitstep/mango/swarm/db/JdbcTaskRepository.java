@@ -22,7 +22,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.postgresql.util.PGobject;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
 import ie.bitstep.mango.swarm.TaskStatus;
 import ie.bitstep.mango.swarm.UuidV7;
 
@@ -231,8 +230,8 @@ LIMIT ?
 	private final JdbcTemplate jdbcTemplate;
 	private final ObjectMapper objectMapper;
 	private final SchemaQualifiedTables tables;
-	private final RowMapper<TaskRecord> rowMapper = this::mapTask;
-	private Boolean h2;
+	private volatile boolean h2;
+	private volatile boolean h2Initialized;
 
 	public JdbcTaskRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
 		this(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
@@ -314,11 +313,11 @@ LIMIT ?
 			java.sql.Connection connection, String taskType, Instant candidate, Duration slotSpacing)
 			throws SQLException {
 		Objects.requireNonNull(candidate, "candidate");
-		Instant before = findSlot(connection, taskType, candidate, true);
+		Instant before = findSlotBefore(connection, taskType, candidate);
 		if (before != null && candidate.isBefore(before.plus(slotSpacing))) {
 			return before.plus(slotSpacing);
 		}
-		Instant after = findSlot(connection, taskType, candidate, false);
+		Instant after = findSlotAfter(connection, taskType, candidate);
 		if (after != null && candidate.plus(slotSpacing).isAfter(after)) {
 			return after.plus(slotSpacing);
 		}
@@ -333,14 +332,6 @@ LIMIT ?
 		} catch (SQLIntegrityConstraintViolationException ex) {
 			return false;
 		}
-	}
-
-	private Instant findSlot(java.sql.Connection connection, String taskType, Instant candidate, boolean before)
-			throws SQLException {
-		if (before) {
-			return findSlotBefore(connection, taskType, candidate);
-		}
-		return findSlotAfter(connection, taskType, candidate);
 	}
 
 	private Instant findSlotBefore(java.sql.Connection connection, String taskType, Instant candidate)
@@ -428,7 +419,7 @@ LIMIT ?
 			try (ResultSet rs = query.executeQuery()) {
 				int rowNum = 0;
 				while (rs.next()) {
-					TaskRecord task = Objects.requireNonNull(rowMapper.mapRow(rs, rowNum++), "mapped claimed task");
+					TaskRecord task = Objects.requireNonNull(mapTask(rs, rowNum++), "mapped claimed task");
 					claimedById.put(task.id(), task);
 				}
 			}
@@ -681,15 +672,24 @@ LIMIT ?
 	}
 
 	private boolean isH2() {
-		if (h2 == null) {
-			h2 = executeRequired(
-					connection -> {
-						String productName = connection.getMetaData().getDatabaseProductName();
-						return productName != null && productName.toLowerCase().contains("h2");
-					},
-					"detect database product");
+		if (!h2Initialized) {
+			synchronized (this) {
+				if (!h2Initialized) {
+					h2 = detectH2();
+					h2Initialized = true;
+				}
+			}
 		}
 		return h2;
+	}
+
+	private boolean detectH2() {
+		return executeRequired(
+				connection -> {
+					String productName = connection.getMetaData().getDatabaseProductName();
+					return productName != null && productName.toLowerCase().contains("h2");
+				},
+				"detect database product");
 	}
 
 	private <T> T executeRequired(ConnectionCallback<T> callback, String operation) {
