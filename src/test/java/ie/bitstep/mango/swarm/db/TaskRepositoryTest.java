@@ -547,10 +547,10 @@ class TaskRepositoryTest extends H2TestSupport {
 		PreparedStatement statement = mock(PreparedStatement.class);
 
 		var method = JdbcTaskRepository.class.getDeclaredMethod(
-				"setJson", PreparedStatement.class, int.class, com.fasterxml.jackson.databind.JsonNode.class);
+				"setJson", PreparedStatement.class, com.fasterxml.jackson.databind.JsonNode.class);
 		method.setAccessible(true);
 		method.invoke(
-				repository, statement, 3, JsonNodeFactory.instance.objectNode().put("subject", "hello"));
+				repository, statement, JsonNodeFactory.instance.objectNode().put("subject", "hello"));
 
 		var captor = org.mockito.ArgumentCaptor.forClass(PGobject.class);
 		verify(statement).setObject(eq(3), captor.capture(), eq(java.sql.Types.OTHER));

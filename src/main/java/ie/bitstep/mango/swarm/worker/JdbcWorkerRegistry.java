@@ -19,14 +19,14 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 	private static final Logger log = LoggerFactory.getLogger(JdbcWorkerRegistry.class);
 	private static final String UPDATE_WORKER_SQL =
 			"""
-			UPDATE mango_swarm_workers
-			SET hostname = ?, last_heartbeat_at = ?
-			WHERE worker_id = ?
+	UPDATE mango_swarm_workers
+	SET hostname = ?, last_heartbeat_at = ?
+	WHERE worker_id = ?
 			""";
 	private static final String INSERT_WORKER_SQL =
 			"""
-			INSERT INTO mango_swarm_workers (worker_id, hostname, started_at, last_heartbeat_at)
-			VALUES (?, ?, ?, ?)
+	INSERT INTO mango_swarm_workers (worker_id, hostname, started_at, last_heartbeat_at)
+	VALUES (?, ?, ?, ?)
 			""";
 	private static final String DELETE_STALE_WORKERS_SQL =
 			"DELETE FROM mango_swarm_workers WHERE last_heartbeat_at < ?";
@@ -50,7 +50,7 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 	@Override
 	public int heartbeat(UUID workerId, String hostname, Instant startedAt, Instant now) {
 		int updated = executeRequired(
-				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
+				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(UPDATE_WORKER_SQL)) {
 						statement.setString(1, hostname);
 						statement.setTimestamp(2, Timestamp.from(now));
@@ -61,7 +61,7 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 				"update worker heartbeat");
 		if (updated == 0) {
 			executeRequired(
-					(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
+					connection -> tables.withSearchPath(connection, scoped -> {
 						try (PreparedStatement statement = scoped.prepareStatement(INSERT_WORKER_SQL)) {
 							statement.setObject(1, workerId);
 							statement.setString(2, hostname);
@@ -74,7 +74,7 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 		}
 		Instant staleBefore = now.minus(staleAfter);
 		int prunedWorkers = executeRequired(
-				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
+				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(DELETE_STALE_WORKERS_SQL)) {
 						statement.setTimestamp(1, Timestamp.from(staleBefore));
 						return statement.executeUpdate();
@@ -92,7 +92,7 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 	@Override
 	public int countActiveWorkers(Instant now) {
 		int count = executeRequired(
-				(ConnectionCallback<Integer>) connection -> tables.withSearchPath(connection, scoped -> {
+				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(COUNT_ACTIVE_WORKERS_SQL)) {
 						statement.setTimestamp(1, Timestamp.from(now.minus(staleAfter)));
 						try (ResultSet rs = statement.executeQuery()) {
