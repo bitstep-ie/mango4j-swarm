@@ -193,6 +193,38 @@ class TaskRepositoryTest extends H2TestSupport {
 	}
 
 	@Test
+	void requestedSlotInsidePreviousSlotSpacingMovesAfterPreviousSlot() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		taskRepository.queueInNextSlot(
+				"email", JsonNodeFactory.instance.objectNode().put("i", 1), now, Duration.ofMillis(10));
+
+		UUID taskId = taskRepository.queueInNextSlot(
+				"email", JsonNodeFactory.instance.objectNode().put("i", 2), now.plusMillis(5), Duration.ofMillis(10));
+
+		Instant availableAt = jdbcTemplate.queryForObject(
+				"select available_at from mango_swarm_tasks where id = ?", Instant.class, taskId);
+		assertThat(availableAt).isEqualTo(now.plusMillis(10));
+	}
+
+	@Test
+	void requestedSlotInsideNextSlotSpacingMovesAfterNextSlot() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		Instant future = now.plusSeconds(1);
+		taskRepository.queueInNextSlot(
+				"email", JsonNodeFactory.instance.objectNode().put("i", 1), future, Duration.ofMillis(10));
+
+		UUID taskId = taskRepository.queueInNextSlot(
+				"email",
+				JsonNodeFactory.instance.objectNode().put("i", 2),
+				future.minusMillis(5),
+				Duration.ofMillis(10));
+
+		Instant availableAt = jdbcTemplate.queryForObject(
+				"select available_at from mango_swarm_tasks where id = ?", Instant.class, taskId);
+		assertThat(availableAt).isEqualTo(future.plusMillis(10));
+	}
+
+	@Test
 	void queueInNextSlotParticipatesInExistingTransaction() {
 		Instant now = Instant.parse("2026-05-20T10:00:00Z");
 		TransactionTemplate transactionTemplate =

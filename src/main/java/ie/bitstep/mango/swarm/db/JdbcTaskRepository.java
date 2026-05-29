@@ -1,5 +1,6 @@
 package ie.bitstep.mango.swarm.db;
 
+import java.sql.Array;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -86,11 +87,11 @@ public class JdbcTaskRepository implements TaskRepository {
 			""";
 	private static final String SELECT_CLAIMED_TASKS_SQL =
 			"""
-	SELECT id, task_type, payload, status, available_at, claimed_by, claimed_at,
-		attempt_count, created_at, updated_at
-	FROM mango_swarm_tasks
-	WHERE claimed_by = ?
-	AND id IN (%s)
+		SELECT id, task_type, payload, status, available_at, claimed_by, claimed_at,
+			attempt_count, created_at, updated_at
+		FROM mango_swarm_tasks
+		WHERE claimed_by = ?
+		AND id = ANY (?)
 			""";
 	private static final String MARK_IN_PROGRESS_SQL =
 			"""
@@ -403,11 +404,10 @@ public class JdbcTaskRepository implements TaskRepository {
 	private List<TaskRecord> selectClaimedTasks(java.sql.Connection connection, List<UUID> ids, UUID workerId)
 			throws SQLException {
 		Map<UUID, TaskRecord> claimedById = new HashMap<>();
-		try (PreparedStatement query = connection.prepareStatement(selectClaimedTasksSql(ids.size()))) {
+		Array taskIds = connection.createArrayOf(uuidArrayType(), ids.toArray());
+		try (PreparedStatement query = connection.prepareStatement(SELECT_CLAIMED_TASKS_SQL)) {
 			query.setObject(1, workerId);
-			for (int i = 0; i < ids.size(); i++) {
-				query.setObject(i + 2, ids.get(i));
-			}
+			query.setArray(2, taskIds);
 			try (ResultSet rs = query.executeQuery()) {
 				int rowNum = 0;
 				while (rs.next()) {
@@ -415,12 +415,14 @@ public class JdbcTaskRepository implements TaskRepository {
 					claimedById.put(task.id(), task);
 				}
 			}
+		} finally {
+			taskIds.free();
 		}
 		return claimedTasksInSelectionOrder(ids, claimedById);
 	}
 
-	private static String selectClaimedTasksSql(int idCount) {
-		return SELECT_CLAIMED_TASKS_SQL.formatted("?,".repeat(idCount - 1) + "?");
+	private String uuidArrayType() {
+		return isH2() ? "UUID" : "uuid";
 	}
 
 	private static List<TaskRecord> claimedTasksInSelectionOrder(List<UUID> ids, Map<UUID, TaskRecord> claimedById) {
