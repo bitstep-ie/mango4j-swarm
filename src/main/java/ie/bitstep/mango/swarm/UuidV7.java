@@ -8,7 +8,9 @@ import java.util.UUID;
 public final class UuidV7 {
 	private static final SecureRandom RANDOM = new SecureRandom();
 
-	private UuidV7() {}
+	private UuidV7() {
+		throw new AssertionError("No instances");
+	}
 
 	public static UUID generate() {
 		return generate(Instant.now());

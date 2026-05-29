@@ -12,8 +12,11 @@ import ie.bitstep.mango.swarm.config.MangoSwarmProperties;
 
 final class ExecutorFactory {
 	private static final String WORKER_THREAD_PREFIX = "swarm-worker-";
+	private static final boolean VIRTUAL_THREADS_AVAILABLE = false;
 
-	private ExecutorFactory() {}
+	private ExecutorFactory() {
+		throw new AssertionError("No instances");
+	}
 
 	static ExecutorService create(MangoSwarmProperties.Executor config) {
 		int maxThreads = resolveMaxThreads(config.getMaxThreads(), false);
@@ -38,7 +41,7 @@ final class ExecutorFactory {
 	}
 
 	static boolean virtualThreadsAvailable() {
-		return false;
+		return VIRTUAL_THREADS_AVAILABLE;
 	}
 
 	private static ThreadFactory namingFactory(ThreadFactory delegate) {

@@ -95,8 +95,11 @@ public class MangoSwarmDaemon {
 		}
 		executorService.shutdown();
 		try {
-			executorService.awaitTermination(30, TimeUnit.SECONDS);
+			if (!executorService.awaitTermination(30, TimeUnit.SECONDS)) {
+				executorService.shutdownNow();
+			}
 		} catch (InterruptedException ex) {
+			executorService.shutdownNow();
 			Thread.currentThread().interrupt();
 		}
 	}
@@ -105,63 +108,70 @@ public class MangoSwarmDaemon {
 		heartbeatIfNeeded(now);
 		cleanupIfNeeded(now);
 		reclaimTimedOut(now);
-		Duration nextRateLimitedPoll = null;
-		boolean attemptedAnyClaim = false;
-		boolean claimedAnyTasks = false;
-		boolean dispatchedAnyTasks = false;
+		PollState pollState = new PollState();
 		for (Map.Entry<String, MangoSwarmProperties.TaskType> entry :
 				properties.getTaskTypes().entrySet()) {
-			String taskType = entry.getKey();
-			MangoSwarmProperties.TaskType config = entry.getValue();
-			double effectiveRate = Math.max(0.0d, (double) config.getRate() / Math.max(activeWorkers, 1));
-			SmoothRateLimiter limiter = rateLimiters.get(taskType);
-			limiter.configure(effectiveRate, config.getPeriod(), now);
-			BatchDecision decision = decideBatchSize(taskType, config, effectiveRate, now);
-			if (decision.claimLimit() <= 0) {
-				if (decision.rateCapacity() <= 0 && isPositive(decision.nextExecutionDelay())) {
-					nextRateLimitedPoll = minPositive(nextRateLimitedPoll, decision.nextExecutionDelay());
-				}
-				continue;
+			processTaskType(entry, now, pollState);
+		}
+		return resolvePollDelay(pollState);
+	}
+
+	private void processTaskType(
+			Map.Entry<String, MangoSwarmProperties.TaskType> entry, Instant now, PollState pollState) {
+		String taskType = entry.getKey();
+		MangoSwarmProperties.TaskType config = entry.getValue();
+		double effectiveRate = Math.max(0.0d, (double) config.getRate() / Math.max(activeWorkers, 1));
+		SmoothRateLimiter limiter = rateLimiters.get(taskType);
+		limiter.configure(effectiveRate, config.getPeriod(), now);
+		BatchDecision decision = decideBatchSize(taskType, config, effectiveRate, now);
+		if (decision.claimLimit() <= 0) {
+			if (decision.rateCapacity() <= 0 && isPositive(decision.nextExecutionDelay())) {
+				pollState.nextRateLimitedPoll =
+						minPositive(pollState.nextRateLimitedPoll, decision.nextExecutionDelay());
 			}
-			log.debug(
-					"swarm claiming batch: taskType={}, workerId={}, activeWorkers={}, effectiveRate={}/{}, configuredBatch={}, claimLimit={}, rateCapacity={}, typeCapacity={}, executorCapacity={}",
-					taskType,
-					workerId,
-					activeWorkers,
-					effectiveRate,
-					config.getPeriod(),
-					decision.configuredBatch(),
-					decision.claimLimit(),
-					decision.rateCapacity(),
-					decision.remainingTypeCapacity(),
-					decision.remainingExecutorCapacity());
-			attemptedAnyClaim = true;
-			List<TaskRecord> claimed = taskRepository.claimBatch(taskType, workerId, now, decision.claimLimit());
-			log.debug(
-					"swarm claimed batch: taskType={}, workerId={}, requested={}, claimed={}, taskIds={}",
-					taskType,
-					workerId,
-					decision.claimLimit(),
-					claimed.size(),
-					log.isDebugEnabled() ? claimed.stream().map(TaskRecord::id).toList() : List.of());
-			if (!claimed.isEmpty()) {
-				claimedAnyTasks = true;
-			}
-			for (TaskRecord task : claimed) {
-				if (dispatch(task, now)) {
-					dispatchedAnyTasks = true;
-				}
+			return;
+		}
+		log.debug(
+				"swarm claiming batch: taskType={}, workerId={}, activeWorkers={}, effectiveRate={}/{}, configuredBatch={}, claimLimit={}, rateCapacity={}, typeCapacity={}, executorCapacity={}",
+				taskType,
+				workerId,
+				activeWorkers,
+				effectiveRate,
+				config.getPeriod(),
+				decision.configuredBatch(),
+				decision.claimLimit(),
+				decision.rateCapacity(),
+				decision.remainingTypeCapacity(),
+				decision.remainingExecutorCapacity());
+		pollState.attemptedAnyClaim = true;
+		List<TaskRecord> claimed = taskRepository.claimBatch(taskType, workerId, now, decision.claimLimit());
+		log.debug(
+				"swarm claimed batch: taskType={}, workerId={}, requested={}, claimed={}, taskIds={}",
+				taskType,
+				workerId,
+				decision.claimLimit(),
+				claimed.size(),
+				log.isDebugEnabled() ? claimed.stream().map(TaskRecord::id).toList() : List.of());
+		if (!claimed.isEmpty()) {
+			pollState.claimedAnyTasks = true;
+		}
+		for (TaskRecord task : claimed) {
+			if (dispatch(task, now)) {
+				pollState.dispatchedAnyTasks = true;
 			}
 		}
-		if (dispatchedAnyTasks) {
+	}
+
+	private Duration resolvePollDelay(PollState pollState) {
+		if (pollState.dispatchedAnyTasks) {
 			consecutiveEmptyPolls = 0;
 			return Duration.ZERO;
 		}
-		if (claimedAnyTasks) {
+		if (pollState.claimedAnyTasks) {
 			consecutiveEmptyPolls = 0;
 			return properties.getExecutor().getPollInterval();
 		}
-		if (attemptedAnyClaim) {
+		if (pollState.attemptedAnyClaim) {
 			consecutiveEmptyPolls++;
 			Duration backoff = emptyQueueBackoff(properties.getExecutor().getPollInterval(), consecutiveEmptyPolls);
 			log.debug(
@@ -172,8 +182,8 @@ public class MangoSwarmDaemon {
 					backoff);
 			return backoff;
 		}
-		if (nextRateLimitedPoll != null) {
-			return nextRateLimitedPoll;
+		if (pollState.nextRateLimitedPoll != null) {
+			return pollState.nextRateLimitedPoll;
 		}
 		return properties.getExecutor().getPollInterval();
 	}
@@ -524,51 +534,18 @@ public class MangoSwarmDaemon {
 		}
 	}
 
-	private static final class BatchDecision {
-		private final int configuredBatch;
-		private final int rateCapacity;
-		private final int remainingTypeCapacity;
-		private final int remainingExecutorCapacity;
-		private final int claimLimit;
-		private final Duration nextExecutionDelay;
-
-		private BatchDecision(
-				int configuredBatch,
-				int rateCapacity,
-				int remainingTypeCapacity,
-				int remainingExecutorCapacity,
-				int claimLimit,
-				Duration nextExecutionDelay) {
-			this.configuredBatch = configuredBatch;
-			this.rateCapacity = rateCapacity;
-			this.remainingTypeCapacity = remainingTypeCapacity;
-			this.remainingExecutorCapacity = remainingExecutorCapacity;
-			this.claimLimit = claimLimit;
-			this.nextExecutionDelay = nextExecutionDelay;
-		}
-
-		private int configuredBatch() {
-			return configuredBatch;
-		}
-
-		private int rateCapacity() {
-			return rateCapacity;
-		}
-
-		private int remainingTypeCapacity() {
-			return remainingTypeCapacity;
-		}
-
-		private int remainingExecutorCapacity() {
-			return remainingExecutorCapacity;
-		}
-
-		private int claimLimit() {
-			return claimLimit;
-		}
-
-		private Duration nextExecutionDelay() {
-			return nextExecutionDelay;
-		}
+	private static final class PollState {
+		private Duration nextRateLimitedPoll;
+		private boolean attemptedAnyClaim;
+		private boolean claimedAnyTasks;
+		private boolean dispatchedAnyTasks;
 	}
+
+	private record BatchDecision(
+			int configuredBatch,
+			int rateCapacity,
+			int remainingTypeCapacity,
+			int remainingExecutorCapacity,
+			int claimLimit,
+			Duration nextExecutionDelay) {}
 }
