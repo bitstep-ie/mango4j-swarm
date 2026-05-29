@@ -35,197 +35,197 @@ import ie.bitstep.mango.swarm.UuidV7;
 public class JdbcTaskRepository implements TaskRepository {
 	private static final String INSERT_TASK_SQL =
 			"""
-	INSERT INTO mango_swarm_tasks(id, task_type, payload, status, available_at)
-	VALUES (?, ?, ?, 'queued', ?)
-			""";
+INSERT INTO mango_swarm_tasks(id, task_type, payload, status, available_at)
+VALUES (?, ?, ?, 'queued', ?)
+""";
 	private static final String INSERT_PACER_SQL =
 			"""
-	INSERT INTO mango_swarm_task_pacers(task_type, slot_at, task_id)
-	VALUES (?, ?, ?)
-			""";
+INSERT INTO mango_swarm_task_pacers(task_type, slot_at, task_id)
+VALUES (?, ?, ?)
+""";
 	private static final String FIND_SLOT_BEFORE_SQL =
 			"""
-	SELECT slot_at
-	FROM mango_swarm_task_pacers
-	WHERE task_type = ?
-	AND slot_at <= ?
-	ORDER BY slot_at DESC
-	LIMIT 1
-			""";
+SELECT slot_at
+FROM mango_swarm_task_pacers
+WHERE task_type = ?
+AND slot_at <= ?
+ORDER BY slot_at DESC
+LIMIT 1
+""";
 	private static final String FIND_SLOT_AFTER_SQL =
 			"""
-	SELECT slot_at
-	FROM mango_swarm_task_pacers
-	WHERE task_type = ?
-	AND slot_at > ?
-	ORDER BY slot_at ASC
-	LIMIT 1
-			""";
+SELECT slot_at
+FROM mango_swarm_task_pacers
+WHERE task_type = ?
+AND slot_at > ?
+ORDER BY slot_at ASC
+LIMIT 1
+""";
 	private static final String SELECT_QUEUED_TASK_IDS_SQL =
 			"""
-	SELECT id
-	FROM mango_swarm_tasks
-	WHERE task_type = ?
-	AND status = 'queued'
-	AND available_at <= ?
-	ORDER BY available_at, id
-	LIMIT ?
-			""";
+SELECT id
+FROM mango_swarm_tasks
+WHERE task_type = ?
+AND status = 'queued'
+AND available_at <= ?
+ORDER BY available_at, id
+LIMIT ?
+""";
 	private static final String CLAIM_TASK_SQL =
 			"""
-	UPDATE mango_swarm_tasks
-	SET status = 'claimed',
-		claimed_by = ?,
-		claimed_at = ?,
-		progress_percent = NULL,
-		progress_description = NULL,
-		last_progress_at = NULL,
-		attempt_count = attempt_count + 1,
-		updated_at = ?
-	WHERE id = ?
-	AND status = 'queued'
-			""";
+UPDATE mango_swarm_tasks
+SET status = 'claimed',
+claimed_by = ?,
+claimed_at = ?,
+progress_percent = NULL,
+progress_description = NULL,
+last_progress_at = NULL,
+attempt_count = attempt_count + 1,
+updated_at = ?
+WHERE id = ?
+AND status = 'queued'
+""";
 	private static final String SELECT_CLAIMED_TASKS_SQL =
 			"""
-		SELECT id, task_type, payload, status, available_at, claimed_by, claimed_at,
-			attempt_count, created_at, updated_at
-		FROM mango_swarm_tasks
-		WHERE claimed_by = ?
-		AND id = ANY (?)
-			""";
+SELECT id, task_type, payload, status, available_at, claimed_by, claimed_at,
+attempt_count, created_at, updated_at
+FROM mango_swarm_tasks
+WHERE claimed_by = ?
+AND id = ANY (?)
+""";
 	private static final String MARK_IN_PROGRESS_SQL =
 			"""
-	UPDATE mango_swarm_tasks
-	SET status = 'in_progress', last_progress_at = ?, updated_at = ?
-	WHERE id = ? AND claimed_by = ? AND status = 'claimed'
-			""";
+UPDATE mango_swarm_tasks
+SET status = 'in_progress', last_progress_at = ?, updated_at = ?
+WHERE id = ? AND claimed_by = ? AND status = 'claimed'
+""";
 	private static final String RECORD_PROGRESS_SQL =
 			"""
-	UPDATE mango_swarm_tasks
-	SET progress_percent = ?, progress_description = ?, last_progress_at = ?, updated_at = ?
-	WHERE id = ? AND claimed_by = ? AND status = 'in_progress'
-			""";
+UPDATE mango_swarm_tasks
+SET progress_percent = ?, progress_description = ?, last_progress_at = ?, updated_at = ?
+WHERE id = ? AND claimed_by = ? AND status = 'in_progress'
+""";
 	private static final String MARK_COMPLETED_SQL =
 			"""
-	UPDATE mango_swarm_tasks
-	SET status = 'completed',
-		completed_at = ?,
-		progress_percent = 100,
-		progress_description = 'finished',
-		last_progress_at = ?,
-		updated_at = ?
-	WHERE id = ? AND claimed_by = ? AND status IN ('claimed', 'in_progress')
-			""";
+UPDATE mango_swarm_tasks
+SET status = 'completed',
+completed_at = ?,
+progress_percent = 100,
+progress_description = 'finished',
+last_progress_at = ?,
+updated_at = ?
+WHERE id = ? AND claimed_by = ? AND status IN ('claimed', 'in_progress')
+""";
 	private static final String MARK_FAILED_SQL =
 			"""
-	UPDATE mango_swarm_tasks
-	SET status = 'failed', failed_at = ?, updated_at = ?, last_error_message = ?
-	WHERE id = ? AND claimed_by = ? AND status IN ('claimed', 'in_progress')
-			""";
+UPDATE mango_swarm_tasks
+SET status = 'failed', failed_at = ?, updated_at = ?, last_error_message = ?
+WHERE id = ? AND claimed_by = ? AND status IN ('claimed', 'in_progress')
+""";
 	private static final String RESCHEDULE_AFTER_FAILURE_SQL =
 			"""
-	UPDATE mango_swarm_tasks
-	SET status = 'queued',
-		available_at = ?,
-		claimed_by = NULL,
-		claimed_at = NULL,
-		progress_percent = NULL,
-		progress_description = NULL,
-		last_progress_at = NULL,
-		failed_at = NULL,
-		updated_at = ?,
-		last_error_message = ?
-	WHERE id = ? AND claimed_by = ? AND status IN ('claimed', 'in_progress')
-			""";
+UPDATE mango_swarm_tasks
+SET status = 'queued',
+available_at = ?,
+claimed_by = NULL,
+claimed_at = NULL,
+progress_percent = NULL,
+progress_description = NULL,
+last_progress_at = NULL,
+failed_at = NULL,
+updated_at = ?,
+last_error_message = ?
+WHERE id = ? AND claimed_by = ? AND status IN ('claimed', 'in_progress')
+""";
 	private static final String REQUEUE_CLAIMED_SQL =
 			"""
-	UPDATE mango_swarm_tasks
-	SET status = 'queued',
-		available_at = ?,
-		claimed_by = NULL,
-		claimed_at = NULL,
-		progress_percent = NULL,
-		progress_description = NULL,
-		last_progress_at = NULL,
-		updated_at = ?,
-		last_error_message = ?
-	WHERE id = ? AND claimed_by = ? AND status = 'claimed'
-			""";
+UPDATE mango_swarm_tasks
+SET status = 'queued',
+available_at = ?,
+claimed_by = NULL,
+claimed_at = NULL,
+progress_percent = NULL,
+progress_description = NULL,
+last_progress_at = NULL,
+updated_at = ?,
+last_error_message = ?
+WHERE id = ? AND claimed_by = ? AND status = 'claimed'
+""";
 	private static final String RECLAIM_TIMED_OUT_SQL =
 			"""
-	UPDATE mango_swarm_tasks
-	SET status = 'queued',
-		claimed_by = NULL,
-		claimed_at = NULL,
-		progress_percent = NULL,
-		progress_description = NULL,
-		last_progress_at = NULL,
-		updated_at = ?,
-		last_error_message = 'Reclaimed after timeout'
-	WHERE id IN (
-		SELECT id
-		FROM mango_swarm_tasks
-		WHERE task_type = ?
-		AND status IN ('claimed', 'in_progress')
-		AND COALESCE(last_progress_at, claimed_at) < ?
-		ORDER BY COALESCE(last_progress_at, claimed_at), id
-		LIMIT ?
-	)
-			""";
+UPDATE mango_swarm_tasks
+SET status = 'queued',
+claimed_by = NULL,
+claimed_at = NULL,
+progress_percent = NULL,
+progress_description = NULL,
+last_progress_at = NULL,
+updated_at = ?,
+last_error_message = 'Reclaimed after timeout'
+WHERE id IN (
+SELECT id
+FROM mango_swarm_tasks
+WHERE task_type = ?
+AND status IN ('claimed', 'in_progress')
+AND COALESCE(last_progress_at, claimed_at) < ?
+ORDER BY COALESCE(last_progress_at, claimed_at), id
+LIMIT ?
+)
+""";
 	private static final String MARK_TIMED_OUT_FAILED_SQL =
 			"""
-	UPDATE mango_swarm_tasks
-	SET status = 'failed',
-		failed_at = ?,
-		updated_at = ?,
-		last_error_message = 'Task timed out and reclaim is disabled'
-	WHERE id IN (
-		SELECT id
-		FROM mango_swarm_tasks
-		WHERE task_type = ?
-		AND status IN ('claimed', 'in_progress')
-		AND COALESCE(last_progress_at, claimed_at) < ?
-		ORDER BY COALESCE(last_progress_at, claimed_at), id
-		LIMIT ?
-	)
-			""";
+UPDATE mango_swarm_tasks
+SET status = 'failed',
+failed_at = ?,
+updated_at = ?,
+last_error_message = 'Task timed out and reclaim is disabled'
+WHERE id IN (
+SELECT id
+FROM mango_swarm_tasks
+WHERE task_type = ?
+AND status IN ('claimed', 'in_progress')
+AND COALESCE(last_progress_at, claimed_at) < ?
+ORDER BY COALESCE(last_progress_at, claimed_at), id
+LIMIT ?
+)
+""";
 	private static final String DELETE_COMPLETED_SQL =
 			"""
-	DELETE FROM mango_swarm_tasks
-	WHERE id IN (
-		SELECT id
-		FROM mango_swarm_tasks
-		WHERE status = 'completed'
-		AND completed_at IS NOT NULL
-		AND completed_at < ?
-		ORDER BY completed_at, id
-		LIMIT ?
-	)
-			""";
+DELETE FROM mango_swarm_tasks
+WHERE id IN (
+SELECT id
+FROM mango_swarm_tasks
+WHERE status = 'completed'
+AND completed_at IS NOT NULL
+AND completed_at < ?
+ORDER BY completed_at, id
+LIMIT ?
+)
+""";
 	private static final String DELETE_FAILED_SQL =
 			"""
-	DELETE FROM mango_swarm_tasks
-	WHERE id IN (
-		SELECT id
-		FROM mango_swarm_tasks
-		WHERE status = 'failed'
-		AND failed_at IS NOT NULL
-		AND failed_at < ?
-		ORDER BY failed_at, id
-		LIMIT ?
-	)
-			""";
+DELETE FROM mango_swarm_tasks
+WHERE id IN (
+SELECT id
+FROM mango_swarm_tasks
+WHERE status = 'failed'
+AND failed_at IS NOT NULL
+AND failed_at < ?
+ORDER BY failed_at, id
+LIMIT ?
+)
+""";
 	private static final String DELETE_PACERS_SQL =
 			"""
-	DELETE FROM mango_swarm_task_pacers
-	WHERE (task_type, slot_at) IN (
-		SELECT task_type, slot_at
-		FROM mango_swarm_task_pacers
-		WHERE slot_at < ?
-		ORDER BY slot_at, task_type
-		LIMIT ?
-	)
-			""";
+DELETE FROM mango_swarm_task_pacers
+WHERE (task_type, slot_at) IN (
+SELECT task_type, slot_at
+FROM mango_swarm_task_pacers
+WHERE slot_at < ?
+ORDER BY slot_at, task_type
+LIMIT ?
+)
+""";
 	private static final int JSON_PARAMETER_INDEX = 3;
 
 	private final JdbcTemplate jdbcTemplate;
@@ -286,36 +286,53 @@ public class JdbcTaskRepository implements TaskRepository {
 	private Instant reserveSlot(
 			java.sql.Connection connection, String taskType, UUID taskId, Instant requestedAt, Duration slotSpacing)
 			throws SQLException {
-		Instant candidate = requestedAt;
+		Instant candidate = Objects.requireNonNull(requestedAt, "requestedAt");
 		int attempts = 0;
 		Instant reservedAt = null;
-		while (reservedAt == null) {
-			attempts++;
-			if (attempts > 50_000) {
-				throw new SQLException("Unable to reserve slot after " + attempts + " attempts for taskType=" + taskType
-						+ " requestedAt=" + requestedAt);
-			}
-			Instant before = findSlot(connection, taskType, candidate, true);
-			if (before != null && candidate.isBefore(before.plus(slotSpacing))) {
-				candidate = before.plus(slotSpacing);
-			} else {
-				Instant after = findSlot(connection, taskType, candidate, false);
-				if (after != null && candidate.plus(slotSpacing).isAfter(after)) {
-					candidate = after.plus(slotSpacing);
+		try (PreparedStatement insert = connection.prepareStatement(INSERT_PACER_SQL)) {
+			insert.setString(1, taskType);
+			insert.setObject(3, taskId);
+			while (reservedAt == null) {
+				attempts++;
+				if (attempts > 50_000) {
+					throw new SQLException("Unable to reserve slot after " + attempts + " attempts for taskType="
+							+ taskType + " requestedAt=" + requestedAt);
+				}
+				Instant adjusted = nextCandidate(connection, taskType, candidate, slotSpacing);
+				boolean candidateUnchanged = adjusted.equals(candidate);
+				if (candidateUnchanged && tryReserveCandidate(insert, candidate)) {
+					reservedAt = candidate;
 				} else {
-					try (PreparedStatement insert = connection.prepareStatement(INSERT_PACER_SQL)) {
-						insert.setString(1, taskType);
-						insert.setTimestamp(2, Timestamp.from(candidate));
-						insert.setObject(3, taskId);
-						insert.executeUpdate();
-						reservedAt = candidate;
-					} catch (SQLIntegrityConstraintViolationException ex) {
-						candidate = candidate.plus(slotSpacing);
-					}
+					candidate = candidateUnchanged ? candidate.plus(slotSpacing) : adjusted;
 				}
 			}
 		}
-		return reservedAt;
+		return Objects.requireNonNull(reservedAt, "reserved slot");
+	}
+
+	private Instant nextCandidate(
+			java.sql.Connection connection, String taskType, Instant candidate, Duration slotSpacing)
+			throws SQLException {
+		Objects.requireNonNull(candidate, "candidate");
+		Instant before = findSlot(connection, taskType, candidate, true);
+		if (before != null && candidate.isBefore(before.plus(slotSpacing))) {
+			return before.plus(slotSpacing);
+		}
+		Instant after = findSlot(connection, taskType, candidate, false);
+		if (after != null && candidate.plus(slotSpacing).isAfter(after)) {
+			return after.plus(slotSpacing);
+		}
+		return candidate;
+	}
+
+	private static boolean tryReserveCandidate(PreparedStatement insert, Instant candidate) throws SQLException {
+		try {
+			insert.setTimestamp(2, Timestamp.from(candidate));
+			insert.executeUpdate();
+			return true;
+		} catch (SQLIntegrityConstraintViolationException ex) {
+			return false;
+		}
 	}
 
 	private Instant findSlot(java.sql.Connection connection, String taskType, Instant candidate, boolean before)
@@ -411,7 +428,7 @@ public class JdbcTaskRepository implements TaskRepository {
 			try (ResultSet rs = query.executeQuery()) {
 				int rowNum = 0;
 				while (rs.next()) {
-					TaskRecord task = rowMapper.mapRow(rs, rowNum++);
+					TaskRecord task = Objects.requireNonNull(rowMapper.mapRow(rs, rowNum++), "mapped claimed task");
 					claimedById.put(task.id(), task);
 				}
 			}
