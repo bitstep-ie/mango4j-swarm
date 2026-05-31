@@ -27,18 +27,6 @@ public final class SchemaQualifiedTables {
 		return schema;
 	}
 
-	public String tasks() {
-		return "mango_swarm_tasks";
-	}
-
-	public String workers() {
-		return "mango_swarm_workers";
-	}
-
-	public String taskPacers() {
-		return "mango_swarm_task_pacers";
-	}
-
 	public <T> T withSearchPath(Connection connection, SqlWork<T> work) throws SQLException {
 		if (schema == null) {
 			return work.execute(connection);

@@ -21,8 +21,6 @@ class SchemaQualifiedTablesTest {
 		SchemaQualifiedTables tables = new SchemaQualifiedTables(null);
 
 		assertThat(tables.schema()).isNull();
-		assertThat(tables.tasks()).isEqualTo("mango_swarm_tasks");
-		assertThat(tables.workers()).isEqualTo("mango_swarm_workers");
 	}
 
 	@Test
@@ -30,8 +28,6 @@ class SchemaQualifiedTablesTest {
 		SchemaQualifiedTables tables = new SchemaQualifiedTables("application_schema");
 
 		assertThat(tables.schema()).isEqualTo("application_schema");
-		assertThat(tables.tasks()).isEqualTo("mango_swarm_tasks");
-		assertThat(tables.workers()).isEqualTo("mango_swarm_workers");
 	}
 
 	@Test

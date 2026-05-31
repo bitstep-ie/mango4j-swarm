@@ -49,9 +49,6 @@ class MangoSwarmAutoConfigurationTest {
 		SchemaQualifiedTables tables = configuration.mangoSchemaQualifiedTables(properties);
 
 		assertThat(tables.schema()).isEqualTo("app_schema");
-		assertThat(tables.tasks()).isEqualTo("mango_swarm_tasks");
-		assertThat(tables.workers()).isEqualTo("mango_swarm_workers");
-		assertThat(tables.taskPacers()).isEqualTo("mango_swarm_task_pacers");
 	}
 
 	@Test
