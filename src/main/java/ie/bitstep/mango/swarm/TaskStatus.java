@@ -3,13 +3,32 @@ package ie.bitstep.mango.swarm;
 /** Persistent task lifecycle states stored in {@code mango_swarm_tasks.status}. */
 public enum TaskStatus {
 	/** Waiting for claim. */
-	queued,
+	QUEUED("queued"),
 	/** Claimed by a worker, awaiting task execution start. */
-	claimed,
+	CLAIMED("claimed"),
 	/** Currently running in a worker executor thread. */
-	in_progress,
+	IN_PROGRESS("in_progress"),
 	/** Finished successfully. */
-	completed,
+	COMPLETED("completed"),
 	/** Finished unsuccessfully with no remaining retries. */
-	failed
+	FAILED("failed");
+
+	private final String databaseValue;
+
+	TaskStatus(String databaseValue) {
+		this.databaseValue = databaseValue;
+	}
+
+	public String databaseValue() {
+		return databaseValue;
+	}
+
+	public static TaskStatus fromDatabaseValue(String value) {
+		for (TaskStatus status : values()) {
+			if (status.databaseValue.equals(value)) {
+				return status;
+			}
+		}
+		throw new IllegalArgumentException("Unknown task status: " + value);
+	}
 }

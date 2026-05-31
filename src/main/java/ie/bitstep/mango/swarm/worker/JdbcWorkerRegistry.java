@@ -19,14 +19,14 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 	private static final Logger log = LoggerFactory.getLogger(JdbcWorkerRegistry.class);
 	private static final String UPDATE_WORKER_SQL =
 			"""
-	UPDATE mango_swarm_workers
-	SET hostname = ?, last_heartbeat_at = ?
-	WHERE worker_id = ?
+			UPDATE mango_swarm_workers
+			SET hostname = ?, last_heartbeat_at = ?
+			WHERE worker_id = ?
 			""";
 	private static final String INSERT_WORKER_SQL =
 			"""
-	INSERT INTO mango_swarm_workers (worker_id, hostname, started_at, last_heartbeat_at)
-	VALUES (?, ?, ?, ?)
+			INSERT INTO mango_swarm_workers (worker_id, hostname, started_at, last_heartbeat_at)
+			VALUES (?, ?, ?, ?)
 			""";
 	private static final String DELETE_STALE_WORKERS_SQL =
 			"DELETE FROM mango_swarm_workers WHERE last_heartbeat_at < ?";

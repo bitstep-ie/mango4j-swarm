@@ -65,8 +65,9 @@ class WorkerRegistryTest extends H2TestSupport {
 				new JdbcWorkerRegistry(jdbcTemplate, java.time.Duration.ofSeconds(30), new SchemaQualifiedTables(null));
 		when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Integer>>any()))
 				.thenReturn(null);
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
 
-		assertThatThrownBy(() -> registry.countActiveWorkers(Instant.parse("2026-05-20T10:00:00Z")))
+		assertThatThrownBy(() -> registry.countActiveWorkers(now))
 				.isInstanceOf(NullPointerException.class)
 				.hasMessage("JdbcTemplate.execute returned null for count active workers");
 	}

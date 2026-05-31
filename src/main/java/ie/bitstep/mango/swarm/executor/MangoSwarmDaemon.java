@@ -389,9 +389,11 @@ public class MangoSwarmDaemon {
 		return true;
 	}
 
-	@SuppressWarnings({"unchecked", "rawtypes"})
 	private void executeTask(TaskRecord task) {
-		TaskHandler handler = handlerRegistry.get(task.taskType());
+		executeTask(task, handlerRegistry.get(task.taskType()));
+	}
+
+	private <T> void executeTask(TaskRecord task, TaskHandler<T> handler) {
 		try {
 			log.debug(
 					"swarm task execution started: taskType={}, taskId={}, workerId={}, attempt={}",
@@ -399,8 +401,8 @@ public class MangoSwarmDaemon {
 					task.id(),
 					workerId,
 					task.attemptCount());
-			Object payload = extractPayload(task.payload(), handler.payloadExtractor());
-			TaskExecutionContext context = new TaskExecutionContext(
+			T payload = extractPayload(task.payload(), handler.payloadExtractor());
+			TaskExecutionContext<T> context = new TaskExecutionContext<>(
 					task.id(),
 					task.taskType(),
 					workerId,

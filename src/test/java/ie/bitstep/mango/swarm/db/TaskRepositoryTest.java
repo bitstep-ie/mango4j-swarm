@@ -3,6 +3,7 @@ package ie.bitstep.mango.swarm.db;
 import java.lang.reflect.Proxy;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -58,7 +59,13 @@ class TaskRepositoryTest extends H2TestSupport {
 
 		assertThat(claimed).isEmpty();
 		assertThat(jdbcTemplate.queryForObject("select status from mango_swarm_tasks", String.class))
-				.isEqualTo(TaskStatus.queued.name());
+				.isEqualTo(TaskStatus.QUEUED.databaseValue());
+	}
+
+	@Test
+	void claimBatchReturnsEmptyWhenNoTasksAreQueued() {
+		assertThat(taskRepository.claimBatch("email", UUID.randomUUID(), Instant.parse("2026-05-20T10:00:00Z"), 10))
+				.isEmpty();
 	}
 
 	@Test
@@ -72,7 +79,7 @@ class TaskRepositoryTest extends H2TestSupport {
 		row.put("id", taskId);
 		row.put("task_type", "email");
 		row.put("payload", "{\"subject\":\"hello\"}");
-		row.put("status", TaskStatus.queued.name());
+		row.put("status", TaskStatus.QUEUED.databaseValue());
 		row.put("available_at", Timestamp.from(availableAt));
 		row.put("claimed_by", workerId);
 		row.put("claimed_at", null);
@@ -80,18 +87,18 @@ class TaskRepositoryTest extends H2TestSupport {
 		row.put("created_at", Timestamp.from(createdAt));
 		row.put("updated_at", Timestamp.from(updatedAt));
 
-		TaskRecord record = ((JdbcTaskRepository) taskRepository).mapTask(resultSet(row), 0);
+		TaskRecord task = ((JdbcTaskRepository) taskRepository).mapTask(resultSet(row));
 
-		assertThat(record.id()).isEqualTo(taskId);
-		assertThat(record.taskType()).isEqualTo("email");
-		assertThat(record.status()).isEqualTo(TaskStatus.queued);
-		assertThat(record.availableAt()).isEqualTo(availableAt);
-		assertThat(record.claimedBy()).isEqualTo(workerId);
-		assertThat(record.claimedAt()).isNull();
-		assertThat(record.attemptCount()).isZero();
-		assertThat(record.createdAt()).isEqualTo(createdAt);
-		assertThat(record.updatedAt()).isEqualTo(updatedAt);
-		assertThat(record.payload().get("subject").asText()).isEqualTo("hello");
+		assertThat(task.id()).isEqualTo(taskId);
+		assertThat(task.taskType()).isEqualTo("email");
+		assertThat(task.status()).isEqualTo(TaskStatus.QUEUED);
+		assertThat(task.availableAt()).isEqualTo(availableAt);
+		assertThat(task.claimedBy()).isEqualTo(workerId);
+		assertThat(task.claimedAt()).isNull();
+		assertThat(task.attemptCount()).isZero();
+		assertThat(task.createdAt()).isEqualTo(createdAt);
+		assertThat(task.updatedAt()).isEqualTo(updatedAt);
+		assertThat(task.payload().get("subject").asText()).isEqualTo("hello");
 	}
 
 	@Test
@@ -101,7 +108,7 @@ class TaskRepositoryTest extends H2TestSupport {
 		row.put("id", UUID.randomUUID());
 		row.put("task_type", "email");
 		row.put("payload", "{}");
-		row.put("status", TaskStatus.claimed.name());
+		row.put("status", TaskStatus.CLAIMED.databaseValue());
 		row.put("available_at", Timestamp.from(now.minusSeconds(1)));
 		row.put("claimed_by", UUID.randomUUID());
 		row.put("claimed_at", Timestamp.from(now));
@@ -109,9 +116,42 @@ class TaskRepositoryTest extends H2TestSupport {
 		row.put("created_at", Timestamp.from(now.minusSeconds(2)));
 		row.put("updated_at", Timestamp.from(now));
 
-		TaskRecord record = ((JdbcTaskRepository) taskRepository).mapTask(resultSet(row), 0);
+		TaskRecord task = ((JdbcTaskRepository) taskRepository).mapTask(resultSet(row));
 
-		assertThat(record.claimedAt()).isEqualTo(now);
+		assertThat(task.claimedAt()).isEqualTo(now);
+	}
+
+	@Test
+	void invalidJsonPayloadRowsFailMapping() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		Map<String, Object> row = new HashMap<>();
+		row.put("id", UUID.randomUUID());
+		row.put("task_type", "email");
+		row.put("payload", "{");
+		row.put("status", TaskStatus.QUEUED.databaseValue());
+		row.put("available_at", Timestamp.from(now));
+		row.put("claimed_by", null);
+		row.put("claimed_at", null);
+		row.put("attempt_count", 0);
+		row.put("created_at", Timestamp.from(now));
+		row.put("updated_at", Timestamp.from(now));
+
+		assertThatThrownBy(() -> ((JdbcTaskRepository) taskRepository).mapTask(resultSet(row)))
+				.isInstanceOf(java.sql.SQLException.class)
+				.hasMessage("Cannot parse task payload");
+	}
+
+	@Test
+	void duplicatePacerSlotReservationReturnsFalse() throws Exception {
+		PreparedStatement statement = mock(PreparedStatement.class);
+		when(statement.executeUpdate()).thenThrow(new SQLIntegrityConstraintViolationException("duplicate slot"));
+		var method = JdbcTaskRepository.class.getDeclaredMethod(
+				"tryReserveCandidate", PreparedStatement.class, Instant.class);
+		method.setAccessible(true);
+
+		boolean reserved = (boolean) method.invoke(null, statement, Instant.parse("2026-05-20T10:00:00Z"));
+
+		assertThat(reserved).isFalse();
 	}
 
 	@Test
@@ -134,13 +174,13 @@ class TaskRepositoryTest extends H2TestSupport {
 				order by available_at
 				""");
 		assertThat(rows).hasSize(3);
-		assertThat(rows.get(0).get("id")).isEqualTo(first);
+		assertThat(rows.get(0)).containsEntry("id", first);
 		assertThat(((java.sql.Timestamp) rows.get(0).get("available_at")).toInstant())
 				.isEqualTo(now);
-		assertThat(rows.get(1).get("id")).isEqualTo(second);
+		assertThat(rows.get(1)).containsEntry("id", second);
 		assertThat(((java.sql.Timestamp) rows.get(1).get("available_at")).toInstant())
 				.isEqualTo(now.plusMillis(10));
-		assertThat(rows.get(2).get("id")).isEqualTo(third);
+		assertThat(rows.get(2)).containsEntry("id", third);
 		assertThat(((java.sql.Timestamp) rows.get(2).get("available_at")).toInstant())
 				.isEqualTo(now.plusSeconds(1));
 	}
@@ -298,9 +338,10 @@ class TaskRepositoryTest extends H2TestSupport {
 				where id = ?
 				""",
 				taskId);
-		assertThat(row.get("status")).isEqualTo("in_progress");
-		assertThat(row.get("progress_percent")).isEqualTo(50);
-		assertThat(row.get("progress_description")).isEqualTo("sending");
+		assertThat(row)
+				.containsEntry("status", "in_progress")
+				.containsEntry("progress_percent", 50)
+				.containsEntry("progress_description", "sending");
 		assertThat(((java.sql.Timestamp) row.get("last_progress_at")).toInstant())
 				.isEqualTo(now.minusSeconds(5));
 	}
@@ -322,9 +363,10 @@ class TaskRepositoryTest extends H2TestSupport {
 				where id = ?
 				""",
 				taskId);
-		assertThat(row.get("status")).isEqualTo("completed");
-		assertThat(row.get("progress_percent")).isEqualTo(100);
-		assertThat(row.get("progress_description")).isEqualTo("finished");
+		assertThat(row)
+				.containsEntry("status", "completed")
+				.containsEntry("progress_percent", 100)
+				.containsEntry("progress_description", "finished");
 		assertThat(((java.sql.Timestamp) row.get("last_progress_at")).toInstant())
 				.isEqualTo(now.plusSeconds(5));
 	}
@@ -347,12 +389,12 @@ class TaskRepositoryTest extends H2TestSupport {
 				where id = ?
 				""",
 				taskId);
-		assertThat(row.get("status")).isEqualTo("queued");
+		assertThat(row).containsEntry("status", "queued");
 		assertThat(((java.sql.Timestamp) row.get("available_at")).toInstant()).isEqualTo(retryAt);
 		assertThat(row.get("claimed_by")).isNull();
 		assertThat(row.get("claimed_at")).isNull();
 		assertThat(row.get("failed_at")).isNull();
-		assertThat(row.get("last_error_message")).isEqualTo("temporary failure");
+		assertThat(row).containsEntry("last_error_message", "temporary failure");
 	}
 
 	@Test
@@ -391,7 +433,7 @@ class TaskRepositoryTest extends H2TestSupport {
 		assertThat(failed).isEqualTo(1);
 		assertThat(jdbcTemplate.queryForObject(
 						"select status from mango_swarm_tasks where id = ?", String.class, taskId))
-				.isEqualTo(TaskStatus.failed.name());
+				.isEqualTo(TaskStatus.FAILED.databaseValue());
 	}
 
 	@Test
@@ -406,7 +448,7 @@ class TaskRepositoryTest extends H2TestSupport {
 		assertThat(failed).isEqualTo(1);
 		assertThat(jdbcTemplate.queryForObject(
 						"select status from mango_swarm_tasks where id = ?", String.class, taskId))
-				.isEqualTo(TaskStatus.failed.name());
+				.isEqualTo(TaskStatus.FAILED.databaseValue());
 	}
 
 	@Test
@@ -439,7 +481,7 @@ class TaskRepositoryTest extends H2TestSupport {
 		assertThat(reclaimed).isZero();
 		assertThat(jdbcTemplate.queryForObject(
 						"select status from mango_swarm_tasks where id = ?", String.class, taskId))
-				.isEqualTo(TaskStatus.claimed.name());
+				.isEqualTo(TaskStatus.CLAIMED.databaseValue());
 	}
 
 	@Test
@@ -519,6 +561,22 @@ class TaskRepositoryTest extends H2TestSupport {
 	}
 
 	@Test
+	void maintenanceMethodsIgnoreNonPositiveLimits() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+		assertThat(taskRepository.reclaimTimedOut("email", Duration.ofSeconds(30), now, 0))
+				.isZero();
+		assertThat(taskRepository.markTimedOutFailed("email", Duration.ofSeconds(30), now, 0))
+				.isZero();
+		assertThat(taskRepository.deleteCompletedOlderThan(Duration.ofDays(30), now, 0))
+				.isZero();
+		assertThat(taskRepository.deleteFailedOlderThan(Duration.ofDays(30), now, 0))
+				.isZero();
+		assertThat(taskRepository.deleteTaskPacersOlderThan(Duration.ofDays(30), now, 0))
+				.isZero();
+	}
+
+	@Test
 	void longMessagesAreTruncated() {
 		Instant now = Instant.parse("2026-05-20T10:00:00Z");
 		UUID workerId = UUID.randomUUID();
@@ -572,13 +630,16 @@ class TaskRepositoryTest extends H2TestSupport {
 
 	@Test
 	void postgresJsonPayloadsAreBoundAsJsonbObjects() throws Exception {
-		JdbcTaskRepository repository = (JdbcTaskRepository) taskRepository;
-		var h2 = JdbcTaskRepository.class.getDeclaredField("h2");
-		h2.setAccessible(true);
-		h2.set(repository, false);
-		var h2Initialized = JdbcTaskRepository.class.getDeclaredField("h2Initialized");
-		h2Initialized.setAccessible(true);
-		h2Initialized.set(repository, true);
+		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+		java.sql.Connection connection = mock(java.sql.Connection.class);
+		java.sql.DatabaseMetaData metaData = mock(java.sql.DatabaseMetaData.class);
+		when(connection.getMetaData()).thenReturn(metaData);
+		when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
+		when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Boolean>>any()))
+				.thenAnswer(invocation ->
+						invocation.<ConnectionCallback<Boolean>>getArgument(0).doInConnection(connection));
+		JdbcTaskRepository repository =
+				new JdbcTaskRepository(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
 		PreparedStatement statement = mock(PreparedStatement.class);
 
 		var method = JdbcTaskRepository.class.getDeclaredMethod(
@@ -586,9 +647,12 @@ class TaskRepositoryTest extends H2TestSupport {
 		method.setAccessible(true);
 		method.invoke(
 				repository, statement, JsonNodeFactory.instance.objectNode().put("subject", "hello"));
+		method.invoke(
+				repository, statement, JsonNodeFactory.instance.objectNode().put("subject", "hello"));
 
 		var captor = org.mockito.ArgumentCaptor.forClass(PGobject.class);
-		verify(statement).setObject(eq(3), captor.capture(), eq(java.sql.Types.OTHER));
+		verify(statement, org.mockito.Mockito.times(2)).setObject(eq(3), captor.capture(), eq(java.sql.Types.OTHER));
+		verify(jdbcTemplate).execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Boolean>>any());
 		assertThat(captor.getValue().getType()).isEqualTo("jsonb");
 		assertThat(captor.getValue().getValue()).isEqualTo("{\"subject\":\"hello\"}");
 	}
@@ -600,9 +664,10 @@ class TaskRepositoryTest extends H2TestSupport {
 				new JdbcTaskRepository(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
 		when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<UUID>>any()))
 				.thenReturn(null);
+		var payload = JsonNodeFactory.instance.objectNode();
+		Instant availableAt = Instant.parse("2026-05-20T10:00:00Z");
 
-		assertThatThrownBy(() -> repository.queue(
-						"email", JsonNodeFactory.instance.objectNode(), Instant.parse("2026-05-20T10:00:00Z")))
+		assertThatThrownBy(() -> repository.queue("email", payload, availableAt))
 				.isInstanceOf(NullPointerException.class)
 				.hasMessage("JdbcTemplate.execute returned null for queue task");
 	}

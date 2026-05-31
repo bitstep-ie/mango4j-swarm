@@ -86,9 +86,9 @@ class PayloadReaderTest {
 				"count": "not-a-number"
 				}
 				"""));
+		PayloadReader.OptionalValue<Integer> priority = invalid.optional(Integer.class, "priority");
 
-		assertThatThrownBy(() ->
-						invalid.optional(Integer.class, "priority").validate(value -> value > 0, "must be positive"))
+		assertThatThrownBy(() -> priority.validate(value -> value > 0, "must be positive"))
 				.isInstanceOf(PayloadExtractionException.class)
 				.hasMessageContaining("Invalid payload field 'priority' as Integer: must be positive");
 
@@ -110,26 +110,6 @@ class PayloadReaderTest {
 			this.templateId = templateId;
 			this.priority = priority;
 			this.trackOpens = trackOpens;
-		}
-
-		private String customerId() {
-			return customerId;
-		}
-
-		private String email() {
-			return email;
-		}
-
-		private String templateId() {
-			return templateId;
-		}
-
-		private int priority() {
-			return priority;
-		}
-
-		private boolean trackOpens() {
-			return trackOpens;
 		}
 
 		@Override

@@ -6,10 +6,8 @@ import java.sql.SQLException;
 import java.util.regex.Pattern;
 
 /** Validates and applies the optional schema used by static swarm SQL queries. */
-public final class SchemaQualifiedTables {
-	private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
-
-	private final String schema;
+public record SchemaQualifiedTables(String schema) {
+	private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_]\\w*");
 
 	public SchemaQualifiedTables(String schema) {
 		if (schema != null && !schema.isBlank()) {
@@ -21,10 +19,6 @@ public final class SchemaQualifiedTables {
 		} else {
 			this.schema = null;
 		}
-	}
-
-	public String schema() {
-		return schema;
 	}
 
 	public <T> T withSearchPath(Connection connection, SqlWork<T> work) throws SQLException {

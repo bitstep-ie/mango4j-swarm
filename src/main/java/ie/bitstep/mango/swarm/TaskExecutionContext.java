@@ -86,12 +86,12 @@ public final class TaskExecutionContext<T> {
 		if (percent < 0 || percent > 100) {
 			throw new IllegalArgumentException("progress percent must be between 0 and 100");
 		}
-		progressReporter.record(percent, description);
+		progressReporter.report(percent, description);
 	}
 
 	/** Internal callback used by the executor to persist progress updates. */
 	@FunctionalInterface
 	public interface ProgressReporter {
-		void record(int percent, String description);
+		void report(int percent, String description);
 	}
 }

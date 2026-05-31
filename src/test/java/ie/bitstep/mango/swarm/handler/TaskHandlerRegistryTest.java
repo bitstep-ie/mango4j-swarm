@@ -18,22 +18,30 @@ class TaskHandlerRegistryTest {
 	void rejectsDuplicateHandlers() {
 		TaskHandler<String> first = new AnnotatedEmailHandler();
 		TaskHandler<String> second = new AnotherAnnotatedEmailHandler();
+		List<TaskHandler<?>> handlers = List.of(first, second);
+		Set<String> configuredTypes = Set.of("email");
 
-		assertThatThrownBy(() -> new TaskHandlerRegistry(List.of(first, second), Set.of("email"), false))
+		assertThatThrownBy(() -> new TaskHandlerRegistry(handlers, configuredTypes, false))
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("Duplicate");
 	}
 
 	@Test
 	void rejectsMissingConfiguredHandler() {
-		assertThatThrownBy(() -> new TaskHandlerRegistry(List.of(), Set.of("email"), false))
+		List<TaskHandler<?>> handlers = List.of();
+		Set<String> configuredTypes = Set.of("email");
+
+		assertThatThrownBy(() -> new TaskHandlerRegistry(handlers, configuredTypes, false))
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("has no TaskHandler");
 	}
 
 	@Test
 	void rejectsUnconfiguredHandlerByDefault() {
-		assertThatThrownBy(() -> new TaskHandlerRegistry(List.of(new AnnotatedEmailHandler()), Set.of(), false))
+		List<TaskHandler<?>> handlers = List.of(new AnnotatedEmailHandler());
+		Set<String> configuredTypes = Set.of();
+
+		assertThatThrownBy(() -> new TaskHandlerRegistry(handlers, configuredTypes, false))
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("unconfigured");
 	}
@@ -68,9 +76,22 @@ class TaskHandlerRegistryTest {
 
 	@Test
 	void rejectsHandlerWithoutAnnotation() {
-		assertThatThrownBy(() -> new TaskHandlerRegistry(List.of(new MissingTypeHandler()), Set.of("email"), false))
+		List<TaskHandler<?>> handlers = List.of(new MissingTypeHandler());
+		Set<String> configuredTypes = Set.of("email");
+
+		assertThatThrownBy(() -> new TaskHandlerRegistry(handlers, configuredTypes, false))
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("must declare task type");
+	}
+
+	@Test
+	void rejectsHandlerWithBlankAnnotationValue() {
+		List<TaskHandler<?>> handlers = List.of(new BlankTypeHandler());
+		Set<String> configuredTypes = Set.of();
+
+		assertThatThrownBy(() -> new TaskHandlerRegistry(handlers, configuredTypes, true))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("must not be blank");
 	}
 
 	@SwarmHandler("email")
@@ -100,6 +121,19 @@ class TaskHandlerRegistryTest {
 	}
 
 	private static final class MissingTypeHandler implements TaskHandler<String> {
+		@Override
+		public PayloadExtractor<String> payloadExtractor() {
+			return reader -> "";
+		}
+
+		@Override
+		public TaskExecutionResult execute(TaskExecutionContext<String> context) {
+			return TaskExecutionResult.completed();
+		}
+	}
+
+	@SwarmHandler(" ")
+	private static final class BlankTypeHandler implements TaskHandler<String> {
 		@Override
 		public PayloadExtractor<String> payloadExtractor() {
 			return reader -> "";

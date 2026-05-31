@@ -38,12 +38,12 @@ public final class TaskHandlerRegistry {
 		this.handlers = Map.copyOf(discovered);
 	}
 
-	public TaskHandler<?> get(String taskType) {
+	public <T> TaskHandler<T> get(String taskType) {
 		TaskHandler<?> handler = handlers.get(taskType);
 		if (handler == null) {
 			throw new IllegalArgumentException("No TaskHandler registered for task type '" + taskType + "'");
 		}
-		return handler;
+		return (TaskHandler<T>) handler;
 	}
 
 	public Set<String> taskTypes() {

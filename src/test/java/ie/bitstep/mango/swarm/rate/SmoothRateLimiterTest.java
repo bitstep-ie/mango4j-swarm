@@ -88,4 +88,17 @@ class SmoothRateLimiterTest {
 
 		assertThat(availablePermits).isEqualTo(1);
 	}
+
+	@Test
+	void reconfigurePreservesRecentNextSlot() {
+		SmoothRateLimiter limiter = new SmoothRateLimiter();
+		Instant first = Instant.parse("2026-05-25T10:00:00Z");
+		limiter.configure(1, Duration.ofSeconds(1), first);
+		limiter.permitsAvailable(first, 1);
+
+		Instant reconfiguredAt = first.plusMillis(1500);
+		limiter.configure(1, Duration.ofSeconds(1), reconfiguredAt);
+
+		assertThat(limiter.timeUntilNextPermit(first.plusMillis(500))).isEqualTo(Duration.ofMillis(500));
+	}
 }

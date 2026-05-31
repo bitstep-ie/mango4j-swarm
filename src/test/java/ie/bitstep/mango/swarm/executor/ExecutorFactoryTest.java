@@ -49,7 +49,7 @@ class ExecutorFactoryTest {
 	}
 
 	@Test
-	void abortStrategyRejectsWhenPoolAndQueueAreFull() throws Exception {
+	void abortStrategyRejectsWhenPoolAndQueueAreFull() {
 		MangoSwarmProperties.Executor config = new MangoSwarmProperties.Executor();
 		config.setVirtualThreads(MangoSwarmProperties.VirtualThreads.DISABLED);
 		config.setMaxThreads("1");

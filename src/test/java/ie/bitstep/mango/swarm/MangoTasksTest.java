@@ -130,7 +130,8 @@ class MangoTasksTest {
 		tasks.queue("email", JsonNodeFactory.instance.objectNode());
 
 		assertThat(repository.slotSpacing).isEqualTo(Duration.ZERO);
-		assertThatThrownBy(() -> tasks.queue("unknown", JsonNodeFactory.instance.objectNode()))
+		ObjectNode payload = JsonNodeFactory.instance.objectNode();
+		assertThatThrownBy(() -> tasks.queue("unknown", payload))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("Task type is not configured: unknown");
 	}
@@ -190,23 +191,35 @@ class MangoTasksTest {
 		}
 
 		@Override
-		public void markInProgress(UUID taskId, UUID workerId, Instant now) {}
+		public void markInProgress(UUID taskId, UUID workerId, Instant now) {
+			// Not needed for these queue-focused tests.
+		}
 
 		@Override
-		public void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description) {}
+		public void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description) {
+			// Not needed for these queue-focused tests.
+		}
 
 		@Override
-		public void markCompleted(UUID taskId, UUID workerId, Instant now) {}
+		public void markCompleted(UUID taskId, UUID workerId, Instant now) {
+			// Not needed for these queue-focused tests.
+		}
 
 		@Override
-		public void markFailed(UUID taskId, UUID workerId, Instant now, String errorMessage) {}
+		public void markFailed(UUID taskId, UUID workerId, Instant now, String errorMessage) {
+			// Not needed for these queue-focused tests.
+		}
 
 		@Override
 		public void rescheduleAfterFailure(
-				UUID taskId, UUID workerId, Instant now, Instant availableAt, String errorMessage) {}
+				UUID taskId, UUID workerId, Instant now, Instant availableAt, String errorMessage) {
+			// Not needed for these queue-focused tests.
+		}
 
 		@Override
-		public void requeueClaimed(UUID taskId, UUID workerId, Instant now, Instant availableAt, String reason) {}
+		public void requeueClaimed(UUID taskId, UUID workerId, Instant now, Instant availableAt, String reason) {
+			// Not needed for these queue-focused tests.
+		}
 
 		@Override
 		public int reclaimTimedOut(String taskType, Duration timeout, Instant now, int limit) {

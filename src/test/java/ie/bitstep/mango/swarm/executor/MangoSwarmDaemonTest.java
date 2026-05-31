@@ -12,6 +12,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import ie.bitstep.mango.swarm.db.TaskRecord;
 import ie.bitstep.mango.swarm.db.TaskRepository;
 import ie.bitstep.mango.swarm.handler.SwarmHandler;
 import ie.bitstep.mango.swarm.handler.TaskHandler;
+import ie.bitstep.mango.swarm.handler.TaskHandlerException;
 import ie.bitstep.mango.swarm.handler.TaskHandlerRegistry;
 import ie.bitstep.mango.swarm.payload.PayloadExtractor;
 import ie.bitstep.mango.swarm.worker.WorkerRegistry;
@@ -578,22 +580,27 @@ class MangoSwarmDaemonTest {
 	}
 
 	@Test
-	void privateTimingHelpersHandleNullZeroAndPositiveDurations() throws Exception {
+	void privateTimingHelpersHandleNullZeroAndPositiveDurations() {
 		assertThat(MangoSwarmDaemon.emptyQueueBackoff(null, 1)).isEqualTo(Duration.ZERO);
 		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofMillis(-1), 1)).isEqualTo(Duration.ZERO);
+		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ZERO, 1)).isEqualTo(Duration.ZERO);
+		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofMillis(250), 1))
+				.isEqualTo(Duration.ofMillis(250));
 		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofSeconds(3), 2)).isEqualTo(Duration.ofSeconds(5));
 		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofMillis(1), 20)).isEqualTo(Duration.ofSeconds(5));
 
 		assertThat(MangoSwarmDaemon.minPositive(null, Duration.ZERO)).isNull();
 		assertThat(MangoSwarmDaemon.minPositive(null, Duration.ofMillis(5))).isEqualTo(Duration.ofMillis(5));
+		assertThat(MangoSwarmDaemon.minPositive(Duration.ofMillis(10), Duration.ZERO))
+				.isEqualTo(Duration.ofMillis(10));
 		assertThat(MangoSwarmDaemon.minPositive(Duration.ofMillis(10), Duration.ofMillis(5)))
 				.isEqualTo(Duration.ofMillis(5));
 		assertThat(MangoSwarmDaemon.minPositive(Duration.ofMillis(10), Duration.ofMillis(50)))
 				.isEqualTo(Duration.ofMillis(10));
 
-		assertThat(MangoSwarmDaemon.isPositive(null)).isEqualTo(false);
-		assertThat(MangoSwarmDaemon.isPositive(Duration.ZERO)).isEqualTo(false);
-		assertThat(MangoSwarmDaemon.isPositive(Duration.ofNanos(1))).isEqualTo(true);
+		assertThat(MangoSwarmDaemon.isPositive(null)).isFalse();
+		assertThat(MangoSwarmDaemon.isPositive(Duration.ZERO)).isFalse();
+		assertThat(MangoSwarmDaemon.isPositive(Duration.ofNanos(1))).isTrue();
 
 		assertThatCode(() -> {
 					MangoSwarmDaemon.sleepIfPositive(Duration.ZERO);
@@ -636,7 +643,10 @@ class MangoSwarmDaemonTest {
 			throws InterruptedException {
 		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
 		while (supplier.getAsInt() < expected && System.nanoTime() < deadline) {
-			Thread.sleep(10);
+			if (Thread.currentThread().isInterrupted()) {
+				throw new InterruptedException();
+			}
+			LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10));
 		}
 	}
 
@@ -664,7 +674,7 @@ class MangoSwarmDaemonTest {
 				UUID.nameUUIDFromBytes(("task-" + taskType).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
 				taskType,
 				JsonNodeFactory.instance.objectNode(),
-				ie.bitstep.mango.swarm.TaskStatus.claimed,
+				ie.bitstep.mango.swarm.TaskStatus.CLAIMED,
 				now,
 				UUID.randomUUID(),
 				now,
@@ -681,7 +691,7 @@ class MangoSwarmDaemonTest {
 		}
 
 		@Override
-		public TaskExecutionResult execute(TaskExecutionContext<String> context) throws Exception {
+		public TaskExecutionResult execute(TaskExecutionContext<String> context) throws TaskHandlerException {
 			context.progress(100);
 			return TaskExecutionResult.completed();
 		}
@@ -732,9 +742,14 @@ class MangoSwarmDaemonTest {
 		}
 
 		@Override
-		public TaskExecutionResult execute(TaskExecutionContext<String> context) throws Exception {
+		public TaskExecutionResult execute(TaskExecutionContext<String> context) throws TaskHandlerException {
 			entered.countDown();
-			release.await(5, TimeUnit.SECONDS);
+			try {
+				release.await(5, TimeUnit.SECONDS);
+			} catch (InterruptedException ex) {
+				Thread.currentThread().interrupt();
+				throw new TaskHandlerException("Interrupted while waiting for test handler release", ex);
+			}
 			return TaskExecutionResult.completed();
 		}
 	}
@@ -861,7 +876,7 @@ class MangoSwarmDaemonTest {
 								("task-" + nextId.getAndIncrement()).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
 						taskType,
 						JsonNodeFactory.instance.objectNode(),
-						ie.bitstep.mango.swarm.TaskStatus.claimed,
+						ie.bitstep.mango.swarm.TaskStatus.CLAIMED,
 						now,
 						workerId,
 						now,

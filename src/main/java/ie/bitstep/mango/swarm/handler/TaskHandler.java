@@ -19,7 +19,7 @@ public interface TaskHandler<T> {
 	 * @param context execution metadata, typed payload, and progress reporting API
 	 * @return completed or failed result; returning {@code null} is treated as completed for backward compatibility,
 	 *     but explicit {@link TaskExecutionResult#completed()} is preferred
-	 * @throws Exception unexpected execution failure
+	 * @throws TaskHandlerException unexpected checked execution failure
 	 */
-	TaskExecutionResult execute(TaskExecutionContext<T> context) throws Exception;
+	TaskExecutionResult execute(TaskExecutionContext<T> context) throws TaskHandlerException;
 }

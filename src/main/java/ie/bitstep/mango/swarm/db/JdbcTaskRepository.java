@@ -417,9 +417,8 @@ LIMIT ?
 			query.setObject(1, workerId);
 			query.setArray(2, taskIds);
 			try (ResultSet rs = query.executeQuery()) {
-				int rowNum = 0;
 				while (rs.next()) {
-					TaskRecord task = Objects.requireNonNull(mapTask(rs, rowNum++), "mapped claimed task");
+					TaskRecord task = Objects.requireNonNull(mapTask(rs), "mapped claimed task");
 					claimedById.put(task.id(), task);
 				}
 			}
@@ -645,14 +644,14 @@ LIMIT ?
 		}
 	}
 
-	TaskRecord mapTask(ResultSet rs, int rowNum) throws SQLException {
+	TaskRecord mapTask(ResultSet rs) throws SQLException {
 		try {
 			Timestamp claimedAt = rs.getTimestamp("claimed_at");
 			return new TaskRecord(
 					rs.getObject("id", UUID.class),
 					rs.getString("task_type"),
 					objectMapper.readTree(rs.getString("payload")),
-					TaskStatus.valueOf(rs.getString("status")),
+					TaskStatus.fromDatabaseValue(rs.getString("status")),
 					rs.getTimestamp("available_at").toInstant(),
 					rs.getObject("claimed_by", UUID.class),
 					claimedAt == null ? null : claimedAt.toInstant(),
