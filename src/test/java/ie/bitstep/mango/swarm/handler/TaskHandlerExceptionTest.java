@@ -11,8 +11,6 @@ class TaskHandlerExceptionTest {
 
 		TaskHandlerException exception = new TaskHandlerException("handler failed", cause);
 
-		assertThat(exception)
-				.hasMessage("handler failed")
-				.hasCause(cause);
+		assertThat(exception).hasMessage("handler failed").hasCause(cause);
 	}
 }
