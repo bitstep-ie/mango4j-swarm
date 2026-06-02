@@ -71,7 +71,7 @@ public final class TaskExecutionContext<T> {
 	 * @param percent progress percentage in range {@code [0,100]}
 	 */
 	public void progress(int percent) {
-		progress(percent, null);
+		updateProgress(percent, null);
 	}
 
 	/**
@@ -83,15 +83,34 @@ public final class TaskExecutionContext<T> {
 	 * @param description optional stage description, e.g. {@code "connecting"} or {@code "sending"}
 	 */
 	public void progress(int percent, String description) {
+		updateProgress(percent, description);
+	}
+
+	/**
+	 * Updates the current execution state.
+	 *
+	 * @param state execution state visible to operators
+	 */
+	public void updateState(String state) {
+		progressReporter.report(state, null, null);
+	}
+
+	/**
+	 * Updates the current progress percentage and message.
+	 *
+	 * @param percent progress percentage in range {@code [0,100]}
+	 * @param message optional progress message
+	 */
+	public void updateProgress(int percent, String message) {
 		if (percent < 0 || percent > 100) {
 			throw new IllegalArgumentException("progress percent must be between 0 and 100");
 		}
-		progressReporter.report(percent, description);
+		progressReporter.report("running", percent, message);
 	}
 
 	/** Internal callback used by the executor to persist progress updates. */
 	@FunctionalInterface
 	public interface ProgressReporter {
-		void report(int percent, String description);
+		void report(String state, Integer percent, String message);
 	}
 }

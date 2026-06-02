@@ -196,6 +196,17 @@ class MangoTasksTest {
 		}
 
 		@Override
+		public void updateRuntime(
+				UUID taskId,
+				UUID workerId,
+				Instant now,
+				String executionState,
+				Integer progressPercent,
+				String message) {
+			// Not needed for these queue-focused tests.
+		}
+
+		@Override
 		public void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description) {
 			// Not needed for these queue-focused tests.
 		}

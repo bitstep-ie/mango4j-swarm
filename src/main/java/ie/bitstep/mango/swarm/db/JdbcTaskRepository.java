@@ -76,9 +76,6 @@ UPDATE mango_swarm_tasks
 SET status = 'claimed',
 claimed_by = ?,
 claimed_at = ?,
-progress_percent = NULL,
-progress_description = NULL,
-last_progress_at = NULL,
 attempt_count = attempt_count + 1,
 updated_at = ?
 WHERE id = ?
@@ -95,23 +92,46 @@ AND id = ANY (?)
 	private static final String MARK_IN_PROGRESS_SQL =
 			"""
 UPDATE mango_swarm_tasks
-SET status = 'in_progress', last_progress_at = ?, updated_at = ?
+SET status = 'in_progress', updated_at = ?
 WHERE id = ? AND claimed_by = ? AND status = 'claimed'
 """;
-	private static final String RECORD_PROGRESS_SQL =
+	private static final String UPSERT_RUNTIME_SQL =
 			"""
-UPDATE mango_swarm_tasks
-SET progress_percent = ?, progress_description = ?, last_progress_at = ?, updated_at = ?
-WHERE id = ? AND claimed_by = ? AND status = 'in_progress'
+INSERT INTO mango_swarm_task_runtime(
+task_id, worker_id, execution_state, progress_percent, progress_message, started_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (task_id) DO UPDATE
+SET worker_id = EXCLUDED.worker_id,
+execution_state = EXCLUDED.execution_state,
+progress_percent = EXCLUDED.progress_percent,
+progress_message = EXCLUDED.progress_message,
+updated_at = EXCLUDED.updated_at
+""";
+	private static final String INSERT_RUNTIME_H2_SQL =
+			"""
+INSERT INTO mango_swarm_task_runtime(
+task_id, worker_id, execution_state, progress_percent, progress_message, started_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+""";
+	private static final String UPDATE_RUNTIME_H2_SQL =
+			"""
+UPDATE mango_swarm_task_runtime
+SET worker_id = ?,
+execution_state = ?,
+progress_percent = ?,
+progress_message = ?,
+updated_at = ?
+WHERE task_id = ?
+""";
+	private static final String DELETE_RUNTIME_SQL = """
+DELETE FROM mango_swarm_task_runtime
+WHERE task_id = ?
 """;
 	private static final String MARK_COMPLETED_SQL =
 			"""
 UPDATE mango_swarm_tasks
 SET status = 'completed',
 completed_at = ?,
-progress_percent = 100,
-progress_description = 'finished',
-last_progress_at = ?,
 updated_at = ?
 WHERE id = ? AND claimed_by = ? AND status IN ('claimed', 'in_progress')
 """;
@@ -128,9 +148,6 @@ SET status = 'queued',
 available_at = ?,
 claimed_by = NULL,
 claimed_at = NULL,
-progress_percent = NULL,
-progress_description = NULL,
-last_progress_at = NULL,
 failed_at = NULL,
 updated_at = ?,
 last_error_message = ?
@@ -143,9 +160,6 @@ SET status = 'queued',
 available_at = ?,
 claimed_by = NULL,
 claimed_at = NULL,
-progress_percent = NULL,
-progress_description = NULL,
-last_progress_at = NULL,
 updated_at = ?,
 last_error_message = ?
 WHERE id = ? AND claimed_by = ? AND status = 'claimed'
@@ -156,18 +170,16 @@ UPDATE mango_swarm_tasks
 SET status = 'queued',
 claimed_by = NULL,
 claimed_at = NULL,
-progress_percent = NULL,
-progress_description = NULL,
-last_progress_at = NULL,
 updated_at = ?,
 last_error_message = 'Reclaimed after timeout'
 WHERE id IN (
-SELECT id
-FROM mango_swarm_tasks
-WHERE task_type = ?
-AND status IN ('claimed', 'in_progress')
-AND COALESCE(last_progress_at, claimed_at) < ?
-ORDER BY COALESCE(last_progress_at, claimed_at), id
+SELECT t.id
+FROM mango_swarm_tasks t
+LEFT JOIN mango_swarm_task_runtime r ON r.task_id = t.id
+WHERE t.task_type = ?
+AND t.status IN ('claimed', 'in_progress')
+AND COALESCE(r.updated_at, t.claimed_at) < ?
+ORDER BY COALESCE(r.updated_at, t.claimed_at), t.id
 LIMIT ?
 )
 """;
@@ -179,12 +191,13 @@ failed_at = ?,
 updated_at = ?,
 last_error_message = 'Task timed out and reclaim is disabled'
 WHERE id IN (
-SELECT id
-FROM mango_swarm_tasks
-WHERE task_type = ?
-AND status IN ('claimed', 'in_progress')
-AND COALESCE(last_progress_at, claimed_at) < ?
-ORDER BY COALESCE(last_progress_at, claimed_at), id
+SELECT t.id
+FROM mango_swarm_tasks t
+LEFT JOIN mango_swarm_task_runtime r ON r.task_id = t.id
+WHERE t.task_type = ?
+AND t.status IN ('claimed', 'in_progress')
+AND COALESCE(r.updated_at, t.claimed_at) < ?
+ORDER BY COALESCE(r.updated_at, t.claimed_at), t.id
 LIMIT ?
 )
 """;
@@ -449,28 +462,35 @@ LIMIT ?
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(MARK_IN_PROGRESS_SQL)) {
 						statement.setTimestamp(1, Timestamp.from(now));
-						statement.setTimestamp(2, Timestamp.from(now));
-						statement.setObject(3, taskId);
-						statement.setObject(4, workerId);
-						return statement.executeUpdate();
+						statement.setObject(2, taskId);
+						statement.setObject(3, workerId);
+						int updated = statement.executeUpdate();
+						if (updated > 0) {
+							upsertRuntime(scoped, taskId, workerId, now, "running", null, null);
+						}
+						return updated;
 					}
 				}),
 				"mark task in progress");
 	}
 
 	@Override
+	public void updateRuntime(
+			UUID taskId, UUID workerId, Instant now, String executionState, Integer progressPercent, String message) {
+		executeRequired(
+				connection -> tables.withSearchPath(connection, scoped -> {
+					upsertRuntime(scoped, taskId, workerId, now, executionState, progressPercent, message);
+					return 1;
+				}),
+				"update task runtime");
+	}
+
+	@Override
 	public void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description) {
 		executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
-					try (PreparedStatement statement = scoped.prepareStatement(RECORD_PROGRESS_SQL)) {
-						statement.setInt(1, progressPercent);
-						statement.setString(2, truncate(description));
-						statement.setTimestamp(3, Timestamp.from(now));
-						statement.setTimestamp(4, Timestamp.from(now));
-						statement.setObject(5, taskId);
-						statement.setObject(6, workerId);
-						return statement.executeUpdate();
-					}
+					upsertRuntime(scoped, taskId, workerId, now, "running", progressPercent, description);
+					return 1;
 				}),
 				"record task progress");
 	}
@@ -482,10 +502,13 @@ LIMIT ?
 					try (PreparedStatement statement = scoped.prepareStatement(MARK_COMPLETED_SQL)) {
 						statement.setTimestamp(1, Timestamp.from(now));
 						statement.setTimestamp(2, Timestamp.from(now));
-						statement.setTimestamp(3, Timestamp.from(now));
-						statement.setObject(4, taskId);
-						statement.setObject(5, workerId);
-						return statement.executeUpdate();
+						statement.setObject(3, taskId);
+						statement.setObject(4, workerId);
+						int updated = statement.executeUpdate();
+						if (updated > 0) {
+							upsertRuntime(scoped, taskId, workerId, now, "completed", 100, "finished");
+						}
+						return updated;
 					}
 				}),
 				"mark task completed");
@@ -501,7 +524,11 @@ LIMIT ?
 						statement.setString(3, truncate(errorMessage));
 						statement.setObject(4, taskId);
 						statement.setObject(5, workerId);
-						return statement.executeUpdate();
+						int updated = statement.executeUpdate();
+						if (updated > 0) {
+							upsertRuntime(scoped, taskId, workerId, now, "failed", null, errorMessage);
+						}
+						return updated;
 					}
 				}),
 				"mark task failed");
@@ -518,7 +545,11 @@ LIMIT ?
 						statement.setString(3, truncate(errorMessage));
 						statement.setObject(4, taskId);
 						statement.setObject(5, workerId);
-						return statement.executeUpdate();
+						int updated = statement.executeUpdate();
+						if (updated > 0) {
+							deleteRuntime(scoped, taskId);
+						}
+						return updated;
 					}
 				}),
 				"reschedule failed task");
@@ -534,7 +565,11 @@ LIMIT ?
 						statement.setString(3, truncate(reason));
 						statement.setObject(4, taskId);
 						statement.setObject(5, workerId);
-						return statement.executeUpdate();
+						int updated = statement.executeUpdate();
+						if (updated > 0) {
+							deleteRuntime(scoped, taskId);
+						}
+						return updated;
 					}
 				}),
 				"requeue claimed task");
@@ -623,6 +658,72 @@ LIMIT ?
 					}
 				}),
 				"delete task pacers");
+	}
+
+	private void upsertRuntime(
+			java.sql.Connection connection,
+			UUID taskId,
+			UUID workerId,
+			Instant now,
+			String executionState,
+			Integer progressPercent,
+			String message)
+			throws SQLException {
+		if (isH2()) {
+			try (PreparedStatement update = connection.prepareStatement(UPDATE_RUNTIME_H2_SQL)) {
+				update.setObject(1, workerId);
+				update.setString(2, truncate(executionState));
+				setNullableInteger(update, 3, progressPercent);
+				update.setString(4, truncate(message));
+				update.setTimestamp(5, Timestamp.from(now));
+				update.setObject(6, taskId);
+				if (update.executeUpdate() > 0) {
+					return;
+				}
+			}
+			try (PreparedStatement insert = connection.prepareStatement(INSERT_RUNTIME_H2_SQL)) {
+				bindRuntimeInsert(insert, taskId, workerId, now, executionState, progressPercent, message);
+				insert.executeUpdate();
+			}
+			return;
+		}
+		try (PreparedStatement statement = connection.prepareStatement(UPSERT_RUNTIME_SQL)) {
+			bindRuntimeInsert(statement, taskId, workerId, now, executionState, progressPercent, message);
+			statement.executeUpdate();
+		}
+	}
+
+	private static void bindRuntimeInsert(
+			PreparedStatement statement,
+			UUID taskId,
+			UUID workerId,
+			Instant now,
+			String executionState,
+			Integer progressPercent,
+			String message)
+			throws SQLException {
+		statement.setObject(1, taskId);
+		statement.setObject(2, workerId);
+		statement.setString(3, truncate(executionState));
+		setNullableInteger(statement, 4, progressPercent);
+		statement.setString(5, truncate(message));
+		statement.setTimestamp(6, Timestamp.from(now));
+		statement.setTimestamp(7, Timestamp.from(now));
+	}
+
+	private static void setNullableInteger(PreparedStatement statement, int index, Integer value) throws SQLException {
+		if (value == null) {
+			statement.setNull(index, Types.INTEGER);
+		} else {
+			statement.setInt(index, value);
+		}
+	}
+
+	private static void deleteRuntime(java.sql.Connection connection, UUID taskId) throws SQLException {
+		try (PreparedStatement statement = connection.prepareStatement(DELETE_RUNTIME_SQL)) {
+			statement.setObject(1, taskId);
+			statement.executeUpdate();
+		}
 	}
 
 	private void setJson(PreparedStatement statement, JsonNode payload) throws SQLException {

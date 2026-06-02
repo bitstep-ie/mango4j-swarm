@@ -333,17 +333,69 @@ class TaskRepositoryTest extends H2TestSupport {
 		assertThat(reclaimed).isZero();
 		var row = jdbcTemplate.queryForMap(
 				"""
-				select status, progress_percent, progress_description, last_progress_at
-				from mango_swarm_tasks
-				where id = ?
+				select t.status, r.execution_state, r.progress_percent, r.progress_message, r.updated_at
+				from mango_swarm_tasks t
+				join mango_swarm_task_runtime r on r.task_id = t.id
+				where t.id = ?
 				""",
 				taskId);
 		assertThat(row)
 				.containsEntry("status", "in_progress")
+				.containsEntry("execution_state", "running")
 				.containsEntry("progress_percent", 50)
-				.containsEntry("progress_description", "sending");
-		assertThat(((java.sql.Timestamp) row.get("last_progress_at")).toInstant())
-				.isEqualTo(now.minusSeconds(5));
+				.containsEntry("progress_message", "sending");
+		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.minusSeconds(5));
+	}
+
+	@Test
+	void markInProgressCreatesRuntimeRow() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+		taskRepository.claimBatch("email", workerId, now, 1);
+
+		taskRepository.markInProgress(taskId, workerId, now.plusSeconds(1));
+
+		var row = jdbcTemplate.queryForMap(
+				"""
+				select worker_id, execution_state, progress_percent, progress_message, started_at, updated_at
+				from mango_swarm_task_runtime
+				where task_id = ?
+				""",
+				taskId);
+		assertThat(row)
+				.containsEntry("worker_id", workerId)
+				.containsEntry("execution_state", "running")
+				.containsEntry("progress_percent", null)
+				.containsEntry("progress_message", null);
+		assertThat(((java.sql.Timestamp) row.get("started_at")).toInstant()).isEqualTo(now.plusSeconds(1));
+		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.plusSeconds(1));
+	}
+
+	@Test
+	void updateRuntimeUpsertsMutableExecutionState() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+		taskRepository.claimBatch("email", workerId, now, 1);
+		taskRepository.updateRuntime(taskId, workerId, now.plusSeconds(1), "Downloading file", 30, "downloading");
+
+		taskRepository.updateRuntime(taskId, workerId, now.plusSeconds(2), "Calling partner API", 75, "calling");
+
+		var row = jdbcTemplate.queryForMap(
+				"""
+				select worker_id, execution_state, progress_percent, progress_message, started_at, updated_at
+				from mango_swarm_task_runtime
+				where task_id = ?
+				""",
+				taskId);
+		assertThat(row)
+				.containsEntry("worker_id", workerId)
+				.containsEntry("execution_state", "Calling partner API")
+				.containsEntry("progress_percent", 75)
+				.containsEntry("progress_message", "calling");
+		assertThat(((java.sql.Timestamp) row.get("started_at")).toInstant()).isEqualTo(now.plusSeconds(1));
+		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.plusSeconds(2));
 	}
 
 	@Test
@@ -358,17 +410,18 @@ class TaskRepositoryTest extends H2TestSupport {
 
 		var row = jdbcTemplate.queryForMap(
 				"""
-				select status, progress_percent, progress_description, last_progress_at
-				from mango_swarm_tasks
-				where id = ?
+				select t.status, r.execution_state, r.progress_percent, r.progress_message, r.updated_at
+				from mango_swarm_tasks t
+				join mango_swarm_task_runtime r on r.task_id = t.id
+				where t.id = ?
 				""",
 				taskId);
 		assertThat(row)
 				.containsEntry("status", "completed")
+				.containsEntry("execution_state", "completed")
 				.containsEntry("progress_percent", 100)
-				.containsEntry("progress_description", "finished");
-		assertThat(((java.sql.Timestamp) row.get("last_progress_at")).toInstant())
-				.isEqualTo(now.plusSeconds(5));
+				.containsEntry("progress_message", "finished");
+		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.plusSeconds(5));
 	}
 
 	@Test
@@ -395,6 +448,35 @@ class TaskRepositoryTest extends H2TestSupport {
 		assertThat(row.get("claimed_at")).isNull();
 		assertThat(row.get("failed_at")).isNull();
 		assertThat(row).containsEntry("last_error_message", "temporary failure");
+		assertThat(jdbcTemplate.queryForObject(
+						"select count(*) from mango_swarm_task_runtime where task_id = ?", Integer.class, taskId))
+				.isZero();
+	}
+
+	@Test
+	void failedTaskRecordsRuntimeState() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+		taskRepository.claimBatch("email", workerId, now, 1);
+
+		taskRepository.markFailed(taskId, workerId, now.plusSeconds(1), "remote error");
+
+		var row = jdbcTemplate.queryForMap(
+				"""
+				select t.status, r.worker_id, r.execution_state, r.progress_percent, r.progress_message, r.updated_at
+				from mango_swarm_tasks t
+				join mango_swarm_task_runtime r on r.task_id = t.id
+				where t.id = ?
+				""",
+				taskId);
+		assertThat(row)
+				.containsEntry("status", "failed")
+				.containsEntry("worker_id", workerId)
+				.containsEntry("execution_state", "failed")
+				.containsEntry("progress_percent", null)
+				.containsEntry("progress_message", "remote error");
+		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.plusSeconds(1));
 	}
 
 	@Test
@@ -589,6 +671,21 @@ class TaskRepositoryTest extends H2TestSupport {
 		String stored = jdbcTemplate.queryForObject(
 				"select last_error_message from mango_swarm_tasks where id = ?", String.class, taskId);
 		assertThat(stored).hasSize(4_000).isEqualTo("x".repeat(4_000));
+	}
+
+	@Test
+	void requeueClaimedDeletesRuntimeRow() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+		taskRepository.claimBatch("email", workerId, now, 1);
+		taskRepository.updateRuntime(taskId, workerId, now, "running", 10, "started");
+
+		taskRepository.requeueClaimed(taskId, workerId, now.plusSeconds(1), now.plusSeconds(10), "capacity");
+
+		assertThat(jdbcTemplate.queryForObject(
+						"select count(*) from mango_swarm_task_runtime where task_id = ?", Integer.class, taskId))
+				.isZero();
 	}
 
 	@Test

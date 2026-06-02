@@ -157,15 +157,16 @@ Handlers receive a `TaskExecutionContext<T>` containing:
 - `attemptCount`: current attempt number
 - `claimedAt`: claim timestamp for the current attempt
 - `payload`: extracted typed payload
-- progress API: `progress(percent)` and `progress(percent, description)`
+- progress API: `progress(percent)`, `progress(percent, description)`, `updateState(state)`, and `updateProgress(percent, description)`
 
-Calling `context.progress(percent)` or `context.progress(percent, description)` records progress from `0` to `100` and also acts as task liveness. Each progress call extends the stale-task timeout window for that task. The optional description can be used for human-readable stages such as `connecting`, `sending`, or `completing`.
+Calling `context.progress(percent)`, `context.progress(percent, description)`, or `context.updateProgress(percent, description)` records progress from `0` to `100` in the runtime table and also acts as task liveness. `context.updateState(state)` records a human-readable execution state. Runtime updates extend the stale-task timeout window for that task. The optional description can be used for human-readable stages such as `connecting`, `sending`, or `completing`.
 
 When a task completes successfully, mango-swarm records a final progress state automatically:
 
 ```text
+execution_state = completed
 progress_percent = 100
-progress_description = finished
+progress_message = finished
 ```
 
 Handlers can still report `100` themselves if they want a custom final description before returning, but the default successful completion state is always `100` / `finished`.
@@ -499,7 +500,7 @@ When a handler calls:
 context.progress(50, "sending");
 ```
 
-mango-swarm updates `progress_percent`, `progress_description`, and `last_progress_at` on the task row. Timeout recovery checks `last_progress_at` when present, otherwise it falls back to `claimed_at`.
+mango-swarm updates `progress_percent`, `progress_message`, and `updated_at` on `mango_swarm_task_runtime`. Timeout recovery checks runtime `updated_at` when present, otherwise it falls back to the task row's `claimed_at`.
 
 For example, with `timeout: 30s`:
 
@@ -507,7 +508,7 @@ For example, with `timeout: 30s`:
 * if it reports progress at `10:00:20`, it is not stale until about `10:00:50`
 * if it reports progress again at `10:00:45`, it is not stale until about `10:01:15`
 
-This means handlers are expected to call `progress(percent, description)` periodically while doing long-running work. A progress call does not need to mean the exact amount of business work completed, but it must represent real handler liveness. The stored percentage and description are useful for observability; the liveness extension comes from the timestamp of the progress call.
+This means handlers are expected to call `progress(percent, description)` or `updateProgress(percent, description)` periodically while doing long-running work. A progress call does not need to mean the exact amount of business work completed, but it must represent real handler liveness. The stored percentage and message are useful for observability; the liveness extension comes from the runtime update timestamp.
 
 ***
 
@@ -541,10 +542,11 @@ Required fields fail with a clear extraction error if the semantic value cannot 
 
 # Database
 
-mango-swarm requires three tables:
+mango-swarm requires four tables:
 
 * `mango_swarm_workers`
 * `mango_swarm_tasks`
+* `mango_swarm_task_runtime`
 * `mango_swarm_task_pacers`
 
 Task IDs are Java-generated UUIDv7 values.

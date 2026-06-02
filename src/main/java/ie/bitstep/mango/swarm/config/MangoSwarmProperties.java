@@ -19,6 +19,7 @@ public class MangoSwarmProperties {
 	private Worker worker = new Worker();
 	private Cleanup cleanup = new Cleanup();
 	private Executor executor = new Executor();
+	private RuntimeState runtime = new RuntimeState();
 	private Retry retry = new Retry();
 	private Map<String, TaskType> taskTypes = new LinkedHashMap<>();
 
@@ -68,6 +69,14 @@ public class MangoSwarmProperties {
 
 	public void setCleanup(Cleanup cleanup) {
 		this.cleanup = cleanup;
+	}
+
+	public RuntimeState getRuntime() {
+		return runtime;
+	}
+
+	public void setRuntime(RuntimeState runtime) {
+		this.runtime = runtime;
 	}
 
 	public Retry getRetry() {
@@ -185,6 +194,28 @@ public class MangoSwarmProperties {
 
 		public void setApplySchemaToHibernateDefault(boolean applySchemaToHibernateDefault) {
 			this.applySchemaToHibernateDefault = applySchemaToHibernateDefault;
+		}
+	}
+
+	/** Runtime state persistence throttling. */
+	public static class RuntimeState {
+		private int progressThresholdPercent = 10;
+		private Duration minUpdateInterval = Duration.ofSeconds(30);
+
+		public int getProgressThresholdPercent() {
+			return progressThresholdPercent;
+		}
+
+		public void setProgressThresholdPercent(int progressThresholdPercent) {
+			this.progressThresholdPercent = progressThresholdPercent;
+		}
+
+		public Duration getMinUpdateInterval() {
+			return minUpdateInterval;
+		}
+
+		public void setMinUpdateInterval(Duration minUpdateInterval) {
+			this.minUpdateInterval = minUpdateInterval;
 		}
 	}
 

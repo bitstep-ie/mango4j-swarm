@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
@@ -52,6 +53,8 @@ public class MangoSwarmDaemon {
 	private final ExecutorService executorService;
 	private final Semaphore executorCapacity;
 	private final AtomicBoolean running = new AtomicBoolean(false);
+	private final int runtimeProgressThresholdPercent;
+	private final Duration runtimeMinUpdateInterval;
 	private Thread daemonThread;
 	private volatile int activeWorkers = 1;
 	private volatile Instant lastHeartbeat = Instant.EPOCH;
@@ -74,6 +77,9 @@ public class MangoSwarmDaemon {
 		int maxThreads =
 				ExecutorFactory.resolveMaxThreads(properties.getExecutor().getMaxThreads(), virtual);
 		this.executorCapacity = new Semaphore(maxThreads);
+		this.runtimeProgressThresholdPercent =
+				Math.max(0, properties.getRuntime().getProgressThresholdPercent());
+		this.runtimeMinUpdateInterval = positiveOrZero(properties.getRuntime().getMinUpdateInterval());
 		Map<String, Integer> limits = new LinkedHashMap<>();
 		properties.getTaskTypes().forEach((type, config) -> limits.put(type, Math.max(1, config.getConcurrency())));
 		this.taskConcurrencyTracker = new TaskConcurrencyTracker(limits);
@@ -264,6 +270,10 @@ public class MangoSwarmDaemon {
 		return delay != null && delay.compareTo(Duration.ZERO) > 0;
 	}
 
+	private static Duration positiveOrZero(Duration delay) {
+		return isPositive(delay) ? delay : Duration.ZERO;
+	}
+
 	private void heartbeatIfNeeded(Instant now) {
 		if (lastHeartbeat.plus(properties.getWorker().getHeartbeatInterval()).isAfter(now)) {
 			return;
@@ -409,8 +419,7 @@ public class MangoSwarmDaemon {
 					task.attemptCount(),
 					task.claimedAt(),
 					payload,
-					(percent, description) ->
-							taskRepository.recordProgress(task.id(), workerId, Instant.now(), percent, description));
+					new RuntimeProgressReporter(task.id(), workerId));
 			TaskExecutionResult result = handler.execute(context);
 			if (result == null || result.isCompleted()) {
 				taskRepository.markCompleted(task.id(), workerId, Instant.now());
@@ -518,6 +527,48 @@ public class MangoSwarmDaemon {
 
 	private <T> T extractPayload(JsonNode payload, PayloadExtractor<T> extractor) throws PayloadExtractionException {
 		return extractor.extract(new PayloadReader(payload));
+	}
+
+	private final class RuntimeProgressReporter implements TaskExecutionContext.ProgressReporter {
+		private final UUID taskId;
+		private final UUID workerId;
+		private String executionState = "running";
+		private Integer progressPercent;
+		private String message;
+		private Instant lastPersistedAt = Instant.EPOCH;
+
+		private RuntimeProgressReporter(UUID taskId, UUID workerId) {
+			this.taskId = taskId;
+			this.workerId = workerId;
+		}
+
+		@Override
+		public void report(String state, Integer percent, String progressMessage) {
+			Instant now = Instant.now();
+			String nextState = state == null ? executionState : state;
+			String nextMessage = progressMessage == null ? message : progressMessage;
+			if (shouldPersist(now, nextState, percent, nextMessage)) {
+				taskRepository.updateRuntime(taskId, workerId, now, nextState, percent, nextMessage);
+				executionState = nextState;
+				progressPercent = percent;
+				message = nextMessage;
+				lastPersistedAt = now;
+			}
+		}
+
+		private boolean shouldPersist(Instant now, String nextState, Integer nextPercent, String nextMessage) {
+			return !Objects.equals(executionState, nextState)
+					|| !Objects.equals(message, nextMessage)
+					|| progressChangedEnough(nextPercent)
+					|| !now.isBefore(lastPersistedAt.plus(runtimeMinUpdateInterval));
+		}
+
+		private boolean progressChangedEnough(Integer nextPercent) {
+			if (progressPercent == null || nextPercent == null) {
+				return !Objects.equals(progressPercent, nextPercent);
+			}
+			return Math.abs(nextPercent - progressPercent) >= runtimeProgressThresholdPercent;
+		}
 	}
 
 	private static int min(int first, int... values) {

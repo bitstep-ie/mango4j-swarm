@@ -21,9 +21,6 @@ CREATE TABLE IF NOT EXISTS mango_swarm_tasks (
     available_at timestamptz NOT NULL DEFAULT now(),
     claimed_by uuid NULL,
     claimed_at timestamptz NULL,
-    progress_percent integer NULL CHECK (progress_percent BETWEEN 0 AND 100),
-    progress_description text NULL,
-    last_progress_at timestamptz NULL,
     attempt_count integer NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -32,12 +29,25 @@ CREATE TABLE IF NOT EXISTS mango_swarm_tasks (
     last_error_message text NULL
 );
 
+CREATE TABLE IF NOT EXISTS mango_swarm_task_runtime (
+    task_id uuid PRIMARY KEY REFERENCES mango_swarm_tasks(id) ON DELETE CASCADE,
+    worker_id uuid NOT NULL,
+    execution_state text NOT NULL,
+    progress_percent integer NULL CHECK (progress_percent BETWEEN 0 AND 100),
+    progress_message text NULL,
+    started_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL
+) WITH (fillfactor = 75);
+
 CREATE INDEX IF NOT EXISTS idx_mango_tasks_queue_claim
     ON mango_swarm_tasks (task_type, available_at, id)
     WHERE status = 'queued';
 
+CREATE INDEX IF NOT EXISTS idx_mango_task_runtime_worker
+    ON mango_swarm_task_runtime (worker_id, task_id);
+
 CREATE INDEX IF NOT EXISTS idx_mango_tasks_timeout_due
-    ON mango_swarm_tasks (task_type, (COALESCE(last_progress_at, claimed_at)), id)
+    ON mango_swarm_tasks (task_type, claimed_at, id)
     WHERE status IN ('claimed', 'in_progress');
 
 CREATE INDEX IF NOT EXISTS idx_mango_tasks_completed_cleanup

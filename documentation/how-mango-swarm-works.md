@@ -26,10 +26,9 @@ Required tables:
   - worker identity and heartbeats (`worker_id`, `last_heartbeat_at`, etc.)
 - `mango_swarm_tasks`
   - durable work item and lifecycle fields
-  - includes progress liveness fields:
-    - `progress_percent`
-    - `progress_description`
-    - `last_progress_at`
+- `mango_swarm_task_runtime`
+  - mutable execution state, progress, and liveness fields
+  - includes `execution_state`, `progress_percent`, `progress_message`, and `updated_at`
 - `mango_swarm_task_pacers`
   - per-task-type slot occupancy ledger used for smooth scheduling
 
@@ -61,9 +60,9 @@ sequenceDiagram
         D->>DB: mark task in_progress
         D->>H: execute(TaskExecutionContext<T>)
         H->>D: context.progress(percent, description)*
-        D->>DB: record progress_percent/description/last_progress_at
+        D->>DB: upsert runtime progress/state
         alt success
-            D->>DB: mark completed + set 100/finished
+            D->>DB: mark completed + record runtime 100/finished
         else failed result/exception and attempts remain
             D->>DB: reschedule same row to queued at retry time
         else failed with no attempts left
@@ -133,6 +132,8 @@ Handlers receive `TaskExecutionContext<T>` and can call:
 
 - `progress(percent)`
 - `progress(percent, description)`
+- `updateState(state)`
+- `updateProgress(percent, description)`
 
 `TaskExecutionContext<T>` contains:
 
@@ -145,20 +146,22 @@ Handlers receive `TaskExecutionContext<T>` and can call:
 
 Effects of each call:
 
-- updates `progress_percent`
-- updates `progress_description` (if provided)
-- updates `last_progress_at`
+- upserts the task's row in `mango_swarm_task_runtime`
+- updates `execution_state` when provided
+- updates `progress_percent` and `progress_message` when provided
+- updates runtime `updated_at`
 
 Timeout reclaim checks:
 
-- `COALESCE(last_progress_at, claimed_at)`
+- `COALESCE(mango_swarm_task_runtime.updated_at, mango_swarm_tasks.claimed_at)`
 
 So progress calls extend the reclaim silence window.
 
 On successful completion, the library records:
 
-- `progress_percent = 100`
-- `progress_description = finished`
+- runtime `execution_state = completed`
+- runtime `progress_percent = 100`
+- runtime `progress_message = finished`
 
 Handlers should return `TaskExecutionResult.completed()` for success or `TaskExecutionResult.failed(message)` for an explicit failure. A `null` result is still treated as success for compatibility, but new handlers should not rely on that behavior.
 

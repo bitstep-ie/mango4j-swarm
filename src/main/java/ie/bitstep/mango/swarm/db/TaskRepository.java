@@ -27,6 +27,10 @@ public interface TaskRepository {
 	/** Marks a claimed task as in progress. */
 	void markInProgress(UUID taskId, UUID workerId, Instant now);
 
+	/** Updates hot runtime execution state and progress for a running task. */
+	void updateRuntime(
+			UUID taskId, UUID workerId, Instant now, String executionState, Integer progressPercent, String message);
+
 	/** Records task progress and textual stage while in progress. */
 	void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description);
 

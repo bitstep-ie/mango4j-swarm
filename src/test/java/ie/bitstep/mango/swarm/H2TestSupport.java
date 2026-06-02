@@ -68,9 +68,6 @@ public abstract class H2TestSupport {
 					available_at timestamp NOT NULL DEFAULT now(),
 					claimed_by uuid NULL,
 					claimed_at timestamp NULL,
-					progress_percent integer NULL CHECK (progress_percent BETWEEN 0 AND 100),
-					progress_description text NULL,
-					last_progress_at timestamp NULL,
 					attempt_count integer NOT NULL DEFAULT 0,
 					created_at timestamp NOT NULL DEFAULT now(),
 					updated_at timestamp NOT NULL DEFAULT now(),
@@ -81,13 +78,31 @@ public abstract class H2TestSupport {
 				""");
 		jdbcTemplate.execute(
 				"""
+				CREATE TABLE mango_swarm_task_runtime (
+					task_id uuid PRIMARY KEY,
+					worker_id uuid NOT NULL,
+					execution_state text NOT NULL,
+					progress_percent integer NULL CHECK (progress_percent BETWEEN 0 AND 100),
+					progress_message text NULL,
+					started_at timestamp NOT NULL,
+					updated_at timestamp NOT NULL,
+					FOREIGN KEY (task_id) REFERENCES mango_swarm_tasks(id) ON DELETE CASCADE
+				)
+				""");
+		jdbcTemplate.execute(
+				"""
 				CREATE INDEX idx_mango_tasks_queue_claim
 					ON mango_swarm_tasks (task_type, status, available_at, id)
 				""");
 		jdbcTemplate.execute(
 				"""
+				CREATE INDEX idx_mango_task_runtime_worker
+					ON mango_swarm_task_runtime (worker_id, task_id)
+				""");
+		jdbcTemplate.execute(
+				"""
 				CREATE INDEX idx_mango_tasks_timeout_due
-					ON mango_swarm_tasks (task_type, status, last_progress_at, claimed_at, id)
+					ON mango_swarm_tasks (task_type, status, claimed_at, id)
 				""");
 		jdbcTemplate.execute(
 				"""

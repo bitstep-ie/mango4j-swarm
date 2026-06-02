@@ -19,7 +19,7 @@ class TaskExecutionContextTest {
 		UUID workerId = UUID.randomUUID();
 		Instant claimedAt = Instant.parse("2026-05-25T10:00:00Z");
 		TaskExecutionContext<String> context = new TaskExecutionContext<>(
-				taskId, "email", workerId, 2, claimedAt, "payload", (percent, description) -> {});
+				taskId, "email", workerId, 2, claimedAt, "payload", (state, percent, message) -> {});
 
 		assertThat(context.taskId()).isEqualTo(taskId);
 		assertThat(context.taskType()).isEqualTo("email");
@@ -33,18 +33,24 @@ class TaskExecutionContextTest {
 	void reportsProgressWithAndWithoutDescription() {
 		List<String> events = new ArrayList<>();
 		TaskExecutionContext<String> context =
-				context((percent, description) -> events.add(percent + ":" + description));
+				context((state, percent, message) -> events.add(state + ":" + percent + ":" + message));
 
 		context.progress(0, "started");
 		context.progress(10);
 		context.progress(100, "finished");
+		context.updateState("Calling partner API");
 
-		assertThat(events).containsExactly("0:started", "10:null", "100:finished");
+		assertThat(events)
+				.containsExactly(
+						"running:0:started",
+						"running:10:null",
+						"running:100:finished",
+						"Calling partner API:null:null");
 	}
 
 	@Test
 	void rejectsProgressOutsidePercentageBounds() {
-		TaskExecutionContext<String> context = context((percent, description) -> {});
+		TaskExecutionContext<String> context = context((state, percent, message) -> {});
 
 		assertThatThrownBy(() -> context.progress(-1))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -61,16 +67,16 @@ class TaskExecutionContextTest {
 		Instant claimedAt = Instant.parse("2026-05-25T10:00:00Z");
 
 		assertThatNullPointerException()
-				.isThrownBy(() ->
-						new TaskExecutionContext<>(null, "email", workerId, 1, claimedAt, "payload", (p, d) -> {}))
+				.isThrownBy(() -> new TaskExecutionContext<>(
+						null, "email", workerId, 1, claimedAt, "payload", (state, percent, message) -> {}))
 				.withMessage("taskId must not be null");
 		assertThatNullPointerException()
-				.isThrownBy(
-						() -> new TaskExecutionContext<>(taskId, null, workerId, 1, claimedAt, "payload", (p, d) -> {}))
+				.isThrownBy(() -> new TaskExecutionContext<>(
+						taskId, null, workerId, 1, claimedAt, "payload", (state, percent, message) -> {}))
 				.withMessage("taskType must not be null");
 		assertThatNullPointerException()
-				.isThrownBy(
-						() -> new TaskExecutionContext<>(taskId, "email", null, 1, claimedAt, "payload", (p, d) -> {}))
+				.isThrownBy(() -> new TaskExecutionContext<>(
+						taskId, "email", null, 1, claimedAt, "payload", (state, percent, message) -> {}))
 				.withMessage("workerId must not be null");
 		assertThatNullPointerException()
 				.isThrownBy(() -> new TaskExecutionContext<>(taskId, "email", workerId, 1, claimedAt, "payload", null))

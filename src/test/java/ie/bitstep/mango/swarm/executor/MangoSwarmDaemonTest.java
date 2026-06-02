@@ -357,6 +357,40 @@ class MangoSwarmDaemonTest {
 	}
 
 	@Test
+	void handlerProgressIsThrottledByThreshold() throws Exception {
+		MangoSwarmProperties properties = properties(10, 1, 1);
+		CountDownLatch executed = new CountDownLatch(1);
+		FakeRepository repository = new FakeRepository(1);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new StableProgressHandler(executed));
+
+		daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+
+		assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
+		awaitCounter(() -> repository.progressCalls, 2);
+		assertThat(repository.progressCalls).isEqualTo(2);
+		assertThat(repository.lastProgressPercent).isEqualTo(35);
+		assertThat(repository.lastProgressDescription).isEqualTo("same");
+		daemon.stop();
+	}
+
+	@Test
+	void handlerStateUpdateIsRecordedWithoutProgressPercent() throws Exception {
+		MangoSwarmProperties properties = properties(10, 1, 1);
+		CountDownLatch executed = new CountDownLatch(1);
+		FakeRepository repository = new FakeRepository(1);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new StateUpdateHandler(executed));
+
+		daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+
+		assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
+		awaitCounter(() -> repository.progressCalls, 2);
+		assertThat(repository.progressCalls).isEqualTo(2);
+		assertThat(repository.lastProgressPercent).isEqualTo(-1);
+		assertThat(repository.lastProgressDescription).isEqualTo("same");
+		daemon.stop();
+	}
+
+	@Test
 	void completedTaskIsMarkedInProgressAndCompleted() throws Exception {
 		MangoSwarmProperties properties = properties(10, 1, 1);
 		properties.getExecutor().setMaxThreads("1");
@@ -798,6 +832,40 @@ class MangoSwarmDaemonTest {
 		}
 	}
 
+	private static final class StableProgressHandler extends CompletingHandler {
+		private final CountDownLatch executed;
+
+		private StableProgressHandler(CountDownLatch executed) {
+			this.executed = executed;
+		}
+
+		@Override
+		public TaskExecutionResult execute(TaskExecutionContext<String> context) {
+			context.updateProgress(25, "same");
+			context.updateProgress(30, "same");
+			context.updateProgress(34, "same");
+			context.updateProgress(35, "same");
+			executed.countDown();
+			return TaskExecutionResult.completed();
+		}
+	}
+
+	private static final class StateUpdateHandler extends CompletingHandler {
+		private final CountDownLatch executed;
+
+		private StateUpdateHandler(CountDownLatch executed) {
+			this.executed = executed;
+		}
+
+		@Override
+		public TaskExecutionResult execute(TaskExecutionContext<String> context) {
+			context.updateProgress(25, "same");
+			context.updateState("running");
+			executed.countDown();
+			return TaskExecutionResult.completed();
+		}
+	}
+
 	private static final class TestWorkerRegistry implements WorkerRegistry {
 		private final int activeWorkers;
 		private int heartbeatCalls;
@@ -890,6 +958,19 @@ class MangoSwarmDaemonTest {
 		@Override
 		public void markInProgress(UUID taskId, UUID workerId, Instant now) {
 			markInProgressCalls++;
+		}
+
+		@Override
+		public void updateRuntime(
+				UUID taskId,
+				UUID workerId,
+				Instant now,
+				String executionState,
+				Integer progressPercent,
+				String message) {
+			progressCalls++;
+			lastProgressPercent = progressPercent == null ? -1 : progressPercent;
+			lastProgressDescription = message;
 		}
 
 		@Override
