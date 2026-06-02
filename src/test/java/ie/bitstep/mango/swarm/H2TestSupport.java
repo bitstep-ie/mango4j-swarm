@@ -73,6 +73,7 @@ public abstract class H2TestSupport {
 					updated_at timestamp NOT NULL DEFAULT now(),
 					completed_at timestamp NULL,
 					failed_at timestamp NULL,
+					execution_time_ms bigint NULL CHECK (execution_time_ms >= 0),
 					last_error_message text NULL
 				)
 				""");
@@ -86,6 +87,7 @@ public abstract class H2TestSupport {
 					progress_message text NULL,
 					started_at timestamp NOT NULL,
 					updated_at timestamp NOT NULL,
+					execution_time_ms bigint NOT NULL DEFAULT 0 CHECK (execution_time_ms >= 0),
 					FOREIGN KEY (task_id) REFERENCES mango_swarm_tasks(id) ON DELETE CASCADE
 				)
 				""");

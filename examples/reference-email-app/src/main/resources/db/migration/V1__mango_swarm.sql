@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS mango_swarm_tasks (
     updated_at timestamptz NOT NULL DEFAULT now(),
     completed_at timestamptz NULL,
     failed_at timestamptz NULL,
+    execution_time_ms bigint NULL CHECK (execution_time_ms >= 0),
     last_error_message text NULL
 );
 
@@ -36,7 +37,8 @@ CREATE TABLE IF NOT EXISTS mango_swarm_task_runtime (
     progress_percent integer NULL CHECK (progress_percent BETWEEN 0 AND 100),
     progress_message text NULL,
     started_at timestamptz NOT NULL,
-    updated_at timestamptz NOT NULL
+    updated_at timestamptz NOT NULL,
+    execution_time_ms bigint NOT NULL DEFAULT 0 CHECK (execution_time_ms >= 0)
 ) WITH (fillfactor = 75);
 
 CREATE INDEX IF NOT EXISTS idx_mango_tasks_queue_claim

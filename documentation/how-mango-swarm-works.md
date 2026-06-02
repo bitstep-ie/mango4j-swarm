@@ -26,9 +26,10 @@ Required tables:
   - worker identity and heartbeats (`worker_id`, `last_heartbeat_at`, etc.)
 - `mango_swarm_tasks`
   - durable work item and lifecycle fields
+  - includes final `execution_time_ms` for the current/last attempt
 - `mango_swarm_task_runtime`
   - mutable execution state, progress, and liveness fields
-  - includes `execution_state`, `progress_percent`, `progress_message`, and `updated_at`
+  - includes `execution_state`, `progress_percent`, `progress_message`, `updated_at`, and current `execution_time_ms`
 - `mango_swarm_task_pacers`
   - per-task-type slot occupancy ledger used for smooth scheduling
 
@@ -150,6 +151,7 @@ Effects of each call:
 - updates `execution_state` when provided
 - updates `progress_percent` and `progress_message` when provided
 - updates runtime `updated_at`
+- updates runtime `execution_time_ms`
 
 Timeout reclaim checks:
 
@@ -162,6 +164,7 @@ On successful completion, the library records:
 - runtime `execution_state = completed`
 - runtime `progress_percent = 100`
 - runtime `progress_message = finished`
+- final `execution_time_ms` on both the task and runtime rows
 
 Handlers should return `TaskExecutionResult.completed()` for success or `TaskExecutionResult.failed(message)` for an explicit failure. A `null` result is still treated as success for compatibility, but new handlers should not rely on that behavior.
 

@@ -159,7 +159,7 @@ Handlers receive a `TaskExecutionContext<T>` containing:
 - `payload`: extracted typed payload
 - progress API: `progress(percent)`, `progress(percent, description)`, `updateState(state)`, and `updateProgress(percent, description)`
 
-Calling `context.progress(percent)`, `context.progress(percent, description)`, or `context.updateProgress(percent, description)` records progress from `0` to `100` in the runtime table and also acts as task liveness. `context.updateState(state)` records a human-readable execution state. Runtime updates extend the stale-task timeout window for that task. The optional description can be used for human-readable stages such as `connecting`, `sending`, or `completing`.
+Calling `context.progress(percent)`, `context.progress(percent, description)`, or `context.updateProgress(percent, description)` records progress from `0` to `100` in the runtime table and also acts as task liveness. `context.updateState(state)` records a human-readable execution state. Runtime updates extend the stale-task timeout window for that task and refresh the current `execution_time_ms`. The optional description can be used for human-readable stages such as `connecting`, `sending`, or `completing`.
 
 When a task completes successfully, mango-swarm records a final progress state automatically:
 
@@ -167,6 +167,7 @@ When a task completes successfully, mango-swarm records a final progress state a
 execution_state = completed
 progress_percent = 100
 progress_message = finished
+execution_time_ms = elapsed attempt time in milliseconds
 ```
 
 Handlers can still report `100` themselves if they want a custom final description before returning, but the default successful completion state is always `100` / `finished`.
@@ -500,7 +501,7 @@ When a handler calls:
 context.progress(50, "sending");
 ```
 
-mango-swarm updates `progress_percent`, `progress_message`, and `updated_at` on `mango_swarm_task_runtime`. Timeout recovery checks runtime `updated_at` when present, otherwise it falls back to the task row's `claimed_at`.
+mango-swarm updates `progress_percent`, `progress_message`, `updated_at`, and `execution_time_ms` on `mango_swarm_task_runtime`. Timeout recovery checks runtime `updated_at` when present, otherwise it falls back to the task row's `claimed_at`.
 
 For example, with `timeout: 30s`:
 

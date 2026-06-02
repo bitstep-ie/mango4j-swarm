@@ -52,6 +52,18 @@ class SmoothRateLimiterTest {
 	}
 
 	@Test
+	void zeroMaxDoesNotInitializeLimiter() throws Exception {
+		SmoothRateLimiter limiter = new SmoothRateLimiter();
+		Instant now = Instant.parse("2026-05-25T10:00:00Z");
+		limiter.configure(1, Duration.ofSeconds(1), now);
+
+		assertThat(limiter.permitsAvailable(now, 0)).isZero();
+
+		assertThat(fieldValue(limiter, "initialized")).isEqualTo(false);
+		assertThat(fieldValue(limiter, "nextSlot")).isEqualTo(Instant.EPOCH);
+	}
+
+	@Test
 	void reportsNoPermitsWhenRequestIsBeforeNextClaimableSlot() {
 		SmoothRateLimiter limiter = new SmoothRateLimiter();
 		Instant now = Instant.parse("2026-05-25T10:00:00Z");
@@ -90,6 +102,19 @@ class SmoothRateLimiterTest {
 	}
 
 	@Test
+	void reconfigureCapsStaleNextSlotAtOnePeriodBehindNow() throws Exception {
+		SmoothRateLimiter limiter = new SmoothRateLimiter();
+		Instant first = Instant.parse("2026-05-25T10:00:00Z");
+		Instant later = first.plusSeconds(10);
+		limiter.configure(1, Duration.ofSeconds(1), first);
+		limiter.permitsAvailable(first, 1);
+
+		limiter.configure(1, Duration.ofSeconds(1), later);
+
+		assertThat(fieldValue(limiter, "nextSlot")).isEqualTo(later.minusSeconds(1));
+	}
+
+	@Test
 	void reconfigurePreservesRecentNextSlot() {
 		SmoothRateLimiter limiter = new SmoothRateLimiter();
 		Instant first = Instant.parse("2026-05-25T10:00:00Z");
@@ -100,5 +125,11 @@ class SmoothRateLimiterTest {
 		limiter.configure(1, Duration.ofSeconds(1), reconfiguredAt);
 
 		assertThat(limiter.timeUntilNextPermit(first.plusMillis(500))).isEqualTo(Duration.ofMillis(500));
+	}
+
+	private static Object fieldValue(Object target, String fieldName) throws Exception {
+		var field = target.getClass().getDeclaredField(fieldName);
+		field.setAccessible(true);
+		return field.get(target);
 	}
 }

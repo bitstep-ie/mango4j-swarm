@@ -333,17 +333,18 @@ class TaskRepositoryTest extends H2TestSupport {
 		assertThat(reclaimed).isZero();
 		var row = jdbcTemplate.queryForMap(
 				"""
-				select t.status, r.execution_state, r.progress_percent, r.progress_message, r.updated_at
-				from mango_swarm_tasks t
-				join mango_swarm_task_runtime r on r.task_id = t.id
-				where t.id = ?
+					select t.status, r.execution_state, r.progress_percent, r.progress_message, r.updated_at, r.execution_time_ms
+					from mango_swarm_tasks t
+					join mango_swarm_task_runtime r on r.task_id = t.id
+					where t.id = ?
 				""",
 				taskId);
 		assertThat(row)
 				.containsEntry("status", "in_progress")
 				.containsEntry("execution_state", "running")
 				.containsEntry("progress_percent", 50)
-				.containsEntry("progress_message", "sending");
+				.containsEntry("progress_message", "sending")
+				.containsEntry("execution_time_ms", 55_000L);
 		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.minusSeconds(5));
 	}
 
@@ -358,18 +359,22 @@ class TaskRepositoryTest extends H2TestSupport {
 
 		var row = jdbcTemplate.queryForMap(
 				"""
-				select worker_id, execution_state, progress_percent, progress_message, started_at, updated_at
-				from mango_swarm_task_runtime
-				where task_id = ?
-				""",
+					select worker_id, execution_state, progress_percent, progress_message, started_at, updated_at, execution_time_ms
+					from mango_swarm_task_runtime
+					where task_id = ?
+					""",
 				taskId);
 		assertThat(row)
 				.containsEntry("worker_id", workerId)
 				.containsEntry("execution_state", "running")
 				.containsEntry("progress_percent", null)
-				.containsEntry("progress_message", null);
+				.containsEntry("progress_message", null)
+				.containsEntry("execution_time_ms", 0L);
 		assertThat(((java.sql.Timestamp) row.get("started_at")).toInstant()).isEqualTo(now.plusSeconds(1));
 		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.plusSeconds(1));
+		assertThat(jdbcTemplate.queryForObject(
+						"select execution_time_ms from mango_swarm_tasks where id = ?", Long.class, taskId))
+				.isZero();
 	}
 
 	@Test
@@ -384,16 +389,17 @@ class TaskRepositoryTest extends H2TestSupport {
 
 		var row = jdbcTemplate.queryForMap(
 				"""
-				select worker_id, execution_state, progress_percent, progress_message, started_at, updated_at
-				from mango_swarm_task_runtime
-				where task_id = ?
-				""",
+					select worker_id, execution_state, progress_percent, progress_message, started_at, updated_at, execution_time_ms
+					from mango_swarm_task_runtime
+					where task_id = ?
+					""",
 				taskId);
 		assertThat(row)
 				.containsEntry("worker_id", workerId)
 				.containsEntry("execution_state", "Calling partner API")
 				.containsEntry("progress_percent", 75)
-				.containsEntry("progress_message", "calling");
+				.containsEntry("progress_message", "calling")
+				.containsEntry("execution_time_ms", 1_000L);
 		assertThat(((java.sql.Timestamp) row.get("started_at")).toInstant()).isEqualTo(now.plusSeconds(1));
 		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.plusSeconds(2));
 	}
@@ -410,17 +416,21 @@ class TaskRepositoryTest extends H2TestSupport {
 
 		var row = jdbcTemplate.queryForMap(
 				"""
-				select t.status, r.execution_state, r.progress_percent, r.progress_message, r.updated_at
-				from mango_swarm_tasks t
-				join mango_swarm_task_runtime r on r.task_id = t.id
-				where t.id = ?
+					select t.status, t.execution_time_ms task_execution_time_ms,
+						r.execution_state, r.progress_percent, r.progress_message, r.updated_at,
+						r.execution_time_ms runtime_execution_time_ms
+					from mango_swarm_tasks t
+					join mango_swarm_task_runtime r on r.task_id = t.id
+					where t.id = ?
 				""",
 				taskId);
 		assertThat(row)
 				.containsEntry("status", "completed")
+				.containsEntry("task_execution_time_ms", 5_000L)
 				.containsEntry("execution_state", "completed")
 				.containsEntry("progress_percent", 100)
-				.containsEntry("progress_message", "finished");
+				.containsEntry("progress_message", "finished")
+				.containsEntry("runtime_execution_time_ms", 5_000L);
 		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.plusSeconds(5));
 	}
 
@@ -437,16 +447,17 @@ class TaskRepositoryTest extends H2TestSupport {
 
 		var row = jdbcTemplate.queryForMap(
 				"""
-				select status, available_at, claimed_by, claimed_at, failed_at, last_error_message
-				from mango_swarm_tasks
-				where id = ?
-				""",
+					select status, available_at, claimed_by, claimed_at, failed_at, execution_time_ms, last_error_message
+					from mango_swarm_tasks
+					where id = ?
+					""",
 				taskId);
 		assertThat(row).containsEntry("status", "queued");
 		assertThat(((java.sql.Timestamp) row.get("available_at")).toInstant()).isEqualTo(retryAt);
 		assertThat(row.get("claimed_by")).isNull();
 		assertThat(row.get("claimed_at")).isNull();
 		assertThat(row.get("failed_at")).isNull();
+		assertThat(row.get("execution_time_ms")).isNull();
 		assertThat(row).containsEntry("last_error_message", "temporary failure");
 		assertThat(jdbcTemplate.queryForObject(
 						"select count(*) from mango_swarm_task_runtime where task_id = ?", Integer.class, taskId))
@@ -464,18 +475,21 @@ class TaskRepositoryTest extends H2TestSupport {
 
 		var row = jdbcTemplate.queryForMap(
 				"""
-				select t.status, r.worker_id, r.execution_state, r.progress_percent, r.progress_message, r.updated_at
-				from mango_swarm_tasks t
-				join mango_swarm_task_runtime r on r.task_id = t.id
-				where t.id = ?
+					select t.status, t.execution_time_ms task_execution_time_ms, r.worker_id, r.execution_state,
+						r.progress_percent, r.progress_message, r.updated_at, r.execution_time_ms runtime_execution_time_ms
+					from mango_swarm_tasks t
+					join mango_swarm_task_runtime r on r.task_id = t.id
+					where t.id = ?
 				""",
 				taskId);
 		assertThat(row)
 				.containsEntry("status", "failed")
+				.containsEntry("task_execution_time_ms", 0L)
 				.containsEntry("worker_id", workerId)
 				.containsEntry("execution_state", "failed")
 				.containsEntry("progress_percent", null)
-				.containsEntry("progress_message", "remote error");
+				.containsEntry("progress_message", "remote error")
+				.containsEntry("runtime_execution_time_ms", 0L);
 		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.plusSeconds(1));
 	}
 
