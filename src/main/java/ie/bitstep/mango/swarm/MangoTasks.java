@@ -87,7 +87,14 @@ public class MangoTasks {
 		Objects.requireNonNull(taskType, "taskType must not be null");
 		Objects.requireNonNull(payload, "payload must not be null");
 		Objects.requireNonNull(at, "at must not be null");
-		return taskRepository.queueInNextSlot(taskType, payload, at, slotSpacing(taskType));
+		MangoSwarmProperties.TaskType config = taskTypeConfig(taskType);
+		if (config.getMode() == MangoSwarmProperties.TaskMode.REJECT) {
+			throw new IllegalStateException("Task type is rejecting new tasks: " + taskType);
+		}
+		if (config.getMode() == MangoSwarmProperties.TaskMode.DROP) {
+			return UuidV7.generate();
+		}
+		return taskRepository.queueInNextSlot(taskType, payload, at, slotSpacing(config));
 	}
 
 	/**
@@ -103,11 +110,15 @@ public class MangoTasks {
 		return at(at, taskType, objectMapper.valueToTree(payload));
 	}
 
-	private Duration slotSpacing(String taskType) {
+	private MangoSwarmProperties.TaskType taskTypeConfig(String taskType) {
 		MangoSwarmProperties.TaskType config = properties.getTaskTypes().get(taskType);
 		if (config == null) {
 			throw new IllegalArgumentException("Task type is not configured: " + taskType);
 		}
+		return config;
+	}
+
+	private static Duration slotSpacing(MangoSwarmProperties.TaskType config) {
 		if (config.getRate() <= 0) {
 			return Duration.ZERO;
 		}

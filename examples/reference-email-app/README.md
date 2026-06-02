@@ -59,3 +59,35 @@ mvn spring-boot:run
 ```
 
 On startup the app queues the configured number of immediate `send-email` tasks and one extra task scheduled 30 seconds in the future. The swarm daemon claims tasks when they become available, and the handler logs each request when it fires.
+
+To queue `send-email` rows without executing them, set the task type mode to `queue`:
+
+```yaml
+mango4j:
+  swarm:
+    task-types:
+      send-email:
+        mode: queue
+```
+
+Queued tasks remain in the database and are claimed when `mode` is set back to `execute`.
+
+Use `mode: reject` to fail new queue attempts:
+
+```yaml
+mango4j:
+  swarm:
+    task-types:
+      send-email:
+        mode: reject
+```
+
+Use `mode: drop` to accept new queue attempts without inserting task rows:
+
+```yaml
+mango4j:
+  swarm:
+    task-types:
+      send-email:
+        mode: drop
+```

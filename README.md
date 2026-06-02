@@ -88,6 +88,7 @@ mango4j:
 
     task-types:
       send-email:
+        mode: execute
         rate: 100
         period: 1s
         concurrency: 5
@@ -217,6 +218,7 @@ mango4j:
 
     task-types:
       send-email:
+        mode: execute
         rate: 100
         period: 1s
         concurrency: 5
@@ -319,6 +321,7 @@ Required:
 * `rate`: permits per period for the whole application.
 
 Optional:
+* `mode` (default `execute`): controls queueing and execution for this task type.
 * `period` (default `1s`)
 * `concurrency` (default `1`)
 * `timeout` (default `1m`)
@@ -331,6 +334,15 @@ Optional:
 * `retry-max-delay` (override)
 * `retry-delay` (legacy alias for first retry delay)
 
+Task type modes:
+
+| Mode | New queue attempts | Existing queued rows | Timeout recovery |
+| --- | --- | --- | --- |
+| `execute` | inserted | claimed and executed | active |
+| `queue` | inserted | not claimed | skipped |
+| `reject` | throws an error before insert | not claimed | skipped |
+| `drop` | returns an acknowledgement id without insert | not claimed | skipped |
+
 ## Minimal Example
 
 ```yaml
@@ -338,6 +350,39 @@ mango4j:
   swarm:
     task-types:
       send-email:
+        rate: 20
+```
+
+Queue tasks without executing them:
+
+```yaml
+mango4j:
+  swarm:
+    task-types:
+      send-email:
+        mode: queue
+        rate: 20
+```
+
+Reject new tasks and keep existing rows from being claimed:
+
+```yaml
+mango4j:
+  swarm:
+    task-types:
+      send-email:
+        mode: reject
+        rate: 20
+```
+
+Drop new tasks without raising an error and keep existing rows from being claimed:
+
+```yaml
+mango4j:
+  swarm:
+    task-types:
+      send-email:
+        mode: drop
         rate: 20
 ```
 
@@ -365,6 +410,7 @@ mango4j:
       max-delay: 30m
     task-types:
       send-email:
+        mode: execute
         rate: 100
         period: 1s
         concurrency: 5

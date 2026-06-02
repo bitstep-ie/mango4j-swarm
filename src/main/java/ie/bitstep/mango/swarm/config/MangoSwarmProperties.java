@@ -305,6 +305,7 @@ public class MangoSwarmProperties {
 
 	/** Per-task-type execution policy. */
 	public static class TaskType {
+		private TaskMode mode = TaskMode.EXECUTE;
 		private int rate;
 		private Duration period = Duration.ofSeconds(1);
 		private int concurrency = 1;
@@ -317,6 +318,14 @@ public class MangoSwarmProperties {
 		private Double retryMultiplier;
 		private Duration retryMaxDelay;
 		private Duration retryDelay;
+
+		public TaskMode getMode() {
+			return mode;
+		}
+
+		public void setMode(TaskMode mode) {
+			this.mode = mode;
+		}
 
 		public int getRate() {
 			return rate;
@@ -414,5 +423,13 @@ public class MangoSwarmProperties {
 		public void setRetryDelay(Duration retryDelay) {
 			this.retryDelay = retryDelay;
 		}
+	}
+
+	/** Per-task-type queueing and execution mode. */
+	public enum TaskMode {
+		EXECUTE,
+		QUEUE,
+		REJECT,
+		DROP
 	}
 }

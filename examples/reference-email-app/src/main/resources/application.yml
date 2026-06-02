@@ -37,6 +37,7 @@ mango4j:
       max-delay: 30m
     task-types:
       send-email:
+        mode: execute
         rate: 100
         period: 1s
         concurrency: 5

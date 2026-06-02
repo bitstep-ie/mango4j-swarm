@@ -126,6 +126,9 @@ public class MangoSwarmDaemon {
 			Map.Entry<String, MangoSwarmProperties.TaskType> entry, Instant now, PollState pollState) {
 		String taskType = entry.getKey();
 		MangoSwarmProperties.TaskType config = entry.getValue();
+		if (config.getMode() != MangoSwarmProperties.TaskMode.EXECUTE) {
+			return;
+		}
 		double effectiveRate = Math.max(0.0d, (double) config.getRate() / Math.max(activeWorkers, 1));
 		SmoothRateLimiter limiter = rateLimiters.get(taskType);
 		limiter.configure(effectiveRate, config.getPeriod(), now);
@@ -338,6 +341,9 @@ public class MangoSwarmDaemon {
 		}
 		int batchSize = maintenanceBatchSize();
 		properties.getTaskTypes().forEach((type, config) -> {
+			if (config.getMode() != MangoSwarmProperties.TaskMode.EXECUTE) {
+				return;
+			}
 			if (config.isReclaimOnTimeout() && config.isIdempotent()) {
 				taskRepository.reclaimTimedOut(type, config.getTimeout(), now, batchSize);
 			} else if (!config.isReclaimOnTimeout()) {

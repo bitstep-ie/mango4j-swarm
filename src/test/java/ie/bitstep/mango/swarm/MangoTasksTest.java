@@ -136,6 +136,33 @@ class MangoTasksTest {
 				.hasMessageContaining("Task type is not configured: unknown");
 	}
 
+	@Test
+	void rejectsNewTasksWhenTaskTypeModeRejectsQueueing() {
+		RecordingRepository repository = new RecordingRepository();
+		MangoSwarmProperties properties = properties();
+		properties.getTaskTypes().get("email").setMode(MangoSwarmProperties.TaskMode.REJECT);
+		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties);
+		ObjectNode payload = JsonNodeFactory.instance.objectNode();
+
+		assertThatThrownBy(() -> tasks.queue("email", payload))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("Task type is rejecting new tasks: email");
+		assertThat(repository.taskType).isNull();
+	}
+
+	@Test
+	void dropsNewTasksWithoutWritingWhenTaskTypeModeDropsQueueing() {
+		RecordingRepository repository = new RecordingRepository();
+		MangoSwarmProperties properties = properties();
+		properties.getTaskTypes().get("email").setMode(MangoSwarmProperties.TaskMode.DROP);
+		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties);
+
+		UUID taskId = tasks.queue("email", JsonNodeFactory.instance.objectNode());
+
+		assertThat(taskId).isNotNull();
+		assertThat(repository.taskType).isNull();
+	}
+
 	private static MangoSwarmProperties properties() {
 		MangoSwarmProperties properties = new MangoSwarmProperties();
 		MangoSwarmProperties.TaskType email = new MangoSwarmProperties.TaskType();

@@ -141,6 +141,22 @@ class MangoSwarmDaemonTest {
 	}
 
 	@Test
+	void queuedTaskTypesAreNotClaimedOrRecovered() {
+		MangoSwarmProperties properties = properties(10, 1, 1);
+		properties.getTaskTypes().get("email").setMode(MangoSwarmProperties.TaskMode.QUEUE);
+		FakeRepository repository = new FakeRepository(10);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+
+		Duration delay = daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+
+		assertThat(delay).isEqualTo(properties.getExecutor().getPollInterval());
+		assertThat(repository.claimLimits).isEmpty();
+		assertThat(repository.reclaimCalls).isZero();
+		assertThat(repository.failTimedOutCalls).isZero();
+		daemon.stop();
+	}
+
+	@Test
 	void marksTimedOutFailedWhenReclaimDisabled() {
 		MangoSwarmProperties properties = properties(10, 1, 1);
 		properties.getTaskTypes().get("email").setReclaimOnTimeout(false);

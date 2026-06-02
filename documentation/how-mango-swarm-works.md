@@ -120,10 +120,22 @@ The daemon uses smooth slot pacing and batch claiming, not burst-all-at-once per
 
 For each task type and poll cycle, claim limit is bounded by:
 
+- whether the task type is in `execute` mode
 - configured/derived batch size
 - remaining local rate capacity
 - remaining per-task-type concurrency
 - remaining global executor capacity
+
+Task type modes affect both producers and workers:
+
+| Mode | Producer behavior | Worker behavior |
+| --- | --- | --- |
+| `execute` | inserts new task rows | claims tasks and runs timeout recovery |
+| `queue` | inserts new task rows | skips claiming and timeout recovery |
+| `reject` | fails before inserting a task row | skips claiming and timeout recovery |
+| `drop` | returns an acknowledgement id without inserting a task row | skips claiming and timeout recovery |
+
+Queued rows for non-executing modes remain in `mango_swarm_tasks` and become eligible again when the task type is set back to `mode: execute`.
 
 Claiming uses a portable select-and-update flow so repository behavior can be validated against H2. PostgreSQL-specific concurrent row-lock claiming is outside the H2 test surface.
 
@@ -217,4 +229,4 @@ This keeps the task table bounded while preserving recent execution history for 
 - Schema creation and selection.
 - Table creation and migration lifecycle.
 - Task handler implementations.
-- Task-type config (`rate`, `period`, `concurrency`, `timeout`, retries, reclaim/idempotency).
+- Task-type config (`mode`, `rate`, `period`, `concurrency`, `timeout`, retries, reclaim/idempotency).

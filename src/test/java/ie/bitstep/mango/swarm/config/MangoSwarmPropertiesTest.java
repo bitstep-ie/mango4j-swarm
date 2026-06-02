@@ -117,6 +117,8 @@ class MangoSwarmPropertiesTest {
 	void taskTypeSettersRoundTripConfiguredValues() {
 		MangoSwarmProperties.TaskType taskType = new MangoSwarmProperties.TaskType();
 
+		assertThat(taskType.getMode()).isEqualTo(MangoSwarmProperties.TaskMode.EXECUTE);
+		taskType.setMode(MangoSwarmProperties.TaskMode.QUEUE);
 		taskType.setRate(50);
 		taskType.setPeriod(Duration.ofSeconds(5));
 		taskType.setConcurrency(6);
@@ -130,6 +132,7 @@ class MangoSwarmPropertiesTest {
 		taskType.setRetryMaxDelay(Duration.ofSeconds(11));
 		taskType.setRetryDelay(Duration.ofSeconds(12));
 
+		assertThat(taskType.getMode()).isEqualTo(MangoSwarmProperties.TaskMode.QUEUE);
 		assertThat(taskType.getRate()).isEqualTo(50);
 		assertThat(taskType.getPeriod()).isEqualTo(Duration.ofSeconds(5));
 		assertThat(taskType.getConcurrency()).isEqualTo(6);
