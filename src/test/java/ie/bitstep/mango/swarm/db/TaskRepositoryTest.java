@@ -378,6 +378,23 @@ class TaskRepositoryTest extends H2TestSupport {
 	}
 
 	@Test
+	void markInProgressDoesNothingForDifferentWorker() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+		taskRepository.claimBatch("email", workerId, now, 1);
+
+		taskRepository.markInProgress(taskId, UUID.randomUUID(), now.plusSeconds(1));
+
+		assertThat(jdbcTemplate.queryForObject(
+						"select status from mango_swarm_tasks where id = ?", String.class, taskId))
+				.isEqualTo(TaskStatus.CLAIMED.databaseValue());
+		assertThat(jdbcTemplate.queryForObject(
+						"select count(*) from mango_swarm_task_runtime where task_id = ?", Integer.class, taskId))
+				.isZero();
+	}
+
+	@Test
 	void updateRuntimeUpsertsMutableExecutionState() {
 		Instant now = Instant.parse("2026-05-20T10:00:00Z");
 		UUID workerId = UUID.randomUUID();
@@ -435,6 +452,32 @@ class TaskRepositoryTest extends H2TestSupport {
 	}
 
 	@Test
+	void completionDoesNothingForDifferentWorker() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+		taskRepository.claimBatch("email", workerId, now, 1);
+		taskRepository.markInProgress(taskId, workerId, now);
+
+		taskRepository.markCompleted(taskId, UUID.randomUUID(), now.plusSeconds(5));
+
+		var row = jdbcTemplate.queryForMap(
+				"""
+				select status, completed_at, execution_time_ms
+				from mango_swarm_tasks
+				where id = ?
+				""",
+				taskId);
+		assertThat(row)
+				.containsEntry("status", TaskStatus.IN_PROGRESS.databaseValue())
+				.containsEntry("completed_at", null)
+				.containsEntry("execution_time_ms", 0L);
+		assertThat(jdbcTemplate.queryForObject(
+						"select execution_state from mango_swarm_task_runtime where task_id = ?", String.class, taskId))
+				.isEqualTo("running");
+	}
+
+	@Test
 	void reschedulesFailedAttemptUsingSameTaskRow() {
 		Instant now = Instant.parse("2026-05-20T10:00:00Z");
 		Instant retryAt = now.plusSeconds(10);
@@ -465,6 +508,25 @@ class TaskRepositoryTest extends H2TestSupport {
 	}
 
 	@Test
+	void rescheduleDoesNothingForDifferentWorker() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+		taskRepository.claimBatch("email", workerId, now, 1);
+		taskRepository.markInProgress(taskId, workerId, now);
+
+		taskRepository.rescheduleAfterFailure(
+				taskId, UUID.randomUUID(), now.plusSeconds(1), now.plusSeconds(10), "wrong worker");
+
+		assertThat(jdbcTemplate.queryForObject(
+						"select status from mango_swarm_tasks where id = ?", String.class, taskId))
+				.isEqualTo(TaskStatus.IN_PROGRESS.databaseValue());
+		assertThat(jdbcTemplate.queryForObject(
+						"select count(*) from mango_swarm_task_runtime where task_id = ?", Integer.class, taskId))
+				.isEqualTo(1);
+	}
+
+	@Test
 	void failedTaskRecordsRuntimeState() {
 		Instant now = Instant.parse("2026-05-20T10:00:00Z");
 		UUID workerId = UUID.randomUUID();
@@ -491,6 +553,33 @@ class TaskRepositoryTest extends H2TestSupport {
 				.containsEntry("progress_message", "remote error")
 				.containsEntry("runtime_execution_time_ms", 0L);
 		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.plusSeconds(1));
+	}
+
+	@Test
+	void failureDoesNothingForDifferentWorker() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+		taskRepository.claimBatch("email", workerId, now, 1);
+		taskRepository.markInProgress(taskId, workerId, now);
+
+		taskRepository.markFailed(taskId, UUID.randomUUID(), now.plusSeconds(1), "wrong worker");
+
+		var row = jdbcTemplate.queryForMap(
+				"""
+				select status, failed_at, last_error_message, execution_time_ms
+				from mango_swarm_tasks
+				where id = ?
+				""",
+				taskId);
+		assertThat(row)
+				.containsEntry("status", TaskStatus.IN_PROGRESS.databaseValue())
+				.containsEntry("failed_at", null)
+				.containsEntry("last_error_message", null)
+				.containsEntry("execution_time_ms", 0L);
+		assertThat(jdbcTemplate.queryForObject(
+						"select execution_state from mango_swarm_task_runtime where task_id = ?", String.class, taskId))
+				.isEqualTo("running");
 	}
 
 	@Test
@@ -703,6 +792,33 @@ class TaskRepositoryTest extends H2TestSupport {
 	}
 
 	@Test
+	void requeueClaimedDoesNothingForDifferentWorker() {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID workerId = UUID.randomUUID();
+		UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), now);
+		taskRepository.claimBatch("email", workerId, now, 1);
+		taskRepository.updateRuntime(taskId, workerId, now, "running", 10, "started");
+
+		taskRepository.requeueClaimed(
+				taskId, UUID.randomUUID(), now.plusSeconds(1), now.plusSeconds(10), "wrong worker");
+
+		var row = jdbcTemplate.queryForMap(
+				"""
+				select status, claimed_by, last_error_message
+				from mango_swarm_tasks
+				where id = ?
+				""",
+				taskId);
+		assertThat(row)
+				.containsEntry("status", TaskStatus.CLAIMED.databaseValue())
+				.containsEntry("claimed_by", workerId)
+				.containsEntry("last_error_message", null);
+		assertThat(jdbcTemplate.queryForObject(
+						"select count(*) from mango_swarm_task_runtime where task_id = ?", Integer.class, taskId))
+				.isEqualTo(1);
+	}
+
+	@Test
 	void nullAndShortMessagesAreStoredAsProvided() {
 		Instant now = Instant.parse("2026-05-20T10:00:00Z");
 		UUID workerId = UUID.randomUUID();
@@ -783,6 +899,32 @@ class TaskRepositoryTest extends H2TestSupport {
 				.hasMessage("JdbcTemplate.execute returned null for queue task");
 	}
 
+	@Test
+	void voidLifecycleCallbacksReturnUpdatedRowCount() throws Exception {
+		assertLifecycleCallbackReturnsOne(repository ->
+				repository.markInProgress(UUID.randomUUID(), UUID.randomUUID(), Instant.parse("2026-05-20T10:00:00Z")));
+		assertLifecycleCallbackReturnsOne(repository -> repository.updateRuntime(
+				UUID.randomUUID(), UUID.randomUUID(), Instant.parse("2026-05-20T10:00:00Z"), "running", 50, "halfway"));
+		assertLifecycleCallbackReturnsOne(repository -> repository.recordProgress(
+				UUID.randomUUID(), UUID.randomUUID(), Instant.parse("2026-05-20T10:00:00Z"), 50, "halfway"));
+		assertLifecycleCallbackReturnsOne(repository ->
+				repository.markCompleted(UUID.randomUUID(), UUID.randomUUID(), Instant.parse("2026-05-20T10:00:00Z")));
+		assertLifecycleCallbackReturnsOne(repository -> repository.markFailed(
+				UUID.randomUUID(), UUID.randomUUID(), Instant.parse("2026-05-20T10:00:00Z"), "failed"));
+		assertLifecycleCallbackReturnsOne(repository -> repository.rescheduleAfterFailure(
+				UUID.randomUUID(),
+				UUID.randomUUID(),
+				Instant.parse("2026-05-20T10:00:00Z"),
+				Instant.parse("2026-05-20T10:01:00Z"),
+				"retry"));
+		assertLifecycleCallbackReturnsOne(repository -> repository.requeueClaimed(
+				UUID.randomUUID(),
+				UUID.randomUUID(),
+				Instant.parse("2026-05-20T10:00:00Z"),
+				Instant.parse("2026-05-20T10:01:00Z"),
+				"capacity"));
+	}
+
 	private UUID completeTask(UUID workerId, Instant completedAt) {
 		UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), completedAt);
 		taskRepository.claimBatch("email", workerId, completedAt, 1);
@@ -799,6 +941,41 @@ class TaskRepositoryTest extends H2TestSupport {
 
 	private List<UUID> existingTaskIds() {
 		return jdbcTemplate.query("select id from mango_swarm_tasks", (rs, rowNum) -> rs.getObject("id", UUID.class));
+	}
+
+	private void assertLifecycleCallbackReturnsOne(java.util.function.Consumer<JdbcTaskRepository> operation)
+			throws Exception {
+		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+		java.sql.Connection connection = mock(java.sql.Connection.class);
+		PreparedStatement statement = mock(PreparedStatement.class);
+		ResultSet resultSet = mock(ResultSet.class);
+		when(connection.prepareStatement(org.mockito.ArgumentMatchers.anyString()))
+				.thenReturn(statement);
+		when(statement.executeUpdate()).thenReturn(1);
+		when(statement.executeQuery()).thenReturn(resultSet);
+		when(resultSet.next()).thenReturn(false);
+		when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Integer>>any()))
+				.thenAnswer(invocation -> {
+					Integer result = invocation
+							.<ConnectionCallback<Integer>>getArgument(0)
+							.doInConnection(connection);
+					assertThat(result).isEqualTo(1);
+					return result;
+				});
+		JdbcTaskRepository repository =
+				new JdbcTaskRepository(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
+		setH2(repository);
+
+		operation.accept(repository);
+	}
+
+	private static void setH2(JdbcTaskRepository repository) throws Exception {
+		java.lang.reflect.Field h2 = JdbcTaskRepository.class.getDeclaredField("h2");
+		java.lang.reflect.Field h2Initialized = JdbcTaskRepository.class.getDeclaredField("h2Initialized");
+		h2.setAccessible(true);
+		h2Initialized.setAccessible(true);
+		h2.setBoolean(repository, true);
+		h2Initialized.setBoolean(repository, true);
 	}
 
 	private static ResultSet resultSet(Map<String, Object> row) {

@@ -71,4 +71,41 @@ class WorkerRegistryTest extends H2TestSupport {
 				.isInstanceOf(NullPointerException.class)
 				.hasMessage("JdbcTemplate.execute returned null for count active workers");
 	}
+
+	@Test
+	void heartbeatCallbacksReturnAffectedRowCounts() throws Exception {
+		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+		java.sql.Connection connection = mock(java.sql.Connection.class);
+		java.sql.PreparedStatement statement = mock(java.sql.PreparedStatement.class);
+		java.sql.ResultSet resultSet = mock(java.sql.ResultSet.class);
+		when(connection.prepareStatement(org.mockito.ArgumentMatchers.anyString()))
+				.thenReturn(statement);
+		when(statement.executeUpdate()).thenReturn(0, 1, 1);
+		when(statement.executeQuery()).thenReturn(resultSet);
+		when(resultSet.next()).thenReturn(true);
+		when(resultSet.getInt(1)).thenReturn(2);
+		java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+		when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Integer>>any()))
+				.thenAnswer(invocation -> {
+					Integer result = invocation
+							.<ConnectionCallback<Integer>>getArgument(0)
+							.doInConnection(connection);
+					int call = calls.incrementAndGet();
+					if (call == 2 || call == 3) {
+						assertThat(result).isEqualTo(1);
+					}
+					if (call == 4) {
+						assertThat(result).isEqualTo(2);
+					}
+					return result;
+				});
+		JdbcWorkerRegistry registry =
+				new JdbcWorkerRegistry(jdbcTemplate, java.time.Duration.ofSeconds(30), new SchemaQualifiedTables(null));
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+		int activeWorkers = registry.heartbeat(UUID.randomUUID(), "node-a", now, now);
+
+		assertThat(activeWorkers).isEqualTo(2);
+		assertThat(calls.get()).isEqualTo(4);
+	}
 }
