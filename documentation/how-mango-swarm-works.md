@@ -22,16 +22,68 @@ This document explains the runtime model of `mango-swarm`, the table interaction
 
 Required tables:
 
-- `mango_swarm_workers`
-  - worker identity and heartbeats (`worker_id`, `last_heartbeat_at`, etc.)
-- `mango_swarm_tasks`
-  - durable work item and lifecycle fields
-  - includes final `execution_time_ms` for the current/last attempt
-- `mango_swarm_task_runtime`
-  - mutable execution state, progress, and liveness fields
-  - includes `execution_state`, `progress_percent`, `progress_message`, `updated_at`, and current `execution_time_ms`
-- `mango_swarm_task_pacers`
-  - per-task-type slot occupancy ledger used for smooth scheduling
+### `mango_swarm_workers`
+
+Worker identity and heartbeat state:
+
+- `worker_id`: worker UUID primary key
+- `hostname`: worker host name for diagnostics
+- `started_at`: worker start timestamp
+- `last_heartbeat_at`: most recent heartbeat timestamp
+
+Workers update this table on each heartbeat. The active worker count used for rate division comes from non-stale rows.
+
+### `mango_swarm_task_pacers`
+
+Per-task-type slot occupancy ledger used for smooth scheduling:
+
+- `task_type`: configured task type
+- `slot_at`: reserved execution slot timestamp
+- `task_id`: task row linked to the slot
+- `created_at`: slot creation timestamp
+
+The primary key is `(task_type, slot_at)`, so each task type has an independent pacing timeline.
+
+### `mango_swarm_tasks`
+
+Durable work item and lifecycle state:
+
+- `id`: task UUID primary key
+- `task_type`: configured task type
+- `payload`: durable task payload stored as `jsonb`
+- `status`: one of `queued`, `claimed`, `in_progress`, `completed`, or `failed`
+- `available_at`: earliest claim timestamp
+- `claimed_by`: worker UUID that owns the current claim
+- `claimed_at`: current claim timestamp
+- `attempt_count`: current attempt number
+- `created_at`, `updated_at`: durable row timestamps
+- `completed_at`, `failed_at`: terminal state timestamps
+- `execution_time_ms`: final/current attempt execution time for durable lifecycle transitions
+- `last_error_message`: last failure, timeout, or requeue message
+
+This table is intentionally durable and mostly stable. Payloads live here, and frequent progress updates do not.
+
+### `mango_swarm_task_runtime`
+
+Hot mutable runtime state for the current attempt:
+
+- `task_id`: primary key and foreign key to `mango_swarm_tasks(id)` with cascade delete
+- `worker_id`: worker UUID currently reporting runtime state
+- `execution_state`: current human-readable state, such as `running` or `completed`
+- `progress_percent`: optional current progress from `0` to `100`
+- `progress_message`: optional human-readable progress message
+- `started_at`: attempt start timestamp
+- `updated_at`: most recent runtime update and liveness timestamp
+- `execution_time_ms`: current elapsed attempt time
+
+This table is narrow, contains no `jsonb`, and uses `fillfactor = 75` so PostgreSQL has room for HOT updates during frequent progress/state changes.
+
+Important indexes:
+
+- `idx_mango_tasks_queue_claim` on queued tasks by `(task_type, available_at, id)` for batch claiming
+- `idx_mango_task_runtime_worker` on `(worker_id, task_id)` for runtime visibility by worker
+- `idx_mango_tasks_timeout_due` on claimed/in-progress tasks by `(task_type, claimed_at, id)` for timeout recovery
+- cleanup indexes on completed and failed terminal timestamps
 
 Reference SQL:
 
