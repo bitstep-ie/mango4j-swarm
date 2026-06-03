@@ -350,6 +350,7 @@ mango4j:
   swarm:
     task-types:
       send-email:
+        mode: execute
         rate: 20
 ```
 
@@ -526,6 +527,7 @@ mango4j:
       max-delay: 30m
     task-types:
       send-email:
+        mode: execute
         max-attempts: 3
         retry-base-delay: 10s
         retry-multiplier: 3.0
