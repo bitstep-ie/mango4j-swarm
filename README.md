@@ -158,9 +158,9 @@ Handlers receive a `TaskExecutionContext<T>` containing:
 - `attemptCount`: current attempt number
 - `claimedAt`: claim timestamp for the current attempt
 - `payload`: extracted typed payload
-- progress API: `progress(percent)`, `progress(percent, description)`, and `updateState(state)`
+- progress API: `progress(percent)` and `progress(percent, description)`
 
-Calling `context.progress(percent)` or `context.progress(percent, description)` records progress from `0` to `100` in the runtime table and also acts as task liveness. `context.updateState(state)` records a human-readable execution state. Runtime updates extend the stale-task timeout window for that task and refresh the current `execution_time_ms`. The optional description can be used for human-readable stages such as `connecting`, `sending`, or `completing`.
+Calling `context.progress(percent)` or `context.progress(percent, description)` records progress from `0` to `100` in the runtime table and also acts as task liveness. Runtime updates extend the stale-task timeout window for that task and refresh the current `execution_time_ms`. The optional description can be used for human-readable stages such as `connecting`, `sending`, or `completing`.
 
 When a task completes successfully, mango-swarm records a final progress state automatically:
 

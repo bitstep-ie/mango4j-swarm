@@ -30,9 +30,8 @@ This addresses the hot-row and table-bloat risk by moving frequent progress/stat
 
 ### Runtime Progress API
 
-- Added `TaskExecutionContext.updateState(String)`.
-- Added `TaskExecutionContext.updateProgress(int, String)`.
-- Kept existing `progress(...)` methods as aliases for compatibility.
+- Kept `TaskExecutionContext.progress(int)` and `TaskExecutionContext.progress(int, String)` as the public progress API.
+- Kept progress persistence routing internal to `TaskExecutionContext`.
 - Extended repository runtime writes with `TaskRepository.updateRuntime(...)`.
 
 This preserves existing handler behavior while allowing optional execution-state and progress reporting.
@@ -57,7 +56,7 @@ This keeps timeout recovery behavior intact while moving high-frequency liveness
 ### Test And Mutation Coverage
 
 - Added repository tests for runtime upsert, in-progress, failed, completion, retry, and requeue cleanup behavior.
-- Added daemon tests for runtime progress throttling, state-only updates, and threshold boundaries.
+- Added daemon tests for runtime progress throttling and threshold boundaries.
 - Updated H2 schema/test support to match the runtime table split.
 
 These tests protect the new persistence split and keep PIT above the configured threshold.

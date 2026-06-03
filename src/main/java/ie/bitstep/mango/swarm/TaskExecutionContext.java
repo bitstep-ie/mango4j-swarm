@@ -86,15 +86,6 @@ public final class TaskExecutionContext<T> {
 		updateProgress(percent, description);
 	}
 
-	/**
-	 * Updates the current execution state.
-	 *
-	 * @param state execution state visible to operators
-	 */
-	public void updateState(String state) {
-		progressReporter.report(state, null, null);
-	}
-
 	/** Records the current progress percentage and message. */
 	private void updateProgress(int percent, String message) {
 		if (percent < 0 || percent > 100) {

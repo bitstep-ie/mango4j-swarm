@@ -214,7 +214,6 @@ Handlers receive `TaskExecutionContext<T>` and can call:
 
 - `progress(percent)`
 - `progress(percent, description)`
-- `updateState(state)`
 
 `TaskExecutionContext<T>` contains:
 
@@ -228,7 +227,6 @@ Handlers receive `TaskExecutionContext<T>` and can call:
 Effects of each call:
 
 - upserts the task's row in `mango_swarm_task_runtime`
-- updates `execution_state` when provided
 - updates `progress_percent` and `progress_message` when provided
 - updates runtime `updated_at`
 - updates runtime `execution_time_ms`

@@ -38,14 +38,8 @@ class TaskExecutionContextTest {
 		context.progress(0, "started");
 		context.progress(10);
 		context.progress(100, "finished");
-		context.updateState("Calling partner API");
 
-		assertThat(events)
-				.containsExactly(
-						"running:0:started",
-						"running:10:null",
-						"running:100:finished",
-						"Calling partner API:null:null");
+		assertThat(events).containsExactly("running:0:started", "running:10:null", "running:100:finished");
 	}
 
 	@Test
