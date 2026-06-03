@@ -95,13 +95,8 @@ public final class TaskExecutionContext<T> {
 		progressReporter.report(state, null, null);
 	}
 
-	/**
-	 * Updates the current progress percentage and message.
-	 *
-	 * @param percent progress percentage in range {@code [0,100]}
-	 * @param message optional progress message
-	 */
-	public void updateProgress(int percent, String message) {
+	/** Records the current progress percentage and message. */
+	private void updateProgress(int percent, String message) {
 		if (percent < 0 || percent > 100) {
 			throw new IllegalArgumentException("progress percent must be between 0 and 100");
 		}

@@ -857,10 +857,10 @@ class MangoSwarmDaemonTest {
 
 		@Override
 		public TaskExecutionResult execute(TaskExecutionContext<String> context) {
-			context.updateProgress(25, "same");
-			context.updateProgress(30, "same");
-			context.updateProgress(34, "same");
-			context.updateProgress(35, "same");
+			context.progress(25, "same");
+			context.progress(30, "same");
+			context.progress(34, "same");
+			context.progress(35, "same");
 			executed.countDown();
 			return TaskExecutionResult.completed();
 		}
@@ -875,7 +875,7 @@ class MangoSwarmDaemonTest {
 
 		@Override
 		public TaskExecutionResult execute(TaskExecutionContext<String> context) {
-			context.updateProgress(25, "same");
+			context.progress(25, "same");
 			context.updateState("running");
 			executed.countDown();
 			return TaskExecutionResult.completed();

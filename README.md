@@ -158,9 +158,9 @@ Handlers receive a `TaskExecutionContext<T>` containing:
 - `attemptCount`: current attempt number
 - `claimedAt`: claim timestamp for the current attempt
 - `payload`: extracted typed payload
-- progress API: `progress(percent)`, `progress(percent, description)`, `updateState(state)`, and `updateProgress(percent, description)`
+- progress API: `progress(percent)`, `progress(percent, description)`, and `updateState(state)`
 
-Calling `context.progress(percent)`, `context.progress(percent, description)`, or `context.updateProgress(percent, description)` records progress from `0` to `100` in the runtime table and also acts as task liveness. `context.updateState(state)` records a human-readable execution state. Runtime updates extend the stale-task timeout window for that task and refresh the current `execution_time_ms`. The optional description can be used for human-readable stages such as `connecting`, `sending`, or `completing`.
+Calling `context.progress(percent)` or `context.progress(percent, description)` records progress from `0` to `100` in the runtime table and also acts as task liveness. `context.updateState(state)` records a human-readable execution state. Runtime updates extend the stale-task timeout window for that task and refresh the current `execution_time_ms`. The optional description can be used for human-readable stages such as `connecting`, `sending`, or `completing`.
 
 When a task completes successfully, mango-swarm records a final progress state automatically:
 
@@ -557,7 +557,7 @@ For example, with `timeout: 30s`:
 * if it reports progress at `10:00:20`, it is not stale until about `10:00:50`
 * if it reports progress again at `10:00:45`, it is not stale until about `10:01:15`
 
-This means handlers are expected to call `progress(percent, description)` or `updateProgress(percent, description)` periodically while doing long-running work. A progress call does not need to mean the exact amount of business work completed, but it must represent real handler liveness. The stored percentage and message are useful for observability; the liveness extension comes from the runtime update timestamp.
+This means handlers are expected to call `progress(percent, description)` periodically while doing long-running work. A progress call does not need to mean the exact amount of business work completed, but it must represent real handler liveness. The stored percentage and message are useful for observability; the liveness extension comes from the runtime update timestamp.
 
 ***
 

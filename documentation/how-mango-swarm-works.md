@@ -126,6 +126,23 @@ sequenceDiagram
 
 `*` progress calls are optional but strongly recommended for long-running handlers.
 
+Runtime table flow:
+
+| Step | Tables | What happens |
+| --- | --- | --- |
+| Queue task | `mango_swarm_task_pacers`, `mango_swarm_tasks` | `MangoTasks` reserves a per-type slot, then inserts a durable `queued` task row with the JSON payload. |
+| Drop task | none | `mode: drop` returns an acknowledgement id without inserting into any swarm table. |
+| Reject task | none | `mode: reject` fails before inserting into any swarm table. |
+| Worker heartbeat | `mango_swarm_workers` | The daemon upserts its worker row, updates `last_heartbeat_at`, prunes stale workers, and uses the remaining worker count for rate division. |
+| Cleanup | `mango_swarm_tasks`, `mango_swarm_task_pacers` | The daemon deletes old terminal task rows and old pacing slots according to cleanup retention settings. |
+| Timeout recovery | `mango_swarm_tasks`, `mango_swarm_task_runtime` | The daemon finds claimed or in-progress tasks whose runtime `updated_at` or task `claimed_at` is stale, then either requeues idempotent reclaimable tasks or marks them failed. |
+| Claim batch | `mango_swarm_tasks` | The daemon selects due `queued` rows for a task type and updates them to `claimed` with `claimed_by`, `claimed_at`, and incremented `attempt_count`. |
+| Start execution | `mango_swarm_tasks`, `mango_swarm_task_runtime` | The worker marks the task `in_progress` and inserts or resets the runtime row with `execution_state = running`, `started_at`, `updated_at`, and `execution_time_ms = 0`. |
+| Report progress/state | `mango_swarm_task_runtime` | `TaskExecutionContext` updates only the narrow runtime row with state, progress, liveness, and current elapsed execution time. |
+| Complete task | `mango_swarm_tasks`, `mango_swarm_task_runtime` | The worker marks the durable task `completed`, records final task execution time, and writes runtime `completed` / `100` / `finished`. |
+| Retry task | `mango_swarm_tasks`, `mango_swarm_task_runtime` | The worker reschedules the same durable row to `queued`, clears claim/runtime lifecycle fields, clears final execution time, and removes runtime state. |
+| Fail task | `mango_swarm_tasks`, `mango_swarm_task_runtime` | The worker marks the durable task `failed`, stores `last_error_message` and final execution time, and writes runtime failure state. |
+
 ## Task state lifecycle
 
 ```mermaid
@@ -198,7 +215,6 @@ Handlers receive `TaskExecutionContext<T>` and can call:
 - `progress(percent)`
 - `progress(percent, description)`
 - `updateState(state)`
-- `updateProgress(percent, description)`
 
 `TaskExecutionContext<T>` contains:
 
