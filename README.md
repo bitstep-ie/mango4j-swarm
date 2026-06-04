@@ -586,7 +586,7 @@ Required fields fail with a clear extraction error if the semantic value cannot 
 
 # Database
 
-mango-swarm requires four tables:
+mango-swarm requires three tables:
 
 * `mango_swarm_workers`
 * `mango_swarm_tasks`
