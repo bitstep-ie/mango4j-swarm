@@ -60,7 +60,7 @@ class MangoSwarmDaemonTest {
 
 		daemon.pollOnce(now);
 
-		assertThat(repository.lastClaimLimit).isEqualTo(50);
+		assertThat(repository.lastClaimLimit).isEqualTo(1);
 		daemon.stop();
 	}
 
@@ -73,7 +73,7 @@ class MangoSwarmDaemonTest {
 
 		daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
 
-		assertThat(repository.lastClaimLimit).isEqualTo(2);
+		assertThat(repository.lastClaimLimit).isEqualTo(1);
 		daemon.stop();
 	}
 
@@ -86,12 +86,76 @@ class MangoSwarmDaemonTest {
 		Duration delay = daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
 
 		assertThat(delay).isEqualTo(Duration.ZERO);
-		assertThat(repository.lastClaimLimit).isEqualTo(5);
+		assertThat(repository.lastClaimLimit).isEqualTo(1);
 		daemon.stop();
 	}
 
 	@Test
-	void reservesFutureSlotsAcrossTheBatchWindow() {
+	void eligibleOverdueTasksDoNotAllStartImmediately() throws Exception {
+		MangoSwarmProperties properties = properties(1, 10, 10);
+		properties.getExecutor().setMaxThreads("10");
+		FakeRepository repository = new FakeRepository(10);
+		CountDownLatch executed = new CountDownLatch(1);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CountingCompletingHandler(executed));
+
+		daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+
+		assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
+		awaitCounter(() -> repository.completedTaskCalls, 1);
+		assertThat(repository.claimLimits).containsExactly(1);
+		assertThat(repository.markInProgressCalls).isEqualTo(1);
+		daemon.stop();
+	}
+
+	@Test
+	void startsArePacedByLocalTokenRing() throws Exception {
+		MangoSwarmProperties properties = properties(1, 10, 10);
+		properties.getExecutor().setMaxThreads("10");
+		FakeRepository repository = new FakeRepository(10);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+		daemon.pollOnce(now);
+		daemon.pollOnce(now.plusMillis(500));
+		daemon.pollOnce(now.plusSeconds(1));
+
+		awaitCounter(() -> repository.completedTaskCalls, 2);
+		assertThat(repository.claimLimits).containsExactly(1, 1);
+		assertThat(repository.markInProgressCalls).isEqualTo(2);
+		daemon.stop();
+	}
+
+	@Test
+	void largeBacklogStartsAtConfiguredRateWhenTaskTypeExecutes() throws Exception {
+		MangoSwarmProperties properties = properties(5, 20, 20);
+		properties.getExecutor().setMaxThreads("20");
+		FakeRepository repository = new FakeRepository(100);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+		for (int tick = 0; tick <= 40; tick++) {
+			daemon.pollOnce(now.plusMillis(tick * 50L));
+		}
+
+		awaitCounter(() -> repository.completedTaskCalls, 11);
+		assertThat(repository.claimInstants.stream()
+						.filter(instant -> instant.isBefore(now.plusSeconds(1)))
+						.count())
+				.isEqualTo(5);
+		assertThat(repository.claimInstants.stream()
+						.filter(instant -> instant.isBefore(now.plusSeconds(2)))
+						.count())
+				.isEqualTo(10);
+		assertThat(repository.claimInstants).hasSize(11);
+		for (int i = 1; i < repository.claimInstants.size(); i++) {
+			assertThat(Duration.between(repository.claimInstants.get(i - 1), repository.claimInstants.get(i)))
+					.isGreaterThanOrEqualTo(Duration.ofMillis(200));
+		}
+		daemon.stop();
+	}
+
+	@Test
+	void waitsForFutureTokenAcrossTheBatchWindow() {
 		MangoSwarmProperties properties = properties(1, 10, 5);
 		properties.getTaskTypes().get("email").setPeriod(Duration.ofSeconds(3));
 		FakeRepository repository = new FakeRepository(10);
@@ -101,7 +165,7 @@ class MangoSwarmDaemonTest {
 		daemon.pollOnce(now);
 		daemon.pollOnce(now.plusMillis(250));
 
-		assertThat(repository.claimLimits).containsExactly(5, 5);
+		assertThat(repository.claimLimits).containsExactly(1);
 		daemon.stop();
 	}
 
@@ -235,7 +299,6 @@ class MangoSwarmDaemonTest {
 		properties.getCleanup().setInterval(Duration.ofMinutes(1));
 		properties.getCleanup().setCompletedRetention(Duration.ofDays(30));
 		properties.getCleanup().setFailedRetention(Duration.ofDays(90));
-		properties.getCleanup().setPacerRetention(Duration.ofDays(7));
 		properties.getCleanup().setBatchSize(25);
 		FakeRepository repository = new FakeRepository(0);
 		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
@@ -246,7 +309,6 @@ class MangoSwarmDaemonTest {
 
 		assertThat(repository.deleteCompletedCalls).isEqualTo(2);
 		assertThat(repository.deleteFailedCalls).isEqualTo(2);
-		assertThat(repository.deletePacerCalls).isEqualTo(2);
 		assertThat(repository.lastDeleteLimit).isEqualTo(25);
 		daemon.stop();
 	}
@@ -272,10 +334,8 @@ class MangoSwarmDaemonTest {
 
 		assertThat(disabledRepository.deleteCompletedCalls).isZero();
 		assertThat(disabledRepository.deleteFailedCalls).isZero();
-		assertThat(disabledRepository.deletePacerCalls).isZero();
 		assertThat(invalidIntervalRepository.deleteCompletedCalls).isZero();
 		assertThat(invalidIntervalRepository.deleteFailedCalls).isZero();
-		assertThat(invalidIntervalRepository.deletePacerCalls).isZero();
 	}
 
 	@Test
@@ -284,7 +344,6 @@ class MangoSwarmDaemonTest {
 		properties.getCleanup().setInterval(Duration.ofSeconds(1));
 		properties.getCleanup().setCompletedRetention(null);
 		properties.getCleanup().setFailedRetention(Duration.ZERO);
-		properties.getCleanup().setPacerRetention(Duration.ofSeconds(-1));
 		FakeRepository repository = new FakeRepository(0);
 		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
 
@@ -292,7 +351,6 @@ class MangoSwarmDaemonTest {
 
 		assertThat(repository.deleteCompletedCalls).isZero();
 		assertThat(repository.deleteFailedCalls).isZero();
-		assertThat(repository.deletePacerCalls).isZero();
 		daemon.stop();
 	}
 
@@ -307,7 +365,7 @@ class MangoSwarmDaemonTest {
 
 		int claimLimit = daemon.calculateBatchSize("email", config, 3.2d, now);
 
-		assertThat(claimLimit).isEqualTo(4);
+		assertThat(claimLimit).isEqualTo(1);
 		daemon.stop();
 	}
 
@@ -330,10 +388,10 @@ class MangoSwarmDaemonTest {
 				Instant.parse("2026-05-20T10:00:00Z"));
 
 		assertThat(invokeAccessor(decision, "configuredBatch")).isEqualTo(4);
-		assertThat(invokeAccessor(decision, "rateCapacity")).isEqualTo(4);
+		assertThat(invokeAccessor(decision, "startCapacity")).isEqualTo(1);
 		assertThat(invokeAccessor(decision, "remainingTypeCapacity")).isEqualTo(10);
 		assertThat(invokeAccessor(decision, "remainingExecutorCapacity")).isEqualTo(6);
-		assertThat(invokeAccessor(decision, "claimLimit")).isEqualTo(4);
+		assertThat(invokeAccessor(decision, "claimLimit")).isEqualTo(1);
 		daemon.stop();
 	}
 
@@ -504,14 +562,14 @@ class MangoSwarmDaemonTest {
 		assertThat(tracker.tryAcquire("email")).isTrue();
 		TaskRecord task = taskRecord("email", Instant.parse("2026-05-20T10:00:00Z"));
 
-		boolean dispatched = (boolean) invokeInstance(
+		Object dispatchDecision = invokeInstance(
 				daemon,
 				"dispatch",
 				new Class<?>[] {TaskRecord.class, Instant.class},
 				task,
 				Instant.parse("2026-05-20T10:00:00Z"));
 
-		assertThat(dispatched).isFalse();
+		assertThat(invokeAccessor(dispatchDecision, "dispatched")).isEqualTo(false);
 		assertThat(repository.requeueCalls).isEqualTo(1);
 		assertThat(repository.lastRequeueReason).contains("task-type concurrency");
 		tracker.release("email");
@@ -528,14 +586,14 @@ class MangoSwarmDaemonTest {
 		assertThat(executorCapacity.tryAcquire()).isTrue();
 		TaskRecord task = taskRecord("email", Instant.parse("2026-05-20T10:00:00Z"));
 
-		boolean dispatched = (boolean) invokeInstance(
+		Object dispatchDecision = invokeInstance(
 				daemon,
 				"dispatch",
 				new Class<?>[] {TaskRecord.class, Instant.class},
 				task,
 				Instant.parse("2026-05-20T10:00:00Z"));
 
-		assertThat(dispatched).isFalse();
+		assertThat(invokeAccessor(dispatchDecision, "dispatched")).isEqualTo(false);
 		assertThat(repository.requeueCalls).isEqualTo(1);
 		assertThat(repository.lastRequeueReason).contains("executor capacity");
 		assertThat(((TaskConcurrencyTracker) fieldValue(daemon, "taskConcurrencyTracker")).remaining("email"))
@@ -579,7 +637,7 @@ class MangoSwarmDaemonTest {
 		daemon.pollOnce(now.plusSeconds(10));
 
 		assertThat(workers.heartbeatCalls).isEqualTo(2);
-		assertThat(repository.claimLimits).containsExactly(4, 4, 4);
+		assertThat(repository.claimLimits).containsExactly(1, 1);
 		daemon.stop();
 	}
 
@@ -594,7 +652,7 @@ class MangoSwarmDaemonTest {
 		assertThat(daemon.pollOnce(now)).isEqualTo(Duration.ofMillis(100));
 		Duration rateLimitedDelay = daemon.pollOnce(now.minusMillis(100));
 
-		assertThat(rateLimitedDelay).isEqualTo(Duration.ofMillis(1100));
+		assertThat(rateLimitedDelay).isEqualTo(Duration.ofMillis(100));
 		assertThat(repository.claimLimits).containsExactly(1);
 		daemon.stop();
 	}
@@ -1007,6 +1065,7 @@ class MangoSwarmDaemonTest {
 		private final AtomicInteger nextId = new AtomicInteger(1);
 		private int available;
 		private final List<Integer> claimLimits = new ArrayList<>();
+		private final List<Instant> claimInstants = new ArrayList<>();
 		private int lastClaimLimit;
 		private int reclaimCalls;
 		private int failTimedOutCalls;
@@ -1024,7 +1083,6 @@ class MangoSwarmDaemonTest {
 		private Instant retryAvailableAt;
 		private int deleteCompletedCalls;
 		private int deleteFailedCalls;
-		private int deletePacerCalls;
 		private int lastDeleteLimit;
 		private Runnable afterClaimLimitCalculated = () -> {};
 
@@ -1042,20 +1100,13 @@ class MangoSwarmDaemonTest {
 		}
 
 		@Override
-		public UUID queueInNextSlot(
-				String taskType,
-				com.fasterxml.jackson.databind.JsonNode payload,
-				Instant requestedAt,
-				Duration slotSpacing) {
-			return UUID.randomUUID();
-		}
-
-		@Override
 		public List<TaskRecord> claimBatch(String taskType, UUID workerId, Instant now, int limit) {
 			lastClaimLimit = limit;
 			claimLimits.add(limit);
+			claimInstants.add(now);
 			afterClaimLimitCalculated.run();
 			int count = Math.min(limit, available);
+			available -= count;
 			List<TaskRecord> records = new ArrayList<>();
 			for (int i = 0; i < count; i++) {
 				records.add(new TaskRecord(
@@ -1147,13 +1198,6 @@ class MangoSwarmDaemonTest {
 		@Override
 		public int deleteFailedOlderThan(Duration retention, Instant now, int limit) {
 			deleteFailedCalls++;
-			lastDeleteLimit = limit;
-			return 0;
-		}
-
-		@Override
-		public int deleteTaskPacersOlderThan(Duration retention, Instant now, int limit) {
-			deletePacerCalls++;
 			lastDeleteLimit = limit;
 			return 0;
 		}

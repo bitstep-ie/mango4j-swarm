@@ -4,7 +4,6 @@ import java.sql.Array;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Duration;
@@ -36,29 +35,6 @@ public class JdbcTaskRepository implements TaskRepository {
 			"""
 INSERT INTO mango_swarm_tasks(id, task_type, payload, status, available_at)
 VALUES (?, ?, ?, 'queued', ?)
-""";
-	private static final String INSERT_PACER_SQL =
-			"""
-INSERT INTO mango_swarm_task_pacers(task_type, slot_at, task_id)
-VALUES (?, ?, ?)
-""";
-	private static final String FIND_SLOT_BEFORE_SQL =
-			"""
-SELECT slot_at
-FROM mango_swarm_task_pacers
-WHERE task_type = ?
-AND slot_at <= ?
-ORDER BY slot_at DESC
-LIMIT 1
-""";
-	private static final String FIND_SLOT_AFTER_SQL =
-			"""
-SELECT slot_at
-FROM mango_swarm_task_pacers
-WHERE task_type = ?
-AND slot_at > ?
-ORDER BY slot_at ASC
-LIMIT 1
 """;
 	private static final String SELECT_QUEUED_TASK_IDS_SQL =
 			"""
@@ -235,17 +211,6 @@ ORDER BY failed_at, id
 LIMIT ?
 )
 """;
-	private static final String DELETE_PACERS_SQL =
-			"""
-DELETE FROM mango_swarm_task_pacers
-WHERE (task_type, slot_at) IN (
-SELECT task_type, slot_at
-FROM mango_swarm_task_pacers
-WHERE slot_at < ?
-ORDER BY slot_at, task_type
-LIMIT ?
-)
-""";
 	private static final int JSON_PARAMETER_INDEX = 3;
 
 	private final JdbcTemplate jdbcTemplate;
@@ -279,108 +244,6 @@ LIMIT ?
 					}
 				}),
 				"queue task");
-	}
-
-	@Override
-	public synchronized UUID queueInNextSlot(
-			String taskType, JsonNode payload, Instant requestedAt, Duration slotSpacing) {
-		if (slotSpacing == null || slotSpacing.isZero() || slotSpacing.isNegative()) {
-			return queue(taskType, payload, requestedAt);
-		}
-		return executeRequired(
-				connection -> tables.withSearchPath(connection, scoped -> {
-					UUID taskId = UuidV7.generate();
-					Instant availableAt = reserveSlot(scoped, taskType, taskId, requestedAt, slotSpacing);
-					try (PreparedStatement statement = scoped.prepareStatement(INSERT_TASK_SQL)) {
-						statement.setObject(1, taskId);
-						statement.setString(2, taskType);
-						setJson(statement, payload);
-						statement.setTimestamp(4, Timestamp.from(availableAt));
-						statement.executeUpdate();
-						return taskId;
-					}
-				}),
-				"queue task in next slot");
-	}
-
-	private Instant reserveSlot(
-			java.sql.Connection connection, String taskType, UUID taskId, Instant requestedAt, Duration slotSpacing)
-			throws SQLException {
-		Instant candidate = Objects.requireNonNull(requestedAt, "requestedAt");
-		int attempts = 0;
-		Instant reservedAt = null;
-		try (PreparedStatement insert = connection.prepareStatement(INSERT_PACER_SQL)) {
-			insert.setString(1, taskType);
-			insert.setObject(3, taskId);
-			while (reservedAt == null) {
-				attempts++;
-				if (attempts > 50_000) {
-					throw new SQLException("Unable to reserve slot after " + attempts + " attempts for taskType="
-							+ taskType + " requestedAt=" + requestedAt);
-				}
-				Instant adjusted = nextCandidate(connection, taskType, candidate, slotSpacing);
-				boolean candidateUnchanged = adjusted.equals(candidate);
-				if (candidateUnchanged && tryReserveCandidate(insert, candidate)) {
-					reservedAt = candidate;
-				} else {
-					candidate = candidateUnchanged ? candidate.plus(slotSpacing) : adjusted;
-				}
-			}
-		}
-		return Objects.requireNonNull(reservedAt, "reserved slot");
-	}
-
-	private Instant nextCandidate(
-			java.sql.Connection connection, String taskType, Instant candidate, Duration slotSpacing)
-			throws SQLException {
-		Objects.requireNonNull(candidate, "candidate");
-		Instant before = findSlotBefore(connection, taskType, candidate);
-		if (before != null && candidate.isBefore(before.plus(slotSpacing))) {
-			return before.plus(slotSpacing);
-		}
-		Instant after = findSlotAfter(connection, taskType, candidate);
-		if (after != null && candidate.plus(slotSpacing).isAfter(after)) {
-			return after.plus(slotSpacing);
-		}
-		return candidate;
-	}
-
-	private static boolean tryReserveCandidate(PreparedStatement insert, Instant candidate) throws SQLException {
-		try {
-			insert.setTimestamp(2, Timestamp.from(candidate));
-			insert.executeUpdate();
-			return true;
-		} catch (SQLIntegrityConstraintViolationException ex) {
-			return false;
-		}
-	}
-
-	private Instant findSlotBefore(java.sql.Connection connection, String taskType, Instant candidate)
-			throws SQLException {
-		try (PreparedStatement statement = connection.prepareStatement(FIND_SLOT_BEFORE_SQL)) {
-			statement.setString(1, taskType);
-			statement.setTimestamp(2, Timestamp.from(candidate));
-			try (ResultSet rs = statement.executeQuery()) {
-				if (!rs.next()) {
-					return null;
-				}
-				return rs.getTimestamp(1).toInstant();
-			}
-		}
-	}
-
-	private Instant findSlotAfter(java.sql.Connection connection, String taskType, Instant candidate)
-			throws SQLException {
-		try (PreparedStatement statement = connection.prepareStatement(FIND_SLOT_AFTER_SQL)) {
-			statement.setString(1, taskType);
-			statement.setTimestamp(2, Timestamp.from(candidate));
-			try (ResultSet rs = statement.executeQuery()) {
-				if (!rs.next()) {
-					return null;
-				}
-				return rs.getTimestamp(1).toInstant();
-			}
-		}
 	}
 
 	@Override
@@ -655,22 +518,6 @@ LIMIT ?
 					}
 				}),
 				"delete failed tasks");
-	}
-
-	@Override
-	public int deleteTaskPacersOlderThan(Duration retention, Instant now, int limit) {
-		if (limit < 1) {
-			return 0;
-		}
-		return executeRequired(
-				connection -> tables.withSearchPath(connection, scoped -> {
-					try (PreparedStatement statement = scoped.prepareStatement(DELETE_PACERS_SQL)) {
-						statement.setTimestamp(1, Timestamp.from(now.minus(retention)));
-						statement.setInt(2, limit);
-						return statement.executeUpdate();
-					}
-				}),
-				"delete task pacers");
 	}
 
 	private void upsertRuntime(

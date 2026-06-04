@@ -13,8 +13,8 @@ import ie.bitstep.mango.swarm.db.TaskRepository;
 /**
  * High-level task scheduling API for application code.
  *
- * <p>Tasks are persisted in PostgreSQL and then aligned to a task-type-specific slot spacing so distributed workers can
- * execute them under smooth rate limits.
+ * <p>Tasks are persisted in PostgreSQL with an earliest eligibility time. Local worker token rings decide when an
+ * eligible task may actually start.
  */
 public class MangoTasks {
 	private final TaskRepository taskRepository;
@@ -94,7 +94,7 @@ public class MangoTasks {
 		if (config.getMode() == MangoSwarmProperties.TaskMode.DROP) {
 			return UuidV7.generate();
 		}
-		return taskRepository.queueInNextSlot(taskType, payload, at, slotSpacing(config));
+		return taskRepository.queue(taskType, payload, at);
 	}
 
 	/**
@@ -116,13 +116,5 @@ public class MangoTasks {
 			throw new IllegalArgumentException("Task type is not configured: " + taskType);
 		}
 		return config;
-	}
-
-	private static Duration slotSpacing(MangoSwarmProperties.TaskType config) {
-		if (config.getRate() <= 0) {
-			return Duration.ZERO;
-		}
-		long nanos = Math.max(1L, config.getPeriod().toNanos() / config.getRate());
-		return Duration.ofNanos(nanos);
 	}
 }

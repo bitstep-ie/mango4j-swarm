@@ -50,16 +50,6 @@ public abstract class H2TestSupport {
 				""");
 		jdbcTemplate.execute(
 				"""
-				CREATE TABLE mango_swarm_task_pacers (
-					task_type text NOT NULL,
-					slot_at timestamp NOT NULL,
-					task_id uuid NOT NULL,
-					created_at timestamp NOT NULL DEFAULT now(),
-					PRIMARY KEY (task_type, slot_at)
-				)
-				""");
-		jdbcTemplate.execute(
-				"""
 				CREATE TABLE mango_swarm_tasks (
 					id uuid PRIMARY KEY,
 					task_type text NOT NULL,

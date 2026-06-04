@@ -27,7 +27,7 @@ import ie.bitstep.mango.swarm.handler.TaskHandlerRegistry;
 import ie.bitstep.mango.swarm.payload.PayloadExtractionException;
 import ie.bitstep.mango.swarm.payload.PayloadExtractor;
 import ie.bitstep.mango.swarm.payload.PayloadReader;
-import ie.bitstep.mango.swarm.rate.SmoothRateLimiter;
+import ie.bitstep.mango.swarm.rate.LocalTokenRingRateLimiter;
 import ie.bitstep.mango.swarm.worker.WorkerRegistry;
 
 /**
@@ -48,7 +48,7 @@ public class MangoSwarmDaemon {
 	private final UUID workerId = UUID.randomUUID();
 	private final Instant startedAt = Instant.now();
 	private final String hostname = resolveHostname();
-	private final Map<String, SmoothRateLimiter> rateLimiters = new LinkedHashMap<>();
+	private final Map<String, LocalTokenRingRateLimiter> startRateLimiters = new LinkedHashMap<>();
 	private final TaskConcurrencyTracker taskConcurrencyTracker;
 	private final ExecutorService executorService;
 	private final Semaphore executorCapacity;
@@ -83,7 +83,10 @@ public class MangoSwarmDaemon {
 		Map<String, Integer> limits = new LinkedHashMap<>();
 		properties.getTaskTypes().forEach((type, config) -> limits.put(type, Math.max(1, config.getConcurrency())));
 		this.taskConcurrencyTracker = new TaskConcurrencyTracker(limits);
-		properties.getTaskTypes().keySet().forEach(type -> rateLimiters.put(type, new SmoothRateLimiter()));
+		properties
+				.getTaskTypes()
+				.forEach((type, config) ->
+						startRateLimiters.put(type, new LocalTokenRingRateLimiter(Math.max(1, config.getRate()))));
 	}
 
 	public void start() {
@@ -130,11 +133,9 @@ public class MangoSwarmDaemon {
 			return;
 		}
 		double effectiveRate = Math.max(0.0d, (double) config.getRate() / Math.max(activeWorkers, 1));
-		SmoothRateLimiter limiter = rateLimiters.get(taskType);
-		limiter.configure(effectiveRate, config.getPeriod(), now);
 		BatchDecision decision = decideBatchSize(taskType, config, effectiveRate, now);
 		if (decision.claimLimit() <= 0) {
-			if (decision.rateCapacity() <= 0 && isPositive(decision.nextExecutionDelay())) {
+			if (decision.startCapacity() <= 0 && isPositive(decision.nextExecutionDelay())) {
 				pollState.nextRateLimitedPoll =
 						minPositive(pollState.nextRateLimitedPoll, decision.nextExecutionDelay());
 			}
@@ -149,7 +150,7 @@ public class MangoSwarmDaemon {
 				config.getPeriod(),
 				decision.configuredBatch(),
 				decision.claimLimit(),
-				decision.rateCapacity(),
+				decision.startCapacity(),
 				decision.remainingTypeCapacity(),
 				decision.remainingExecutorCapacity());
 		pollState.attemptedAnyClaim = true;
@@ -165,7 +166,9 @@ public class MangoSwarmDaemon {
 			pollState.claimedAnyTasks = true;
 		}
 		for (TaskRecord task : claimed) {
-			if (dispatch(task, now)) {
+			DispatchDecision dispatchDecision = dispatch(task, now);
+			pollState.nextRateLimitedPoll = minPositive(pollState.nextRateLimitedPoll, dispatchDecision.waitDuration());
+			if (dispatchDecision.dispatched()) {
 				pollState.dispatchedAnyTasks = true;
 			}
 		}
@@ -224,17 +227,18 @@ public class MangoSwarmDaemon {
 		int remainingTypeCapacity = taskConcurrencyTracker.remaining(taskType);
 		int remainingExecutorCapacity = executorCapacity.availablePermits();
 		int configuredBatch = configuredBatch(config, effectiveRate);
-		SmoothRateLimiter rateLimiter = rateLimiters.get(taskType);
-		int rateCapacity = rateLimiter.permitsAvailable(now, configuredBatch);
+		LocalTokenRingRateLimiter startLimiter = startRateLimiters.get(taskType);
+		startLimiter.configure(effectiveRate, config.getPeriod(), now);
+		int startCapacity = startLimiter.availablePermits(now, configuredBatch);
 		int claimLimit =
-				Math.max(0, min(configuredBatch, rateCapacity, remainingTypeCapacity, remainingExecutorCapacity));
+				Math.max(0, min(configuredBatch, startCapacity, remainingTypeCapacity, remainingExecutorCapacity));
 		return new BatchDecision(
 				configuredBatch,
-				rateCapacity,
+				startCapacity,
 				remainingTypeCapacity,
 				remainingExecutorCapacity,
 				claimLimit,
-				rateLimiter.timeUntilNextPermit(now));
+				startLimiter.timeUntilNextPermit(now));
 	}
 
 	private void runLoop() {
@@ -299,7 +303,6 @@ public class MangoSwarmDaemon {
 		}
 		Duration completedRetention = cleanup.getCompletedRetention();
 		Duration failedRetention = cleanup.getFailedRetention();
-		Duration pacerRetention = cleanup.getPacerRetention();
 		int batchSize = maintenanceBatchSize();
 		if (isRetentionEnabled(completedRetention)) {
 			int deletedCompleted = taskRepository.deleteCompletedOlderThan(completedRetention, now, batchSize);
@@ -316,14 +319,6 @@ public class MangoSwarmDaemon {
 					workerId,
 					failedRetention,
 					deletedFailed);
-		}
-		if (isRetentionEnabled(pacerRetention)) {
-			int deletedPacers = taskRepository.deleteTaskPacersOlderThan(pacerRetention, now, batchSize);
-			log.debug(
-					"swarm cleanup task-pacers: workerId={}, retention={}, deleted={}",
-					workerId,
-					pacerRetention,
-					deletedPacers);
 		}
 		lastCleanup = now;
 	}
@@ -365,7 +360,7 @@ public class MangoSwarmDaemon {
 		return retention != null && !retention.isNegative() && !retention.isZero();
 	}
 
-	private boolean dispatch(TaskRecord task, Instant now) {
+	private DispatchDecision dispatch(TaskRecord task, Instant now) {
 		if (!taskConcurrencyTracker.tryAcquire(task.taskType())) {
 			taskRepository.requeueClaimed(
 					task.id(), workerId, now, now, "Local task-type concurrency unavailable; returned to queue");
@@ -374,7 +369,7 @@ public class MangoSwarmDaemon {
 					task.taskType(),
 					task.id(),
 					workerId);
-			return false;
+			return DispatchDecision.notDispatchedDecision();
 		}
 		if (!executorCapacity.tryAcquire()) {
 			taskConcurrencyTracker.release(task.taskType());
@@ -385,7 +380,22 @@ public class MangoSwarmDaemon {
 					task.taskType(),
 					task.id(),
 					workerId);
-			return false;
+			return DispatchDecision.notDispatchedDecision();
+		}
+		LocalTokenRingRateLimiter.Acquisition token =
+				startRateLimiters.get(task.taskType()).acquire(now);
+		if (!token.granted()) {
+			executorCapacity.release();
+			taskConcurrencyTracker.release(task.taskType());
+			taskRepository.requeueClaimed(
+					task.id(), workerId, now, now, "Local rate token unavailable; returned to queue");
+			log.debug(
+					"swarm dispatch deferred: taskType={}, taskId={}, workerId={}, reason=local-rate-token, wait={}",
+					task.taskType(),
+					task.id(),
+					workerId,
+					token.waitDuration());
+			return DispatchDecision.waitFor(token.waitDuration());
 		}
 		log.debug(
 				"swarm dispatch submitted: taskType={}, taskId={}, workerId={}, attempt={}",
@@ -402,7 +412,7 @@ public class MangoSwarmDaemon {
 				executorCapacity.release();
 			}
 		});
-		return true;
+		return DispatchDecision.dispatchedDecision();
 	}
 
 	private void executeTask(TaskRecord task) {
@@ -602,9 +612,23 @@ public class MangoSwarmDaemon {
 
 	private record BatchDecision(
 			int configuredBatch,
-			int rateCapacity,
+			int startCapacity,
 			int remainingTypeCapacity,
 			int remainingExecutorCapacity,
 			int claimLimit,
 			Duration nextExecutionDelay) {}
+
+	private record DispatchDecision(boolean dispatched, Duration waitDuration) {
+		private static DispatchDecision dispatchedDecision() {
+			return new DispatchDecision(true, Duration.ZERO);
+		}
+
+		private static DispatchDecision notDispatchedDecision() {
+			return new DispatchDecision(false, Duration.ZERO);
+		}
+
+		private static DispatchDecision waitFor(Duration waitDuration) {
+			return new DispatchDecision(false, waitDuration);
+		}
+	}
 }

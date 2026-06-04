@@ -5,14 +5,6 @@ CREATE TABLE IF NOT EXISTS mango_swarm_workers (
     last_heartbeat_at timestamptz NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS mango_swarm_task_pacers (
-    task_type text NOT NULL,
-    slot_at timestamptz NOT NULL,
-    task_id uuid NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (task_type, slot_at)
-);
-
 CREATE TABLE IF NOT EXISTS mango_swarm_tasks (
     id uuid PRIMARY KEY,
     task_type text NOT NULL,

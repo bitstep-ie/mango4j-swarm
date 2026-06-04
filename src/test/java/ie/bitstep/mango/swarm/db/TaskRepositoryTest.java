@@ -3,7 +3,6 @@ package ie.bitstep.mango.swarm.db;
 import java.lang.reflect.Proxy;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -142,136 +141,39 @@ class TaskRepositoryTest extends H2TestSupport {
 	}
 
 	@Test
-	void duplicatePacerSlotReservationReturnsFalse() throws Exception {
-		PreparedStatement statement = mock(PreparedStatement.class);
-		when(statement.executeUpdate()).thenThrow(new SQLIntegrityConstraintViolationException("duplicate slot"));
-		var method = JdbcTaskRepository.class.getDeclaredMethod(
-				"tryReserveCandidate", PreparedStatement.class, Instant.class);
-		method.setAccessible(true);
-
-		boolean reserved = (boolean) method.invoke(null, statement, Instant.parse("2026-05-20T10:00:00Z"));
-
-		assertThat(reserved).isFalse();
-	}
-
-	@Test
-	void queueInNextSlotPushesRequestedTimePastLatestSlot() {
+	void queueStoresRequestedEligibilityTimeWithoutSmoothing() {
 		Instant now = Instant.parse("2026-05-20T10:00:00Z");
-		UUID first = taskRepository.queueInNextSlot(
-				"email", JsonNodeFactory.instance.objectNode().put("i", 1), now, java.time.Duration.ofMillis(10));
-		UUID second = taskRepository.queueInNextSlot(
-				"email", JsonNodeFactory.instance.objectNode().put("i", 2), now, java.time.Duration.ofMillis(10));
-		UUID third = taskRepository.queueInNextSlot(
-				"email",
-				JsonNodeFactory.instance.objectNode().put("i", 3),
-				now.plusSeconds(1),
-				java.time.Duration.ofMillis(10));
+		UUID first = taskRepository.queue(
+				"email", JsonNodeFactory.instance.objectNode().put("i", 1), now);
+		UUID second = taskRepository.queue(
+				"email", JsonNodeFactory.instance.objectNode().put("i", 2), now);
+		UUID third = taskRepository.queue(
+				"email", JsonNodeFactory.instance.objectNode().put("i", 3), now.plusSeconds(1));
 
 		var rows = jdbcTemplate.queryForList(
 				"""
 				select id, available_at
 				from mango_swarm_tasks
-				order by available_at
+				order by available_at, id
 				""");
 		assertThat(rows).hasSize(3);
-		assertThat(rows.get(0)).containsEntry("id", first);
+		assertThat(rows).extracting(row -> row.get("id")).containsExactlyInAnyOrder(first, second, third);
 		assertThat(((java.sql.Timestamp) rows.get(0).get("available_at")).toInstant())
 				.isEqualTo(now);
-		assertThat(rows.get(1)).containsEntry("id", second);
 		assertThat(((java.sql.Timestamp) rows.get(1).get("available_at")).toInstant())
-				.isEqualTo(now.plusMillis(10));
-		assertThat(rows.get(2)).containsEntry("id", third);
+				.isEqualTo(now);
 		assertThat(((java.sql.Timestamp) rows.get(2).get("available_at")).toInstant())
 				.isEqualTo(now.plusSeconds(1));
 	}
 
 	@Test
-	void farFutureTaskDoesNotBlockEarlierScheduleSlots() {
-		Instant now = Instant.parse("2026-05-20T10:00:00Z");
-		Instant future = now.plusSeconds(3600);
-		taskRepository.queueInNextSlot(
-				"email",
-				JsonNodeFactory.instance.objectNode().put("i", "future"),
-				future,
-				java.time.Duration.ofMillis(10));
-
-		UUID immediate = taskRepository.queueInNextSlot(
-				"email", JsonNodeFactory.instance.objectNode().put("i", "now"), now, java.time.Duration.ofMillis(10));
-		UUID beforeFuture = taskRepository.queueInNextSlot(
-				"email",
-				JsonNodeFactory.instance.objectNode().put("i", "before-future"),
-				future.minusSeconds(1),
-				java.time.Duration.ofMillis(10));
-
-		var rows = jdbcTemplate.queryForList(
-				"""
-				select id, available_at
-				from mango_swarm_tasks
-				where id in (?, ?)
-				order by available_at
-				""",
-				immediate,
-				beforeFuture);
-		assertThat(((java.sql.Timestamp) rows.get(0).get("available_at")).toInstant())
-				.isEqualTo(now);
-		assertThat(((java.sql.Timestamp) rows.get(1).get("available_at")).toInstant())
-				.isEqualTo(future.minusSeconds(1));
-	}
-
-	@Test
-	void exactSlotSpacingBoundaryIsAvailable() {
-		Instant now = Instant.parse("2026-05-20T10:00:00Z");
-		taskRepository.queueInNextSlot(
-				"email", JsonNodeFactory.instance.objectNode().put("i", 1), now, Duration.ofMillis(10));
-
-		UUID boundary = taskRepository.queueInNextSlot(
-				"email", JsonNodeFactory.instance.objectNode().put("i", 2), now.plusMillis(10), Duration.ofMillis(10));
-
-		Instant availableAt = jdbcTemplate.queryForObject(
-				"select available_at from mango_swarm_tasks where id = ?", Instant.class, boundary);
-		assertThat(availableAt).isEqualTo(now.plusMillis(10));
-	}
-
-	@Test
-	void requestedSlotInsidePreviousSlotSpacingMovesAfterPreviousSlot() {
-		Instant now = Instant.parse("2026-05-20T10:00:00Z");
-		taskRepository.queueInNextSlot(
-				"email", JsonNodeFactory.instance.objectNode().put("i", 1), now, Duration.ofMillis(10));
-
-		UUID taskId = taskRepository.queueInNextSlot(
-				"email", JsonNodeFactory.instance.objectNode().put("i", 2), now.plusMillis(5), Duration.ofMillis(10));
-
-		Instant availableAt = jdbcTemplate.queryForObject(
-				"select available_at from mango_swarm_tasks where id = ?", Instant.class, taskId);
-		assertThat(availableAt).isEqualTo(now.plusMillis(10));
-	}
-
-	@Test
-	void requestedSlotInsideNextSlotSpacingMovesAfterNextSlot() {
-		Instant now = Instant.parse("2026-05-20T10:00:00Z");
-		Instant future = now.plusSeconds(1);
-		taskRepository.queueInNextSlot(
-				"email", JsonNodeFactory.instance.objectNode().put("i", 1), future, Duration.ofMillis(10));
-
-		UUID taskId = taskRepository.queueInNextSlot(
-				"email",
-				JsonNodeFactory.instance.objectNode().put("i", 2),
-				future.minusMillis(5),
-				Duration.ofMillis(10));
-
-		Instant availableAt = jdbcTemplate.queryForObject(
-				"select available_at from mango_swarm_tasks where id = ?", Instant.class, taskId);
-		assertThat(availableAt).isEqualTo(future.plusMillis(10));
-	}
-
-	@Test
-	void queueInNextSlotParticipatesInExistingTransaction() {
+	void queueParticipatesInExistingTransaction() {
 		Instant now = Instant.parse("2026-05-20T10:00:00Z");
 		TransactionTemplate transactionTemplate =
 				new TransactionTemplate(new DataSourceTransactionManager(jdbcTemplate.getDataSource()));
 
-		UUID taskId = transactionTemplate.execute(status -> taskRepository.queueInNextSlot(
-				"email", JsonNodeFactory.instance.objectNode().put("i", "transactional"), now, Duration.ofMillis(10)));
+		UUID taskId = transactionTemplate.execute(status -> taskRepository.queue(
+				"email", JsonNodeFactory.instance.objectNode().put("i", "transactional"), now));
 
 		assertThat(taskId).isNotNull();
 		assertThat(jdbcTemplate.queryForObject("select count(*) from mango_swarm_tasks", Integer.class))
@@ -583,29 +485,6 @@ class TaskRepositoryTest extends H2TestSupport {
 	}
 
 	@Test
-	void zeroOrNegativeSlotSpacingQueuesAtRequestedTime() {
-		Instant now = Instant.parse("2026-05-20T10:00:00Z");
-
-		UUID zero = taskRepository.queueInNextSlot("email", JsonNodeFactory.instance.objectNode(), now, Duration.ZERO);
-		UUID negative = taskRepository.queueInNextSlot(
-				"email", JsonNodeFactory.instance.objectNode(), now.plusSeconds(1), Duration.ofMillis(-1));
-
-		var rows = jdbcTemplate.queryForList(
-				"""
-				select id, available_at
-				from mango_swarm_tasks
-				where id in (?, ?)
-				order by available_at
-				""",
-				zero,
-				negative);
-		assertThat(((java.sql.Timestamp) rows.get(0).get("available_at")).toInstant())
-				.isEqualTo(now);
-		assertThat(((java.sql.Timestamp) rows.get(1).get("available_at")).toInstant())
-				.isEqualTo(now.plusSeconds(1));
-	}
-
-	@Test
 	void markTimedOutFailedReturnsUpdatedRows() {
 		Instant now = Instant.parse("2026-05-20T10:00:00Z");
 		UUID workerId = UUID.randomUUID();
@@ -729,23 +608,6 @@ class TaskRepositoryTest extends H2TestSupport {
 	}
 
 	@Test
-	void deletesOldTaskPacerSlotsInBatches() {
-		Instant now = Instant.parse("2026-05-20T10:00:00Z");
-		taskRepository.queueInNextSlot(
-				"email", JsonNodeFactory.instance.objectNode(), now.minus(Duration.ofDays(40)), Duration.ofMillis(10));
-		taskRepository.queueInNextSlot(
-				"email", JsonNodeFactory.instance.objectNode(), now.minus(Duration.ofDays(39)), Duration.ofMillis(10));
-		taskRepository.queueInNextSlot(
-				"email", JsonNodeFactory.instance.objectNode(), now.minus(Duration.ofDays(5)), Duration.ofMillis(10));
-
-		int deleted = taskRepository.deleteTaskPacersOlderThan(Duration.ofDays(30), now, 1);
-
-		assertThat(deleted).isEqualTo(1);
-		Integer remaining = jdbcTemplate.queryForObject("select count(*) from mango_swarm_task_pacers", Integer.class);
-		assertThat(remaining).isEqualTo(2);
-	}
-
-	@Test
 	void maintenanceMethodsIgnoreNonPositiveLimits() {
 		Instant now = Instant.parse("2026-05-20T10:00:00Z");
 
@@ -756,8 +618,6 @@ class TaskRepositoryTest extends H2TestSupport {
 		assertThat(taskRepository.deleteCompletedOlderThan(Duration.ofDays(30), now, 0))
 				.isZero();
 		assertThat(taskRepository.deleteFailedOlderThan(Duration.ofDays(30), now, 0))
-				.isZero();
-		assertThat(taskRepository.deleteTaskPacersOlderThan(Duration.ofDays(30), now, 0))
 				.isZero();
 	}
 

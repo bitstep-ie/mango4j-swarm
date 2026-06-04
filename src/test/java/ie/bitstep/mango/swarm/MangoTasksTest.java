@@ -31,7 +31,6 @@ class MangoTasksTest {
 		assertThat(taskId).isEqualTo(RecordingRepository.TASK_ID);
 		assertThat(repository.taskType).isEqualTo("email");
 		assertThat(repository.availableAt).isAfterOrEqualTo(before);
-		assertThat(repository.slotSpacing).isEqualTo(Duration.ofMillis(10));
 		assertThat(repository.payload.get("customerId").asText()).isEqualTo("customer-1");
 		assertThat(repository.payload.get("email").asText()).isEqualTo("x@example.com");
 	}
@@ -50,7 +49,6 @@ class MangoTasksTest {
 		assertThat(taskId).isEqualTo(RecordingRepository.TASK_ID);
 		assertThat(repository.taskType).isEqualTo("email");
 		assertThat(repository.payload).isSameAs(payload);
-		assertThat(repository.slotSpacing).isEqualTo(Duration.ofMillis(10));
 	}
 
 	@Test
@@ -64,7 +62,6 @@ class MangoTasksTest {
 		assertThat(taskId).isEqualTo(RecordingRepository.TASK_ID);
 		assertThat(repository.taskType).isEqualTo("email");
 		assertThat(repository.availableAt).isEqualTo(availableAt);
-		assertThat(repository.slotSpacing).isEqualTo(Duration.ofMillis(10));
 		assertThat(repository.payload.get("customerId").asText()).isEqualTo("customer-1");
 		assertThat(repository.payload.get("email").asText()).isEqualTo("x@example.com");
 	}
@@ -121,7 +118,7 @@ class MangoTasksTest {
 	}
 
 	@Test
-	void rejectsUnconfiguredTaskTypeAndUsesZeroSpacingWhenRateIsNotPositive() {
+	void rejectsUnconfiguredTaskTypeAndQueuesWhenRateIsNotPositive() {
 		RecordingRepository repository = new RecordingRepository();
 		MangoSwarmProperties properties = properties();
 		properties.getTaskTypes().get("email").setRate(0);
@@ -129,7 +126,7 @@ class MangoTasksTest {
 
 		tasks.queue("email", JsonNodeFactory.instance.objectNode());
 
-		assertThat(repository.slotSpacing).isEqualTo(Duration.ZERO);
+		assertThat(repository.taskType).isEqualTo("email");
 		ObjectNode payload = JsonNodeFactory.instance.objectNode();
 		assertThatThrownBy(() -> tasks.queue("unknown", payload))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -194,21 +191,14 @@ class MangoTasksTest {
 		private String taskType;
 		private JsonNode payload;
 		private Instant availableAt;
-		private Duration slotSpacing;
 
 		private static final UUID TASK_ID = UUID.fromString("018f0000-0000-7000-8000-000000000001");
 
 		@Override
 		public UUID queue(String taskType, JsonNode payload, Instant availableAt) {
-			return queueInNextSlot(taskType, payload, availableAt, Duration.ZERO);
-		}
-
-		@Override
-		public UUID queueInNextSlot(String taskType, JsonNode payload, Instant availableAt, Duration slotSpacing) {
 			this.taskType = taskType;
 			this.payload = payload;
 			this.availableAt = availableAt;
-			this.slotSpacing = slotSpacing;
 			return TASK_ID;
 		}
 
@@ -276,11 +266,6 @@ class MangoTasksTest {
 
 		@Override
 		public int deleteFailedOlderThan(Duration retention, Instant now, int limit) {
-			return 0;
-		}
-
-		@Override
-		public int deleteTaskPacersOlderThan(Duration retention, Instant now, int limit) {
 			return 0;
 		}
 	}

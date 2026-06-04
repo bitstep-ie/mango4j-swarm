@@ -18,9 +18,6 @@ public interface TaskRepository {
 	/** Persists a task at a concrete availability time. */
 	UUID queue(String taskType, JsonNode payload, Instant availableAt);
 
-	/** Persists a task in the next available slot at or after a requested time. */
-	UUID queueInNextSlot(String taskType, JsonNode payload, Instant requestedAt, Duration slotSpacing);
-
 	/** Claims up to {@code limit} queued tasks for a worker. */
 	List<TaskRecord> claimBatch(String taskType, UUID workerId, Instant now, int limit);
 
@@ -57,7 +54,4 @@ public interface TaskRepository {
 
 	/** Deletes up to {@code limit} failed tasks older than the retention window. */
 	int deleteFailedOlderThan(Duration retention, Instant now, int limit);
-
-	/** Deletes up to {@code limit} task pacing slots older than the retention window. */
-	int deleteTaskPacersOlderThan(Duration retention, Instant now, int limit);
 }

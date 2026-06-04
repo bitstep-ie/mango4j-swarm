@@ -33,17 +33,6 @@ Worker identity and heartbeat state:
 
 Workers update this table on each heartbeat. The active worker count used for rate division comes from non-stale rows.
 
-### `mango_swarm_task_pacers`
-
-Per-task-type slot occupancy ledger used for smooth scheduling:
-
-- `task_type`: configured task type
-- `slot_at`: reserved execution slot timestamp
-- `task_id`: task row linked to the slot
-- `created_at`: slot creation timestamp
-
-The primary key is `(task_type, slot_at)`, so each task type has an independent pacing timeline.
-
 ### `mango_swarm_tasks`
 
 Durable work item and lifecycle state:
@@ -101,13 +90,13 @@ sequenceDiagram
     participant H as TaskHandler
 
     App->>API: queue/at/after(taskType, payload)
-    API->>DB: reserve slot in mango_swarm_task_pacers
-    API->>DB: insert row in mango_swarm_tasks(status=queued)
+    API->>DB: insert row in mango_swarm_tasks(status=queued, available_at=earliest eligibility)
 
     loop Poll cycle
         D->>DB: heartbeat worker + prune stale workers
         D->>DB: cleanup old completed/failed rows (interval-based)
         D->>D: recalc effective rate = app rate / active workers
+        D->>D: check local token ring for task-type start permission
         D->>DB: select claimable batch
         D->>DB: mark claimed rows
         D->>DB: mark task in_progress
@@ -130,11 +119,11 @@ Runtime table flow:
 
 | Step | Tables | What happens |
 | --- | --- | --- |
-| Queue task | `mango_swarm_task_pacers`, `mango_swarm_tasks` | `MangoTasks` reserves a per-type slot, then inserts a durable `queued` task row with the JSON payload. |
+| Queue task | `mango_swarm_tasks` | `MangoTasks` inserts a durable `queued` task row with the JSON payload and an `available_at` earliest eligibility timestamp. |
 | Drop task | none | `mode: drop` returns an acknowledgement id without inserting into any swarm table. |
 | Reject task | none | `mode: reject` fails before inserting into any swarm table. |
 | Worker heartbeat | `mango_swarm_workers` | The daemon upserts its worker row, updates `last_heartbeat_at`, prunes stale workers, and uses the remaining worker count for rate division. |
-| Cleanup | `mango_swarm_tasks`, `mango_swarm_task_pacers` | The daemon deletes old terminal task rows and old pacing slots according to cleanup retention settings. |
+| Cleanup | `mango_swarm_tasks` | The daemon deletes old terminal task rows according to cleanup retention settings. |
 | Timeout recovery | `mango_swarm_tasks`, `mango_swarm_task_runtime` | The daemon finds claimed or in-progress tasks whose runtime `updated_at` or task `claimed_at` is stale, then either requeues idempotent reclaimable tasks or marks them failed. |
 | Claim batch | `mango_swarm_tasks` | The daemon selects due `queued` rows for a task type and updates them to `claimed` with `claimed_by`, `claimed_at`, and incremented `attempt_count`. |
 | Start execution | `mango_swarm_tasks`, `mango_swarm_task_runtime` | The worker marks the task `in_progress` and inserts or resets the runtime row with `execution_state = running`, `started_at`, `updated_at`, and `execution_time_ms = 0`. |
@@ -163,17 +152,11 @@ stateDiagram-v2
 
 ## Scheduling model
 
-`MangoTasks` schedules by slot spacing derived from task-type `rate` and `period`:
+`MangoTasks` stores the requested queue time as `mango_swarm_tasks.available_at`.
 
-- `slotSpacing = period / rate` (bounded to at least 1ns)
+`available_at` is earliest database eligibility only. It is not an execution guarantee. A due row can be claimed only when worker capacity, task-type concurrency, and the worker-local token ring all allow a start.
 
-When queueing:
-
-1. Check nearest occupied slot at or before requested time.
-2. Check nearest occupied slot after requested time.
-3. Move requested time forward only when needed to avoid slot collisions.
-
-Result: a far-future task does not block earlier tasks.
+Result: overdue rows can build up in the database without being replayed in one burst when workers resume.
 
 ## Distributed rate division
 
@@ -183,7 +166,9 @@ Each task type has app-level rate config. A worker applies:
 
 `activeWorkerCount` comes from worker heartbeats in `mango_swarm_workers`.
 
-The daemon uses smooth slot pacing and batch claiming, not burst-all-at-once permits.
+Each worker keeps a fixed-size, object-reusing token ring per task type. Tokens have `availableAt` and `expiresAt`; a token is usable only when it is available and not expired.
+
+Expired token windows are skipped and recycled forward rather than replayed. This prevents catch-up bursts after a pause, while the configured rate remains the hard upper bound.
 
 ## Batch claiming and concurrency
 
@@ -191,7 +176,7 @@ For each task type and poll cycle, claim limit is bounded by:
 
 - whether the task type is in `execute` mode
 - configured/derived batch size
-- remaining local rate capacity
+- currently usable local start-token capacity
 - remaining per-task-type concurrency
 - remaining global executor capacity
 
@@ -270,14 +255,12 @@ Cleanup config:
 - `mango.swarm.cleanup.interval` (default `10m`)
 - `mango.swarm.cleanup.completed-retention` (default `30d`)
 - `mango.swarm.cleanup.failed-retention` (default `90d`)
-- `mango.swarm.cleanup.pacer-retention` (default `30d`)
 - `mango.swarm.cleanup.batch-size` (default `1000`)
 
 Cleanup behavior:
 
 - delete from `mango_swarm_tasks` where `status='completed'` and `completed_at < now - completed-retention`
 - delete from `mango_swarm_tasks` where `status='failed'` and `failed_at < now - failed-retention`
-- delete from `mango_swarm_task_pacers` where `slot_at < now - pacer-retention`
 - each cleanup category deletes at most `batch-size` rows per pass
 - never deletes `queued`, `claimed`, or `in_progress` rows
 

@@ -40,7 +40,7 @@ The library provides:
 * JSONB payloads with payload evolution helpers
 * worker registration and heartbeat pruning
 * distributed rate division across active instances
-* smooth time-slot based pacing instead of bursty permit release
+* worker-local token-ring pacing instead of bursty permit release
 * portable batch claiming for PostgreSQL and H2-backed tests
 * per-task-type concurrency limits
 * configurable global worker pool
@@ -202,7 +202,6 @@ mango4j:
       interval: 10m
       completed-retention: 30d
       failed-retention: 90d
-      pacer-retention: 30d
       batch-size: 1000
 
     executor:
@@ -256,7 +255,6 @@ mango4j:
 * `mango4j.swarm.cleanup.interval` (default `10m`): cleanup run cadence.
 * `mango4j.swarm.cleanup.completed-retention` (default `30d`): completed tasks older than this are deleted.
 * `mango4j.swarm.cleanup.failed-retention` (default `90d`): failed tasks older than this are deleted.
-* `mango4j.swarm.cleanup.pacer-retention` (default `30d`): task pacing slots older than this are deleted.
 * `mango4j.swarm.cleanup.batch-size` (default `1000`): maximum rows deleted per cleanup category per pass.
 
 ## Cleanup Task
@@ -268,7 +266,6 @@ Behavior:
 * cleanup runs every `mango4j.swarm.cleanup.interval`
 * completed rows are deleted when `completed_at < now - completed-retention`
 * failed rows are deleted when `failed_at < now - failed-retention`
-* task pacing slots are deleted when `slot_at < now - pacer-retention`
 * each cleanup category deletes at most `batch-size` rows per pass
 * only terminal states are deleted (`completed`, `failed`)
 * `queued`, `claimed`, and `in_progress` rows are never removed by cleanup
@@ -277,7 +274,6 @@ Defaults:
 
 * `completed-retention: 30d`
 * `failed-retention: 90d`
-* `pacer-retention: 30d`
 * `batch-size: 1000`
 
 Disable cleanup entirely:
@@ -298,7 +294,6 @@ mango4j:
       interval: 15m
       completed-retention: 14d
       failed-retention: 60d
-      pacer-retention: 14d
       batch-size: 500
 ```
 
@@ -399,7 +394,6 @@ mango4j:
       interval: 10m
       completed-retention: 30d
       failed-retention: 90d
-      pacer-retention: 30d
       batch-size: 1000
     executor:
       max-threads: "16"
@@ -428,22 +422,21 @@ mango4j:
 `MangoTasks` exposes three scheduling methods:
 
 ```java
-tasks.queue("send-email", payload);                 // schedule as soon as the next slot allows
+tasks.queue("send-email", payload);                 // eligible as soon as possible
 tasks.at(instant, "send-email", payload);           // schedule at or after a requested instant
 tasks.after(duration, "send-email", payload);       // schedule after a relative delay
 ```
 
-Scheduling uses a per-task-type pacer table. This prevents a task scheduled far in the future from blocking tasks that should run before it.
+Scheduling stores the requested time in `mango_swarm_tasks.available_at`. This timestamp is earliest database eligibility, not an execution guarantee.
 
 When a task is queued:
 
-* mango-swarm looks at the closest occupied slot before the requested time
-* it looks at the closest occupied slot after the requested time
-* if the requested time is too close to the slot before, the task moves after that before slot
-* if the requested time is too close to the slot after, the task moves after that after slot
-* otherwise the requested time is used
+* `queue(...)` stores the current time as `available_at`
+* `at(...)` stores the requested instant as `available_at`
+* `after(...)` stores `now + delay` as `available_at`
+* workers only start eligible tasks when concurrency and the local token ring both permit execution
 
-In short: a requested time is pushed forward only when it would collide with a nearby existing execution slot. Future slots do not reserve the whole timeline before them.
+In short: the database controls eligibility, while worker-local token rings control start permission. Overdue tasks can stack up without being replayed in a catch-up burst.
 
 ***
 
@@ -455,7 +448,9 @@ If `send-email` is configured for `100` tasks per second and there are `4` activ
 
 Workers register themselves with a random UUID and send periodic heartbeats to PostgreSQL. Each heartbeat also prunes stale workers. The active worker count is used to recalculate local rates.
 
-Execution is paced smoothly across the configured period. mango-swarm uses time slots instead of releasing all permits at once, so `100/sec` means work is spread through the second rather than claimed in one burst.
+Execution is paced smoothly across the configured period. Each worker keeps a fixed-size token ring per task type, so `100/sec` means work is spread through the second rather than claimed in one burst.
+
+Expired token windows are skipped and recycled forward. Missed capacity is not replayed after a pause, and the configured rate remains the hard upper bound.
 
 ***
 
@@ -596,7 +591,6 @@ mango-swarm requires four tables:
 * `mango_swarm_workers`
 * `mango_swarm_tasks`
 * `mango_swarm_task_runtime`
-* `mango_swarm_task_pacers`
 
 Task IDs are Java-generated UUIDv7 values.
 
