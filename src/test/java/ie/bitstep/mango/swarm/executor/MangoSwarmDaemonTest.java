@@ -65,6 +65,31 @@ class MangoSwarmDaemonTest {
 	}
 
 	@Test
+	void dividesStartRateByActiveWorkerCount() throws Exception {
+		MangoSwarmProperties properties = properties(100, 100, 100);
+		properties.getExecutor().setMaxThreads("100");
+		FakeRepository repository = new FakeRepository(1_000);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 4, new CompletingHandler());
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+		for (int tick = 0; tick <= 200; tick++) {
+			daemon.pollOnce(now.plusMillis(tick * 10L));
+		}
+
+		awaitCounter(() -> repository.completedTaskCalls, 51);
+		assertThat(repository.claimInstants.stream()
+						.filter(instant -> instant.isBefore(now.plusSeconds(1)))
+						.count())
+				.isEqualTo(25);
+		assertThat(repository.claimInstants.stream()
+						.filter(instant -> instant.isBefore(now.plusSeconds(2)))
+						.count())
+				.isEqualTo(50);
+		assertThat(repository.claimInstants).hasSize(51);
+		daemon.stop();
+	}
+
+	@Test
 	void respectsConfiguredBatchAndConcurrencyAndExecutorCapacity() {
 		MangoSwarmProperties properties = properties(100, 3, 20);
 		properties.getExecutor().setMaxThreads("2");

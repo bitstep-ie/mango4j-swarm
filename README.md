@@ -14,7 +14,7 @@ Distributed PostgreSQL-backed, rate-limited task execution for Spring Boot appli
   <h3 align="center">mango-swarm</h3>
 
   <p align="center">
-    Durable JSON tasks, self-coordinating workers, smooth rate limits, retries, and PostgreSQL-safe claiming.
+    Durable JSON tasks, self-coordinating workers, token-ring rate limits, retries, and PostgreSQL-safe claiming.
     <br/><br/>
     <a href="documentation/how-mango-swarm-works.md"><strong>How It Works</strong></a>
     <br/><br/>
@@ -448,7 +448,7 @@ If `send-email` is configured for `100` tasks per second and there are `4` activ
 
 Workers register themselves with a random UUID and send periodic heartbeats to PostgreSQL. Each heartbeat also prunes stale workers. The active worker count is used to recalculate local rates.
 
-Execution is paced smoothly across the configured period. Each worker keeps a fixed-size token ring per task type, so `100/sec` means work is spread through the second rather than claimed in one burst.
+Execution is paced by the local token ring across the configured period. Each worker keeps a fixed-size token ring per task type, so `100/sec` means work is spread through the second rather than claimed in one burst.
 
 Expired token windows are skipped and recycled forward. Missed capacity is not replayed after a pause, and the configured rate remains the hard upper bound.
 
@@ -460,8 +460,8 @@ Task acquisition is batch-based for throughput.
 
 For each polling cycle, a worker calculates how many tasks it can claim from:
 
-* the effective local rate
 * the configured or derived batch size
+* currently usable local start-token capacity
 * remaining task-type concurrency
 * remaining global executor capacity
 
@@ -470,13 +470,13 @@ The claim limit is conceptually:
 ```text
 min(
   configured or derived batch size,
-  remaining local rate capacity,
+  currently usable local start-token capacity,
   remaining task-type concurrency capacity,
   remaining executor capacity
 )
 ```
 
-If no `batch-size` is configured, mango-swarm derives one from the effective local rate, concurrency, and executor capacity.
+If no `batch-size` is configured, mango-swarm derives one from the effective local rate, concurrency, and executor capacity. The local token ring still decides how many starts are currently permitted.
 
 Database claiming uses a portable select-and-update flow so the repository can run against PostgreSQL and the H2-backed test suite. PostgreSQL-specific concurrent claim locking is skipped in H2 validation.
 
