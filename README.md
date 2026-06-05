@@ -17,6 +17,8 @@ Distributed PostgreSQL-backed, rate-limited task execution for Spring Boot appli
     Durable JSON tasks, self-coordinating workers, token-ring rate limits, retries, and PostgreSQL-safe claiming.
     <br/><br/>
     <a href="documentation/how-mango-swarm-works.md"><strong>How It Works</strong></a>
+    <br/>
+    <a href="documentation/why-mango4j-swarm.md"><strong>Why mango-swarm?</strong></a>
     <br/><br/>
     <a href="examples/reference-email-app"><strong>Reference Email App</strong></a>
   </p>
