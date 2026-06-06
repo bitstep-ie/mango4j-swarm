@@ -448,9 +448,13 @@ Rates are configured at application level and divided by the number of active wo
 
 If `send-email` is configured for `100` tasks per second and there are `4` active workers, each worker aims for roughly `25` tasks per second.
 
-Workers register themselves with a random UUID and send periodic heartbeats to PostgreSQL. Each heartbeat also prunes stale workers. The active worker count is used to recalculate local rates.
+Workers register themselves with a random UUID, hostname, start time, and heartbeat timestamp in `mango_swarm_workers`. Each heartbeat updates the worker row, prunes stale workers, and recounts the remaining active workers. That count divides the configured application rate into each worker's current local share.
 
-Execution is paced by the local token ring across the configured period. Each worker keeps a fixed-size token ring per task type, so `100/sec` means work is spread through the second rather than claimed in one burst.
+When workers arrive, the active count rises and each worker recalculates a smaller local share. When workers disappear, their heartbeat eventually becomes stale, surviving workers prune them, and the local share ramps back up. No central coordinator assigns slices; every worker derives the same division from the database membership view.
+
+Execution is paced by a local token ring across the configured period. Each worker keeps a fixed-capacity token ring per task type. The ring capacity is based on the configured task-type rate, while the number of active tokens is recalculated from the local share. For example, `100/sec` on one worker can use up to `100` active local tokens; with `4` workers that worker reconfigures down to about `25` active tokens immediately by disabling excess slots. If the swarm later shrinks to `2` workers, only the newly added token slots are enabled. Those new slots are scheduled no earlier than the next configured period after reconfiguration, so resizing the ring does not create a fresh burst or add replacement capacity inside the current period. Reduced share is enforced immediately; increased share is applied from the next period onward.
+
+That next-period delay matters when membership changes quickly. If a worker has already consumed part of its current-period tokens, a shrink followed by a grow must not put those removed tokens back into the same period. New capacity is therefore applied from the next period onward.
 
 Expired token windows are skipped and recycled forward. Missed capacity is not replayed after a pause, and the configured rate remains the hard upper bound.
 

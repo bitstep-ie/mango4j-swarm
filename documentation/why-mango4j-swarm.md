@@ -110,7 +110,9 @@ Task-type rates are configured at application level. Each worker gets a local sh
 effectiveLocalRate = configuredRate / activeWorkerCount
 ```
 
-Each worker enforces that share with a fixed-size local token ring per task type.
+Each worker enforces that share with a fixed-capacity local token ring per task type. The ring itself is reused, while the active token count changes with the worker's current local share. When more workers arrive, reduced share is enforced immediately by disabling excess token slots. When workers disappear, only the newly added token slots are enabled, and those slots are scheduled no earlier than the next configured period after reconfiguration. Existing active tokens keep their current windows, so recalculating the share does not create a fresh burst or add replacement capacity inside the current period.
+
+That means a shrink followed by a grow inside the same period does not put removed tokens back into a period where some starts have already been spent. The higher local share takes effect from the next period onward.
 
 This matters when many tasks are already eligible. `available_at` is only earliest database eligibility. It does not guarantee immediate execution. Even if thousands of rows are overdue, workers start tasks only when:
 

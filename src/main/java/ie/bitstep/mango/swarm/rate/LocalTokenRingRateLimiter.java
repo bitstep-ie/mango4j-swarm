@@ -34,12 +34,13 @@ public final class LocalTokenRingRateLimiter {
 		long nanos = Math.max(1L, (long) (period.toNanos() / rate));
 		int configuredActiveTokens = Math.max(1, Math.min(tokens.length, (int) Math.ceil(rate)));
 		spacing = Duration.ofNanos(nanos);
+		boolean wasDisabled = disabled;
 		disabled = false;
-		if (!initialized || configuredActiveTokens != activeTokens) {
+		if (!initialized || wasDisabled) {
 			activeTokens = configuredActiveTokens;
 			initialize(now);
 		} else {
-			activeTokens = configuredActiveTokens;
+			reconfigureActiveTokens(configuredActiveTokens, period, now);
 		}
 	}
 
@@ -111,6 +112,31 @@ public final class LocalTokenRingRateLimiter {
 		initialized = true;
 	}
 
+	private void reconfigureActiveTokens(int configuredActiveTokens, Duration period, Instant now) {
+		if (configuredActiveTokens == activeTokens) {
+			return;
+		}
+		int previousActiveTokens = activeTokens;
+		activeTokens = configuredActiveTokens;
+		if (configuredActiveTokens < previousActiveTokens) {
+			for (int i = configuredActiveTokens; i < previousActiveTokens; i++) {
+				tokens[i].disable();
+			}
+			head = earliestActiveTokenIndex();
+			return;
+		}
+		Instant nextAvailable = latestScheduledToken(previousActiveTokens).plus(spacing);
+		Instant nextPeriod = now.plus(period);
+		if (nextAvailable.isBefore(nextPeriod)) {
+			nextAvailable = nextPeriod;
+		}
+		for (int i = previousActiveTokens; i < configuredActiveTokens; i++) {
+			tokens[i].schedule(nextAvailable, spacing);
+			nextAvailable = nextAvailable.plus(spacing);
+		}
+		head = earliestActiveTokenIndex();
+	}
+
 	private void skipExpired(Instant now) {
 		while (isExpired(tokens[head], now)) {
 			recycle(tokens[head], now);
@@ -131,14 +157,31 @@ public final class LocalTokenRingRateLimiter {
 	}
 
 	private Instant latestScheduledToken() {
+		return latestScheduledToken(activeTokens);
+	}
+
+	private Instant latestScheduledToken(int tokenCount) {
 		Instant latest = Instant.EPOCH;
-		for (int i = 0; i < activeTokens; i++) {
+		for (int i = 0; i < tokenCount; i++) {
 			Instant availableAt = tokens[i].availableAt;
 			if (availableAt.isAfter(latest)) {
 				latest = availableAt;
 			}
 		}
 		return latest;
+	}
+
+	private int earliestActiveTokenIndex() {
+		int earliestIndex = 0;
+		Instant earliest = tokens[0].availableAt;
+		for (int i = 1; i < activeTokens; i++) {
+			Instant availableAt = tokens[i].availableAt;
+			if (availableAt.isBefore(earliest)) {
+				earliest = availableAt;
+				earliestIndex = i;
+			}
+		}
+		return earliestIndex;
 	}
 
 	private void advanceHead() {

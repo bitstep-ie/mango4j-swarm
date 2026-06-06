@@ -82,6 +82,53 @@ class LocalTokenRingRateLimiterTest {
 	}
 
 	@Test
+	void reducingActiveTokenCountDoesNotRefreshRemainingTokens() {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(4);
+		limiter.configure(4, Duration.ofSeconds(4), NOW);
+		limiter.acquire(NOW);
+
+		limiter.configure(2, Duration.ofSeconds(4), NOW);
+
+		assertThat(limiter.availablePermits(NOW, 2)).isZero();
+		assertThat(limiter.headToken().availableAt()).isEqualTo(NOW.plusSeconds(1));
+		assertThat(limiter.tokenAt(0).availableAt()).isEqualTo(NOW.plusSeconds(4));
+		assertThat(limiter.tokenAt(1).availableAt()).isEqualTo(NOW.plusSeconds(1));
+		assertThat(limiter.tokenAt(2).availableAt()).isEqualTo(Instant.MAX);
+		assertThat(limiter.tokenAt(3).availableAt()).isEqualTo(Instant.MAX);
+	}
+
+	@Test
+	void increasingActiveTokenCountOnlySchedulesNewTokens() {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(4);
+		limiter.configure(2, Duration.ofSeconds(4), NOW);
+		limiter.acquire(NOW);
+
+		limiter.configure(4, Duration.ofSeconds(4), NOW);
+
+		assertThat(limiter.availablePermits(NOW, 4)).isZero();
+		assertThat(limiter.headToken().availableAt()).isEqualTo(NOW.plusSeconds(2));
+		assertThat(limiter.tokenAt(0).availableAt()).isEqualTo(NOW.plusSeconds(4));
+		assertThat(limiter.tokenAt(1).availableAt()).isEqualTo(NOW.plusSeconds(2));
+		assertThat(limiter.tokenAt(2).availableAt()).isEqualTo(NOW.plusSeconds(5));
+		assertThat(limiter.tokenAt(3).availableAt()).isEqualTo(NOW.plusSeconds(6));
+	}
+
+	@Test
+	void increasingAfterReductionDefersNewTokensUntilNextPeriod() {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(4);
+		limiter.configure(4, Duration.ofSeconds(4), NOW);
+
+		limiter.configure(2, Duration.ofSeconds(4), NOW);
+		limiter.configure(4, Duration.ofSeconds(4), NOW);
+
+		assertThat(limiter.availablePermits(NOW, 4)).isEqualTo(1);
+		assertThat(limiter.tokenAt(0).availableAt()).isEqualTo(NOW);
+		assertThat(limiter.tokenAt(1).availableAt()).isEqualTo(NOW.plusSeconds(1));
+		assertThat(limiter.tokenAt(2).availableAt()).isEqualTo(NOW.plusSeconds(4));
+		assertThat(limiter.tokenAt(3).availableAt()).isEqualTo(NOW.plusSeconds(5));
+	}
+
+	@Test
 	void noBurstCatchUpOccursAfterLongPause() {
 		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(5);
 		limiter.configure(5, Duration.ofSeconds(5), NOW);
