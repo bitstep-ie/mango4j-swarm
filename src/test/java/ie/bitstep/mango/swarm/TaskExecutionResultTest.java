@@ -7,19 +7,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TaskExecutionResultTest {
 
 	@Test
-	void completedResultIsSuccessfulSingleton() {
-		TaskExecutionResult completed = TaskExecutionResult.completed();
-
-		assertThat(completed).isSameAs(TaskExecutionResult.completed());
-		assertThat(completed.isCompleted()).isTrue();
-		assertThat(completed.message()).isNull();
+	void completedResultIsSingleton() {
+		assertThat(TaskExecutionResult.completed()).isSameAs(TaskExecutionResult.completed());
 	}
 
 	@Test
 	void failedResultCarriesMessage() {
-		TaskExecutionResult failed = TaskExecutionResult.failed("boom");
+		TaskExecutionResult.Failed failed = TaskExecutionResult.failed("boom");
 
-		assertThat(failed.isCompleted()).isFalse();
 		assertThat(failed.message()).isEqualTo("boom");
 	}
 }

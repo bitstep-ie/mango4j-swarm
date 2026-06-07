@@ -1,6 +1,5 @@
 package ie.bitstep.mango.swarm.payload;
 
-
 /**
  * Converts a durable JSON task payload into the current Java payload model.
  *
@@ -16,5 +15,4 @@ public interface PayloadExtractor<T> {
 	 * @throws PayloadExtractionException when semantic required data cannot be derived
 	 */
 	T extract(PayloadReader reader) throws PayloadExtractionException;
-
 }

@@ -11,14 +11,16 @@ class PayloadReaderTest {
 
 	@Test
 	void extractsAliasesNestedPathsAndDefaults() throws Exception {
-		PayloadReader reader = new PayloadReader(objectMapper.readTree(
-				"""
+		PayloadReader reader = new PayloadReader(
+				objectMapper.readTree(
+						"""
 				{
 				"recipientEmail": "x@y.com",
 				"userId": "123",
 				"priority": 8
 				}
-				"""), objectMapper);
+				"""),
+				objectMapper);
 
 		EmailPayload payload = new EmailPayload(
 				reader.required(String.class, "customerId", "userId", "customer.id"),
@@ -34,11 +36,12 @@ class PayloadReaderTest {
 	@Test
 	void staticExtractorConvenienceWrapsPayloadReader() throws Exception {
 		String customerId = new PayloadReader(
-				objectMapper.readTree("""
+						objectMapper.readTree("""
 				{
 				"customerId": "customer-1"
 				}
-				"""), objectMapper).required(String.class, "customerId");
+				"""), objectMapper)
+				.required(String.class, "customerId");
 
 		assertThat(customerId).isEqualTo("customer-1");
 	}
@@ -55,7 +58,8 @@ class PayloadReaderTest {
 
 	@Test
 	void optionalValueCanBeInspectedValidatedAndRequired() throws Exception {
-		PayloadReader reader = new PayloadReader(objectMapper.readTree("""
+		PayloadReader reader =
+				new PayloadReader(objectMapper.readTree("""
 				{
 				"priority": 8
 				}
@@ -82,7 +86,8 @@ class PayloadReaderTest {
 				"priority": -1,
 				"count": "not-a-number"
 				}
-				"""), objectMapper);
+				"""),
+				objectMapper);
 		PayloadReader.OptionalValue<Integer> priority = invalid.optional(Integer.class, "priority");
 
 		assertThatThrownBy(() -> priority.validate(value -> value > 0, "must be positive"))

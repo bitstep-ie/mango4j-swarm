@@ -452,7 +452,16 @@ public class MangoSwarmDaemon {
 					payload,
 					new RuntimeProgressReporter(task.id(), workerId));
 			TaskExecutionResult result = handler.execute(context);
-			if (result == null || result.isCompleted()) {
+			if (result instanceof TaskExecutionResult.Failed failed) {
+				handleFailedTask(task, failed.message(), null);
+				log.debug(
+						"swarm task execution failed-result: taskType={}, taskId={}, workerId={}, attempt={}, message={}",
+						task.taskType(),
+						task.id(),
+						workerId,
+						task.attemptCount(),
+						failed.message());
+			} else {
 				taskRepository.markCompleted(task.id(), workerId, Instant.now());
 				log.debug(
 						"swarm task execution completed: taskType={}, taskId={}, workerId={}, attempt={}",
@@ -460,15 +469,6 @@ public class MangoSwarmDaemon {
 						task.id(),
 						workerId,
 						task.attemptCount());
-			} else {
-				handleFailedTask(task, result.message(), null);
-				log.debug(
-						"swarm task execution failed-result: taskType={}, taskId={}, workerId={}, attempt={}, message={}",
-						task.taskType(),
-						task.id(),
-						workerId,
-						task.attemptCount(),
-						result.message());
 			}
 		} catch (Exception ex) {
 			handleFailedTask(task, ex.getMessage(), ex);

@@ -3,42 +3,31 @@ package ie.bitstep.mango.swarm;
 /**
  * Outcome returned by a {@code TaskHandler}.
  *
- * <p>Returning {@link #completed()} marks the task successful. Returning {@link #failed(String)} triggers retry/failure
- * flow based on task-type configuration.
+ * <p>Return {@link #completed()} on success or {@link #failed(String)} to trigger the retry/failure flow based on
+ * task-type configuration.
  */
-public final class TaskExecutionResult {
-	private static final TaskExecutionResult COMPLETED_RESULT = new TaskExecutionResult(true, null);
+public sealed interface TaskExecutionResult permits TaskExecutionResult.Completed, TaskExecutionResult.Failed {
 
-	private final boolean completed;
-	private final String message;
+    /** Successful execution marker. */
+    record Completed() implements TaskExecutionResult {
+        static final Completed INSTANCE = new Completed();
+    }
 
-	private TaskExecutionResult(boolean completed, String message) {
-		this.completed = completed;
-		this.message = message;
-	}
+    /** Explicit failure with a diagnostic message persisted for diagnostics. */
+    record Failed(String message) implements TaskExecutionResult {}
 
-	/** @return successful execution result */
-	public static TaskExecutionResult completed() {
-		return COMPLETED_RESULT;
-	}
+    /** @return successful execution result */
+    static Completed completed() {
+        return Completed.INSTANCE;
+    }
 
-	/**
-	 * Creates an explicit failure result.
-	 *
-	 * @param message error detail persisted for diagnostics
-	 * @return failed result
-	 */
-	public static TaskExecutionResult failed(String message) {
-		return new TaskExecutionResult(false, message);
-	}
-
-	/** @return {@code true} when execution is successful */
-	public boolean isCompleted() {
-		return completed;
-	}
-
-	/** @return optional failure message */
-	public String message() {
-		return message;
-	}
+    /**
+     * Creates an explicit failure result.
+     *
+     * @param message error detail persisted for diagnostics
+     * @return failed result
+     */
+    static Failed failed(String message) {
+        return new Failed(message);
+    }
 }
