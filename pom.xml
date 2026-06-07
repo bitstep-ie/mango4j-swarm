@@ -130,7 +130,12 @@
                         <includes>
                             <include>src/**/*.java</include>
                         </includes>
-                        <cleanthat/>
+                        <cleanthat>
+                            <excludedMutators>
+                                <!-- cleanthat crashes on sealed interfaces (Java 17); palantir handles modifier ordering -->
+                                <excludedMutator>ModifierOrder</excludedMutator>
+                            </excludedMutators>
+                        </cleanthat>
                         <palantirJavaFormat>
                             <version>${spotless-palantir-maven-plugin.version}</version>
                             <style>PALANTIR</style>
