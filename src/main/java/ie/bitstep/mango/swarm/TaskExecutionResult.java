@@ -9,16 +9,14 @@ package ie.bitstep.mango.swarm;
 public sealed interface TaskExecutionResult permits TaskExecutionResult.Completed, TaskExecutionResult.Failed {
 
     /** Successful execution marker. */
-    record Completed() implements TaskExecutionResult {
-        static final Completed INSTANCE = new Completed();
-    }
+    record Completed() implements TaskExecutionResult {}
 
     /** Explicit failure with a diagnostic message persisted for diagnostics. */
     record Failed(String message) implements TaskExecutionResult {}
 
     /** @return successful execution result */
     static Completed completed() {
-        return Completed.INSTANCE;
+        return new Completed();
     }
 
     /**

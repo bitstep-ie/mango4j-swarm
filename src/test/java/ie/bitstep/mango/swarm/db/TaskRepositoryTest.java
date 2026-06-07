@@ -300,8 +300,7 @@ class TaskRepositoryTest extends H2TestSupport {
 		var row = jdbcTemplate.queryForMap(
 				"""
 					select started_at from mango_swarm_task_runtime where task_id = ?
-					""",
-				taskId);
+					""", taskId);
 		assertThat(((java.sql.Timestamp) row.get("started_at")).toInstant()).isEqualTo(secondStart);
 
 		// execution_time_ms on the terminal task row must be ~10s, not ~100s

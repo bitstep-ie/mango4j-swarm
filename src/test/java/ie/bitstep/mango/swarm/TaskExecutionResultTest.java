@@ -7,8 +7,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TaskExecutionResultTest {
 
 	@Test
-	void completedResultIsSingleton() {
-		assertThat(TaskExecutionResult.completed()).isSameAs(TaskExecutionResult.completed());
+	void completedResultIsEqualToAnotherCompleted() {
+		assertThat(TaskExecutionResult.completed()).isEqualTo(TaskExecutionResult.completed());
 	}
 
 	@Test
