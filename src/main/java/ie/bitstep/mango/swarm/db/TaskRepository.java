@@ -28,9 +28,6 @@ public interface TaskRepository {
 	void updateRuntime(
 			UUID taskId, UUID workerId, Instant now, String executionState, Integer progressPercent, String message);
 
-	/** Records task progress and textual stage while in progress. */
-	void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description);
-
 	/** Marks a task as completed. */
 	void markCompleted(UUID taskId, UUID workerId, Instant now);
 

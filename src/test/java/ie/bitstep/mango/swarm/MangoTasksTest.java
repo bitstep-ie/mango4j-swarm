@@ -225,9 +225,6 @@ class MangoTasksTest {
 				String message) {}
 
 		@Override
-		public void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description) {}
-
-		@Override
 		public void markCompleted(UUID taskId, UUID workerId, Instant now) {}
 
 		@Override

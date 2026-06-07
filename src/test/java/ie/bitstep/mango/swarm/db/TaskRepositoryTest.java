@@ -229,7 +229,7 @@ class TaskRepositoryTest extends H2TestSupport {
 		taskRepository.claimBatch("email", workerId, now.minusSeconds(60), 1);
 		taskRepository.markInProgress(taskId, workerId, now.minusSeconds(60));
 
-		taskRepository.recordProgress(taskId, workerId, now.minusSeconds(5), 50, "sending");
+		taskRepository.updateRuntime(taskId, workerId, now.minusSeconds(5), "running", 50, "sending");
 		int reclaimed = taskRepository.reclaimTimedOut("email", java.time.Duration.ofSeconds(30), now, 10);
 
 		assertThat(reclaimed).isZero();
@@ -765,9 +765,7 @@ class TaskRepositoryTest extends H2TestSupport {
 				repository.markInProgress(UUID.randomUUID(), UUID.randomUUID(), Instant.parse("2026-05-20T10:00:00Z")));
 		assertLifecycleCallbackReturnsOne(repository -> repository.updateRuntime(
 				UUID.randomUUID(), UUID.randomUUID(), Instant.parse("2026-05-20T10:00:00Z"), "running", 50, "halfway"));
-		assertLifecycleCallbackReturnsOne(repository -> repository.recordProgress(
-				UUID.randomUUID(), UUID.randomUUID(), Instant.parse("2026-05-20T10:00:00Z"), 50, "halfway"));
-		assertLifecycleCallbackReturnsOne(repository ->
+assertLifecycleCallbackReturnsOne(repository ->
 				repository.markCompleted(UUID.randomUUID(), UUID.randomUUID(), Instant.parse("2026-05-20T10:00:00Z")));
 		assertLifecycleCallbackReturnsOne(repository -> repository.markFailed(
 				UUID.randomUUID(), UUID.randomUUID(), Instant.parse("2026-05-20T10:00:00Z"), "failed"));

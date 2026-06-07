@@ -356,16 +356,6 @@ LIMIT ?
 	}
 
 	@Override
-	public void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description) {
-		executeRequired(
-				connection -> tables.withSearchPath(connection, scoped -> {
-					upsertRuntime(scoped, taskId, workerId, now, "running", progressPercent, description);
-					return 1;
-				}),
-				"record task progress");
-	}
-
-	@Override
 	public void markCompleted(UUID taskId, UUID workerId, Instant now) {
 		executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
