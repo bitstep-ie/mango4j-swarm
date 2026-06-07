@@ -2,13 +2,14 @@ package ie.bitstep.mango.swarm.rate;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedList;
 import java.util.Objects;
 
 /** Fixed-size, object-reusing token ring for local per-worker task start pacing. */
 public final class LocalTokenRingRateLimiter {
 	private final Token[] tokens;
-	private int head;
-	private int activeTokens;
+	private final LinkedList<Token> activeRing = new LinkedList<>();
+	private final LinkedList<Token> blockedRing = new LinkedList<>();
 	private Duration spacing = Duration.ofSeconds(1);
 	private boolean disabled = true;
 	private boolean initialized;
@@ -21,7 +22,6 @@ public final class LocalTokenRingRateLimiter {
 		for (int i = 0; i < tokens.length; i++) {
 			tokens[i] = new Token();
 		}
-		this.activeTokens = tokens.length;
 	}
 
 	public synchronized void configure(double rate, Duration period, Instant now) {
@@ -37,8 +37,7 @@ public final class LocalTokenRingRateLimiter {
 		boolean wasDisabled = disabled;
 		disabled = false;
 		if (!initialized || wasDisabled) {
-			activeTokens = configuredActiveTokens;
-			initialize(now);
+			initialize(configuredActiveTokens, now);
 		} else {
 			reconfigureActiveTokens(configuredActiveTokens, period, now);
 		}
@@ -50,17 +49,17 @@ public final class LocalTokenRingRateLimiter {
 			return Acquisition.deny();
 		}
 		while (true) {
-			Token token = tokens[head];
+			Token token = activeRing.getFirst();
 			if (token.availableAt.isAfter(now)) {
 				return Acquisition.waitFor(Duration.between(now, token.availableAt));
 			}
 			if (isExpired(token, now)) {
 				recycle(token, now);
-				advanceHead();
+				rotateActiveHeadToTail();
 				continue;
 			}
 			recycle(token, now);
-			advanceHead();
+			rotateActiveHeadToTail();
 			return Acquisition.grant();
 		}
 	}
@@ -72,8 +71,10 @@ public final class LocalTokenRingRateLimiter {
 		}
 		skipExpired(now);
 		int available = 0;
-		for (int offset = 0; offset < activeTokens && available < max; offset++) {
-			Token token = tokens[index(offset)];
+		for (Token token : activeRing) {
+			if (available >= max) {
+				break;
+			}
 			if (token.availableAt.isAfter(now) || isExpired(token, now)) {
 				break;
 			}
@@ -88,59 +89,62 @@ public final class LocalTokenRingRateLimiter {
 			return Duration.ZERO;
 		}
 		skipExpired(now);
-		Token token = tokens[head];
+		Token token = activeRing.getFirst();
 		return token.availableAt.isAfter(now) ? Duration.between(now, token.availableAt) : Duration.ZERO;
 	}
 
 	Token headToken() {
-		return tokens[head];
+		return activeRing.getFirst();
 	}
 
 	Token tokenAt(int index) {
 		return tokens[index];
 	}
 
-	private void initialize(Instant now) {
-		head = 0;
+	private void initialize(int configuredActiveTokens, Instant now) {
+		activeRing.clear();
+		blockedRing.clear();
 		for (int i = 0; i < tokens.length; i++) {
-			if (i < activeTokens) {
+			if (i < configuredActiveTokens) {
 				tokens[i].schedule(now.plus(spacing.multipliedBy(i)), spacing);
+				activeRing.addLast(tokens[i]);
 			} else {
 				tokens[i].disable();
+				blockedRing.addLast(tokens[i]);
 			}
 		}
 		initialized = true;
 	}
 
 	private void reconfigureActiveTokens(int configuredActiveTokens, Duration period, Instant now) {
-		if (configuredActiveTokens == activeTokens) {
+		if (configuredActiveTokens == activeRing.size()) {
 			return;
 		}
-		int previousActiveTokens = activeTokens;
-		activeTokens = configuredActiveTokens;
-		if (configuredActiveTokens < previousActiveTokens) {
-			for (int i = configuredActiveTokens; i < previousActiveTokens; i++) {
-				tokens[i].disable();
+		if (configuredActiveTokens < activeRing.size()) {
+			while (activeRing.size() > configuredActiveTokens) {
+				Token token = activeRing.removeLast();
+				token.disable();
+				blockedRing.addLast(token);
 			}
-			head = earliestActiveTokenIndex();
 			return;
 		}
-		Instant nextAvailable = latestScheduledToken(previousActiveTokens).plus(spacing);
+		Instant nextAvailable = latestScheduledToken().plus(spacing);
 		Instant nextPeriod = now.plus(period);
 		if (nextAvailable.isBefore(nextPeriod)) {
 			nextAvailable = nextPeriod;
 		}
-		for (int i = previousActiveTokens; i < configuredActiveTokens; i++) {
-			tokens[i].schedule(nextAvailable, spacing);
+		while (activeRing.size() < configuredActiveTokens) {
+			Token token = blockedRing.removeFirst();
+			token.schedule(nextAvailable, spacing);
+			activeRing.addLast(token);
 			nextAvailable = nextAvailable.plus(spacing);
 		}
-		head = earliestActiveTokenIndex();
 	}
 
 	private void skipExpired(Instant now) {
-		while (isExpired(tokens[head], now)) {
-			recycle(tokens[head], now);
-			advanceHead();
+		while (isExpired(activeRing.getFirst(), now)) {
+			recycle(activeRing.getFirst(), now);
+			rotateActiveHeadToTail();
 		}
 	}
 
@@ -157,13 +161,9 @@ public final class LocalTokenRingRateLimiter {
 	}
 
 	private Instant latestScheduledToken() {
-		return latestScheduledToken(activeTokens);
-	}
-
-	private Instant latestScheduledToken(int tokenCount) {
 		Instant latest = Instant.EPOCH;
-		for (int i = 0; i < tokenCount; i++) {
-			Instant availableAt = tokens[i].availableAt;
+		for (Token token : activeRing) {
+			Instant availableAt = token.availableAt;
 			if (availableAt.isAfter(latest)) {
 				latest = availableAt;
 			}
@@ -171,25 +171,8 @@ public final class LocalTokenRingRateLimiter {
 		return latest;
 	}
 
-	private int earliestActiveTokenIndex() {
-		int earliestIndex = 0;
-		Instant earliest = tokens[0].availableAt;
-		for (int i = 1; i < activeTokens; i++) {
-			Instant availableAt = tokens[i].availableAt;
-			if (availableAt.isBefore(earliest)) {
-				earliest = availableAt;
-				earliestIndex = i;
-			}
-		}
-		return earliestIndex;
-	}
-
-	private void advanceHead() {
-		head = index(1);
-	}
-
-	private int index(int offset) {
-		return (head + offset) % activeTokens;
+	private void rotateActiveHeadToTail() {
+		activeRing.addLast(activeRing.removeFirst());
 	}
 
 	static final class Token {

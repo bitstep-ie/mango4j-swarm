@@ -6,9 +6,57 @@ import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LocalTokenRingRateLimiterTest {
 	private static final Instant NOW = Instant.parse("2026-06-04T10:00:00Z");
+
+	@Test
+	void capacityMustBePositive() {
+		assertThatThrownBy(() -> new LocalTokenRingRateLimiter(0))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("capacity must be at least 1");
+	}
+
+	@Test
+	void invalidConfigurationDisablesLimiterUntilReconfigured() {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(2);
+		limiter.configure(2, Duration.ofSeconds(2), NOW);
+
+		limiter.configure(0, Duration.ofSeconds(2), NOW);
+
+		assertThat(limiter.acquire(NOW).granted()).isFalse();
+		assertThat(limiter.availablePermits(NOW, 2)).isZero();
+		assertThat(limiter.timeUntilNextPermit(NOW)).isEqualTo(Duration.ZERO);
+
+		Instant later = NOW.plusSeconds(10);
+		limiter.configure(2, Duration.ofSeconds(2), later);
+
+		assertThat(limiter.acquire(later).granted()).isTrue();
+		assertThat(limiter.headToken().availableAt()).isEqualTo(later.plusSeconds(1));
+	}
+
+	@Test
+	void zeroOrNegativeMaxHasNoAvailablePermits() {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(2);
+		limiter.configure(2, Duration.ofSeconds(2), NOW);
+
+		assertThat(limiter.availablePermits(NOW, 0)).isZero();
+		assertThat(limiter.availablePermits(NOW, -1)).isZero();
+	}
+
+	@Test
+	void reconfiguringSameActiveTokenCountPreservesSchedule() {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(2);
+		limiter.configure(2, Duration.ofSeconds(2), NOW);
+		limiter.acquire(NOW);
+
+		limiter.configure(2, Duration.ofSeconds(2), NOW.plusMillis(100));
+
+		assertThat(limiter.headToken().availableAt()).isEqualTo(NOW.plusSeconds(1));
+		assertThat(limiter.tokenAt(0).availableAt()).isEqualTo(NOW.plusSeconds(2));
+		assertThat(limiter.tokenAt(1).availableAt()).isEqualTo(NOW.plusSeconds(1));
+	}
 
 	@Test
 	void tokenIsNotAvailableBeforeAvailableAt() {
@@ -91,9 +139,9 @@ class LocalTokenRingRateLimiterTest {
 
 		assertThat(limiter.availablePermits(NOW, 2)).isZero();
 		assertThat(limiter.headToken().availableAt()).isEqualTo(NOW.plusSeconds(1));
-		assertThat(limiter.tokenAt(0).availableAt()).isEqualTo(NOW.plusSeconds(4));
+		assertThat(limiter.tokenAt(0).availableAt()).isEqualTo(Instant.MAX);
 		assertThat(limiter.tokenAt(1).availableAt()).isEqualTo(NOW.plusSeconds(1));
-		assertThat(limiter.tokenAt(2).availableAt()).isEqualTo(Instant.MAX);
+		assertThat(limiter.tokenAt(2).availableAt()).isEqualTo(NOW.plusSeconds(2));
 		assertThat(limiter.tokenAt(3).availableAt()).isEqualTo(Instant.MAX);
 	}
 
@@ -124,8 +172,8 @@ class LocalTokenRingRateLimiterTest {
 		assertThat(limiter.availablePermits(NOW, 4)).isEqualTo(1);
 		assertThat(limiter.tokenAt(0).availableAt()).isEqualTo(NOW);
 		assertThat(limiter.tokenAt(1).availableAt()).isEqualTo(NOW.plusSeconds(1));
-		assertThat(limiter.tokenAt(2).availableAt()).isEqualTo(NOW.plusSeconds(4));
-		assertThat(limiter.tokenAt(3).availableAt()).isEqualTo(NOW.plusSeconds(5));
+		assertThat(limiter.tokenAt(2).availableAt()).isEqualTo(NOW.plusSeconds(5));
+		assertThat(limiter.tokenAt(3).availableAt()).isEqualTo(NOW.plusSeconds(4));
 	}
 
 	@Test
@@ -151,6 +199,19 @@ class LocalTokenRingRateLimiterTest {
 		}
 
 		assertThat(starts).isEqualTo(2);
+	}
+
+	@Test
+	void timeUntilNextPermitIsZeroWhenPermitIsAvailableAndPositiveWhenBlocked() {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(1);
+		limiter.configure(1, Duration.ofSeconds(1), NOW);
+
+		assertThat(limiter.timeUntilNextPermit(NOW)).isEqualTo(Duration.ZERO);
+
+		limiter.acquire(NOW);
+
+		assertThat(limiter.timeUntilNextPermit(NOW)).isEqualTo(Duration.ofSeconds(1));
+		assertThat(limiter.timeUntilNextPermit(NOW.plusMillis(600))).isEqualTo(Duration.ofMillis(400));
 	}
 
 	@Test
