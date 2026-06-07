@@ -118,7 +118,7 @@ class MangoTasksTest {
 	}
 
 	@Test
-	void rejectsUnconfiguredTaskTypeAndQueuesWhenRateIsNotPositive() {
+	void queuesSuccessfullyWhenRateIsNotPositive() {
 		RecordingRepository repository = new RecordingRepository();
 		MangoSwarmProperties properties = properties();
 		properties.getTaskTypes().get("email").setRate(0);
@@ -127,8 +127,13 @@ class MangoTasksTest {
 		tasks.queue("email", JsonNodeFactory.instance.objectNode());
 
 		assertThat(repository.taskType).isEqualTo("email");
-		ObjectNode payload = JsonNodeFactory.instance.objectNode();
-		assertThatThrownBy(() -> tasks.queue("unknown", payload))
+	}
+
+	@Test
+	void rejectsUnconfiguredTaskType() {
+		MangoTasks tasks = new MangoTasks(new RecordingRepository(), new ObjectMapper(), properties());
+
+		assertThatThrownBy(() -> tasks.queue("unknown", JsonNodeFactory.instance.objectNode()))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("Task type is not configured: unknown");
 	}
@@ -208,9 +213,7 @@ class MangoTasksTest {
 		}
 
 		@Override
-		public void markInProgress(UUID taskId, UUID workerId, Instant now) {
-			// Not needed for these queue-focused tests.
-		}
+		public void markInProgress(UUID taskId, UUID workerId, Instant now) {}
 
 		@Override
 		public void updateRuntime(
@@ -219,35 +222,23 @@ class MangoTasksTest {
 				Instant now,
 				String executionState,
 				Integer progressPercent,
-				String message) {
-			// Not needed for these queue-focused tests.
-		}
+				String message) {}
 
 		@Override
-		public void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description) {
-			// Not needed for these queue-focused tests.
-		}
+		public void recordProgress(UUID taskId, UUID workerId, Instant now, int progressPercent, String description) {}
 
 		@Override
-		public void markCompleted(UUID taskId, UUID workerId, Instant now) {
-			// Not needed for these queue-focused tests.
-		}
+		public void markCompleted(UUID taskId, UUID workerId, Instant now) {}
 
 		@Override
-		public void markFailed(UUID taskId, UUID workerId, Instant now, String errorMessage) {
-			// Not needed for these queue-focused tests.
-		}
+		public void markFailed(UUID taskId, UUID workerId, Instant now, String errorMessage) {}
 
 		@Override
 		public void rescheduleAfterFailure(
-				UUID taskId, UUID workerId, Instant now, Instant availableAt, String errorMessage) {
-			// Not needed for these queue-focused tests.
-		}
+				UUID taskId, UUID workerId, Instant now, Instant availableAt, String errorMessage) {}
 
 		@Override
-		public void requeueClaimed(UUID taskId, UUID workerId, Instant now, Instant availableAt, String reason) {
-			// Not needed for these queue-focused tests.
-		}
+		public void requeueClaimed(UUID taskId, UUID workerId, Instant now, Instant availableAt, String reason) {}
 
 		@Override
 		public int reclaimTimedOut(String taskType, Duration timeout, Instant now, int limit) {

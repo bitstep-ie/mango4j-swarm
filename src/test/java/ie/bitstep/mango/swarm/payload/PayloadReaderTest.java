@@ -1,7 +1,5 @@
 package ie.bitstep.mango.swarm.payload;
 
-import java.util.Objects;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -97,40 +95,5 @@ class PayloadReaderTest {
 				.hasMessageContaining("Payload field 'count' cannot be converted to Integer");
 	}
 
-	private static final class EmailPayload {
-		private final String customerId;
-		private final String email;
-		private final String templateId;
-		private final int priority;
-		private final boolean trackOpens;
-
-		private EmailPayload(String customerId, String email, String templateId, int priority, boolean trackOpens) {
-			this.customerId = customerId;
-			this.email = email;
-			this.templateId = templateId;
-			this.priority = priority;
-			this.trackOpens = trackOpens;
-		}
-
-		@Override
-		public boolean equals(Object other) {
-			if (this == other) {
-				return true;
-			}
-			if (!(other instanceof EmailPayload)) {
-				return false;
-			}
-			EmailPayload that = (EmailPayload) other;
-			return priority == that.priority
-					&& trackOpens == that.trackOpens
-					&& Objects.equals(customerId, that.customerId)
-					&& Objects.equals(email, that.email)
-					&& Objects.equals(templateId, that.templateId);
-		}
-
-		@Override
-		public int hashCode() {
-			return Objects.hash(customerId, email, templateId, priority, trackOpens);
-		}
-	}
+	private record EmailPayload(String customerId, String email, String templateId, int priority, boolean trackOpens) {}
 }

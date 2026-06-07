@@ -32,7 +32,8 @@ class MangoSwarmAutoConfigurationTest {
 		TaskHandlerRegistry registry = configuration.mangoTaskHandlerRegistry(List.of(), properties);
 
 		MangoTasks tasks = configuration.mangoTasks(taskRepository, objectMapper, properties);
-		MangoSwarmDaemon daemon = configuration.mangoSwarmDaemon(workerRegistry, taskRepository, registry, properties);
+		MangoSwarmDaemon daemon =
+				configuration.mangoSwarmDaemon(workerRegistry, taskRepository, registry, properties, objectMapper);
 
 		assertThat(objectMapper).isNotNull();
 		assertThat(registry.taskTypes()).isEmpty();

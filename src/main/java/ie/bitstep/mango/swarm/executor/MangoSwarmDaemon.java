@@ -14,7 +14,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ie.bitstep.mango.swarm.TaskExecutionContext;
@@ -24,8 +24,6 @@ import ie.bitstep.mango.swarm.db.TaskRecord;
 import ie.bitstep.mango.swarm.db.TaskRepository;
 import ie.bitstep.mango.swarm.handler.TaskHandler;
 import ie.bitstep.mango.swarm.handler.TaskHandlerRegistry;
-import ie.bitstep.mango.swarm.payload.PayloadExtractionException;
-import ie.bitstep.mango.swarm.payload.PayloadExtractor;
 import ie.bitstep.mango.swarm.payload.PayloadReader;
 import ie.bitstep.mango.swarm.rate.LocalTokenRingRateLimiter;
 import ie.bitstep.mango.swarm.worker.WorkerRegistry;
@@ -45,32 +43,35 @@ public class MangoSwarmDaemon {
 	private final TaskRepository taskRepository;
 	private final TaskHandlerRegistry handlerRegistry;
 	private final MangoSwarmProperties properties;
+	private final ObjectMapper objectMapper;
 	private final UUID workerId = UUID.randomUUID();
 	private final Instant startedAt = Instant.now();
 	private final String hostname = resolveHostname();
 	private final Map<String, LocalTokenRingRateLimiter> startRateLimiters = new LinkedHashMap<>();
-	private final TaskConcurrencyTracker taskConcurrencyTracker;
+	private final Map<String, Semaphore> typeSemaphores;
 	private final ExecutorService executorService;
 	private final Semaphore executorCapacity;
 	private final AtomicBoolean running = new AtomicBoolean(false);
 	private final int runtimeProgressThresholdPercent;
 	private final Duration runtimeMinUpdateInterval;
-	private Thread daemonThread;
-	private volatile int activeWorkers = 1;
-	private volatile Instant lastHeartbeat = Instant.EPOCH;
-	private volatile Instant lastCleanup = Instant.EPOCH;
-	private volatile Instant lastTimeoutRecovery = Instant.EPOCH;
+	private volatile Thread daemonThread;
+	private int activeWorkers = 1;
+	private Instant lastHeartbeat = Instant.EPOCH;
+	private Instant lastCleanup = Instant.EPOCH;
+	private Instant lastTimeoutRecovery = Instant.EPOCH;
 	private int consecutiveEmptyPolls = 0;
 
 	public MangoSwarmDaemon(
 			WorkerRegistry workerRegistry,
 			TaskRepository taskRepository,
 			TaskHandlerRegistry handlerRegistry,
-			MangoSwarmProperties properties) {
+			MangoSwarmProperties properties,
+			ObjectMapper objectMapper) {
 		this.workerRegistry = workerRegistry;
 		this.taskRepository = taskRepository;
 		this.handlerRegistry = handlerRegistry;
 		this.properties = properties;
+		this.objectMapper = objectMapper;
 		this.executorService = ExecutorFactory.create(properties.getExecutor());
 		boolean virtual = properties.getExecutor().getVirtualThreads() != MangoSwarmProperties.VirtualThreads.DISABLED
 				&& ExecutorFactory.virtualThreadsAvailable();
@@ -80,9 +81,11 @@ public class MangoSwarmDaemon {
 		this.runtimeProgressThresholdPercent =
 				Math.max(0, properties.getRuntime().getProgressThresholdPercent());
 		this.runtimeMinUpdateInterval = positiveOrZero(properties.getRuntime().getMinUpdateInterval());
-		Map<String, Integer> limits = new LinkedHashMap<>();
-		properties.getTaskTypes().forEach((type, config) -> limits.put(type, Math.max(1, config.getConcurrency())));
-		this.taskConcurrencyTracker = new TaskConcurrencyTracker(limits);
+		Map<String, Semaphore> semaphores = new LinkedHashMap<>();
+		properties
+				.getTaskTypes()
+				.forEach((type, config) -> semaphores.put(type, new Semaphore(Math.max(1, config.getConcurrency()))));
+		this.typeSemaphores = Map.copyOf(semaphores);
 		properties
 				.getTaskTypes()
 				.forEach((type, config) ->
@@ -99,8 +102,14 @@ public class MangoSwarmDaemon {
 
 	public void stop() {
 		running.set(false);
-		if (daemonThread != null) {
-			daemonThread.interrupt();
+		Thread thread = daemonThread;
+		if (thread != null) {
+			thread.interrupt();
+			try {
+				thread.join(5_000);
+			} catch (InterruptedException ex) {
+				Thread.currentThread().interrupt();
+			}
 		}
 		executorService.shutdown();
 		try {
@@ -186,13 +195,14 @@ public class MangoSwarmDaemon {
 		if (pollState.attemptedAnyClaim) {
 			consecutiveEmptyPolls++;
 			Duration backoff = emptyQueueBackoff(properties.getExecutor().getPollInterval(), consecutiveEmptyPolls);
+			Duration sleep = minPositive(backoff, pollState.nextRateLimitedPoll);
 			log.debug(
 					"swarm empty-queue backoff: workerId={}, consecutiveEmptyPolls={}, base={}, sleep={}",
 					workerId,
 					consecutiveEmptyPolls,
 					properties.getExecutor().getPollInterval(),
-					backoff);
-			return backoff;
+					sleep);
+			return sleep;
 		}
 		if (pollState.nextRateLimitedPoll != null) {
 			return pollState.nextRateLimitedPoll;
@@ -204,18 +214,21 @@ public class MangoSwarmDaemon {
 		if (base == null || base.isNegative() || base.isZero()) {
 			return Duration.ZERO;
 		}
-		Duration delay = base;
-		int steps = Math.max(0, consecutiveEmptyPolls - 1);
-		for (int i = 0; i < steps; i++) {
-			if (delay.compareTo(MAX_EMPTY_QUEUE_BACKOFF) >= 0) {
-				return MAX_EMPTY_QUEUE_BACKOFF;
-			}
-			delay = delay.multipliedBy(2);
-			if (delay.compareTo(MAX_EMPTY_QUEUE_BACKOFF) >= 0) {
-				return MAX_EMPTY_QUEUE_BACKOFF;
-			}
+		long nanos = base.toNanos();
+		long maxNanos = MAX_EMPTY_QUEUE_BACKOFF.toNanos();
+		if (nanos >= maxNanos) {
+			return MAX_EMPTY_QUEUE_BACKOFF;
 		}
-		return delay;
+		int steps = Math.max(0, consecutiveEmptyPolls - 1);
+		if (steps == 0) {
+			return base;
+		}
+		int maxSafeShift = Long.numberOfLeadingZeros(nanos) - 1;
+		if (steps > maxSafeShift) {
+			return MAX_EMPTY_QUEUE_BACKOFF;
+		}
+		long scaled = nanos << steps;
+		return scaled >= maxNanos ? MAX_EMPTY_QUEUE_BACKOFF : Duration.ofNanos(scaled);
 	}
 
 	int calculateBatchSize(String taskType, MangoSwarmProperties.TaskType config, double effectiveRate, Instant now) {
@@ -224,7 +237,7 @@ public class MangoSwarmDaemon {
 
 	private BatchDecision decideBatchSize(
 			String taskType, MangoSwarmProperties.TaskType config, double effectiveRate, Instant now) {
-		int remainingTypeCapacity = taskConcurrencyTracker.remaining(taskType);
+		int remainingTypeCapacity = typeSemaphores.get(taskType).availablePermits();
 		int remainingExecutorCapacity = executorCapacity.availablePermits();
 		int configuredBatch = configuredBatch(config, effectiveRate);
 		LocalTokenRingRateLimiter startLimiter = startRateLimiters.get(taskType);
@@ -361,7 +374,8 @@ public class MangoSwarmDaemon {
 	}
 
 	private DispatchDecision dispatch(TaskRecord task, Instant now) {
-		if (!taskConcurrencyTracker.tryAcquire(task.taskType())) {
+		Semaphore typeSemaphore = typeSemaphores.get(task.taskType());
+		if (!typeSemaphore.tryAcquire()) {
 			taskRepository.requeueClaimed(
 					task.id(), workerId, now, now, "Local task-type concurrency unavailable; returned to queue");
 			log.debug(
@@ -372,7 +386,7 @@ public class MangoSwarmDaemon {
 			return DispatchDecision.notDispatchedDecision();
 		}
 		if (!executorCapacity.tryAcquire()) {
-			taskConcurrencyTracker.release(task.taskType());
+			typeSemaphore.release();
 			taskRepository.requeueClaimed(
 					task.id(), workerId, now, now, "Local executor capacity unavailable; returned to queue");
 			log.debug(
@@ -386,7 +400,7 @@ public class MangoSwarmDaemon {
 				startRateLimiters.get(task.taskType()).acquire(now);
 		if (!token.granted()) {
 			executorCapacity.release();
-			taskConcurrencyTracker.release(task.taskType());
+			typeSemaphore.release();
 			taskRepository.requeueClaimed(
 					task.id(), workerId, now, now, "Local rate token unavailable; returned to queue");
 			log.debug(
@@ -408,7 +422,7 @@ public class MangoSwarmDaemon {
 				taskRepository.markInProgress(task.id(), workerId, Instant.now());
 				executeTask(task);
 			} finally {
-				taskConcurrencyTracker.release(task.taskType());
+				typeSemaphore.release();
 				executorCapacity.release();
 			}
 		});
@@ -427,7 +441,7 @@ public class MangoSwarmDaemon {
 					task.id(),
 					workerId,
 					task.attemptCount());
-			T payload = extractPayload(task.payload(), handler.payloadExtractor());
+			T payload = handler.payloadExtractor().extract(new PayloadReader(task.payload(), objectMapper));
 			TaskExecutionContext<T> context = new TaskExecutionContext<>(
 					task.id(),
 					task.taskType(),
@@ -539,10 +553,6 @@ public class MangoSwarmDaemon {
 			}
 		}
 		return null;
-	}
-
-	private <T> T extractPayload(JsonNode payload, PayloadExtractor<T> extractor) throws PayloadExtractionException {
-		return extractor.extract(new PayloadReader(payload));
 	}
 
 	private final class RuntimeProgressReporter implements TaskExecutionContext.ProgressReporter {

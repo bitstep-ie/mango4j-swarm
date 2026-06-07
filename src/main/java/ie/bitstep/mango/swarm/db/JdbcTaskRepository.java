@@ -543,9 +543,7 @@ LIMIT ?
 				}
 			}
 			try (PreparedStatement insert = connection.prepareStatement(INSERT_RUNTIME_H2_SQL)) {
-				bindRuntimeInsert(
-						insert,
-						new RuntimeParameters(taskId, workerId, now, executionState, progressPercent, message, 0L));
+				bindRuntimeInsert(insert, taskId, workerId, now, executionState, progressPercent, message, 0L);
 				insert.executeUpdate();
 			}
 			return;
@@ -553,37 +551,35 @@ LIMIT ?
 		try (PreparedStatement statement = connection.prepareStatement(UPSERT_RUNTIME_SQL)) {
 			bindRuntimeInsert(
 					statement,
-					new RuntimeParameters(
-							taskId,
-							workerId,
-							now,
-							executionState,
-							progressPercent,
-							message,
-							executionTimeMillis(connection, taskId, now)));
+					taskId,
+					workerId,
+					now,
+					executionState,
+					progressPercent,
+					message,
+					executionTimeMillis(connection, taskId, now));
 			statement.executeUpdate();
 		}
 	}
 
-	private record RuntimeParameters(
+	private static void bindRuntimeInsert(
+			PreparedStatement statement,
 			UUID taskId,
 			UUID workerId,
 			Instant now,
 			String executionState,
 			Integer progressPercent,
 			String message,
-			long executionTimeMillis) {}
-
-	private static void bindRuntimeInsert(PreparedStatement statement, RuntimeParameters parameters)
+			long executionTimeMillis)
 			throws SQLException {
-		statement.setObject(1, parameters.taskId());
-		statement.setObject(2, parameters.workerId());
-		statement.setString(3, truncate(parameters.executionState()));
-		setNullableInteger(statement, 4, parameters.progressPercent());
-		statement.setString(5, truncate(parameters.message()));
-		statement.setTimestamp(6, Timestamp.from(parameters.now()));
-		statement.setTimestamp(7, Timestamp.from(parameters.now()));
-		statement.setLong(8, parameters.executionTimeMillis());
+		statement.setObject(1, taskId);
+		statement.setObject(2, workerId);
+		statement.setString(3, truncate(executionState));
+		setNullableInteger(statement, 4, progressPercent);
+		statement.setString(5, truncate(message));
+		statement.setTimestamp(6, Timestamp.from(now));
+		statement.setTimestamp(7, Timestamp.from(now));
+		statement.setLong(8, executionTimeMillis);
 	}
 
 	private static void setNullableInteger(PreparedStatement statement, int index, Integer value) throws SQLException {

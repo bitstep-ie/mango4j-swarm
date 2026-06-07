@@ -14,12 +14,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>Supports aliases, defaults, nested paths, validation and clear extraction errors.
  */
 public final class PayloadReader {
-	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+	private static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
 
 	private final JsonNode root;
+	private final ObjectMapper objectMapper;
 
 	public PayloadReader(JsonNode root) {
+		this(root, DEFAULT_OBJECT_MAPPER);
+	}
+
+	public PayloadReader(JsonNode root, ObjectMapper objectMapper) {
 		this.root = Objects.requireNonNull(root, "root");
+		this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
 	}
 
 	/**
@@ -55,7 +61,7 @@ public final class PayloadReader {
 			JsonNode node = find(path);
 			if (node != null && !node.isNull() && !node.isMissingNode()) {
 				try {
-					return Optional.of(OBJECT_MAPPER.convertValue(node, type));
+					return Optional.of(objectMapper.convertValue(node, type));
 				} catch (IllegalArgumentException ex) {
 					throw new PayloadExtractionException(
 							"Payload field '" + path + "' cannot be converted to " + type.getSimpleName(), ex);

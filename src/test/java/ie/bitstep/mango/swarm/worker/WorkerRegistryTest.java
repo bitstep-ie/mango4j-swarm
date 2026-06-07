@@ -10,8 +10,11 @@ import ie.bitstep.mango.swarm.H2TestSupport;
 import ie.bitstep.mango.swarm.db.SchemaQualifiedTables;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class WorkerRegistryTest extends H2TestSupport {
@@ -73,6 +76,42 @@ class WorkerRegistryTest extends H2TestSupport {
 	}
 
 	@Test
+	void heartbeatInsertsNewWorkerWhenUpdateFindsNoExistingRow() throws Exception {
+		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+		java.sql.Connection connection = mock(java.sql.Connection.class);
+		java.sql.PreparedStatement updateStatement = mock(java.sql.PreparedStatement.class);
+		java.sql.PreparedStatement insertStatement = mock(java.sql.PreparedStatement.class);
+		java.sql.PreparedStatement deleteStatement = mock(java.sql.PreparedStatement.class);
+		java.sql.PreparedStatement countStatement = mock(java.sql.PreparedStatement.class);
+		java.sql.ResultSet resultSet = mock(java.sql.ResultSet.class);
+		when(connection.prepareStatement(contains("UPDATE mango_swarm_workers SET")))
+				.thenReturn(updateStatement);
+		when(connection.prepareStatement(contains("INSERT INTO mango_swarm_workers")))
+				.thenReturn(insertStatement);
+		when(connection.prepareStatement(contains("DELETE FROM mango_swarm_workers")))
+				.thenReturn(deleteStatement);
+		when(connection.prepareStatement(contains("SELECT count(*)"))).thenReturn(countStatement);
+		when(updateStatement.executeUpdate()).thenReturn(0);
+		when(insertStatement.executeUpdate()).thenReturn(1);
+		when(deleteStatement.executeUpdate()).thenReturn(0);
+		when(countStatement.executeQuery()).thenReturn(resultSet);
+		when(resultSet.next()).thenReturn(true);
+		when(resultSet.getInt(1)).thenReturn(1);
+		when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Integer>>any()))
+				.thenAnswer(invocation ->
+						invocation.<ConnectionCallback<Integer>>getArgument(0).doInConnection(connection));
+		JdbcWorkerRegistry registry =
+				new JdbcWorkerRegistry(jdbcTemplate, java.time.Duration.ofSeconds(30), new SchemaQualifiedTables(null));
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+		assertThatCode(() -> registry.heartbeat(UUID.randomUUID(), "node-a", now, now))
+				.doesNotThrowAnyException();
+
+		verify(updateStatement).executeUpdate();
+		verify(insertStatement).executeUpdate();
+	}
+
+	@Test
 	void heartbeatCallbacksReturnAffectedRowCounts() throws Exception {
 		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
 		java.sql.Connection connection = mock(java.sql.Connection.class);
@@ -80,7 +119,7 @@ class WorkerRegistryTest extends H2TestSupport {
 		java.sql.ResultSet resultSet = mock(java.sql.ResultSet.class);
 		when(connection.prepareStatement(org.mockito.ArgumentMatchers.anyString()))
 				.thenReturn(statement);
-		when(statement.executeUpdate()).thenReturn(0, 1, 1);
+		when(statement.executeUpdate()).thenReturn(1, 1);
 		when(statement.executeQuery()).thenReturn(resultSet);
 		when(resultSet.next()).thenReturn(true);
 		when(resultSet.getInt(1)).thenReturn(2);
@@ -91,10 +130,10 @@ class WorkerRegistryTest extends H2TestSupport {
 							.<ConnectionCallback<Integer>>getArgument(0)
 							.doInConnection(connection);
 					int call = calls.incrementAndGet();
-					if (call == 2 || call == 3) {
+					if (call == 1 || call == 2) {
 						assertThat(result).isEqualTo(1);
 					}
-					if (call == 4) {
+					if (call == 3) {
 						assertThat(result).isEqualTo(2);
 					}
 					return result;
@@ -106,6 +145,6 @@ class WorkerRegistryTest extends H2TestSupport {
 		int activeWorkers = registry.heartbeat(UUID.randomUUID(), "node-a", now, now);
 
 		assertThat(activeWorkers).isEqualTo(2);
-		assertThat(calls.get()).isEqualTo(4);
+		assertThat(calls.get()).isEqualTo(3);
 	}
 }

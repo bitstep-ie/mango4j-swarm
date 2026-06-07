@@ -12,13 +12,29 @@ import ie.bitstep.mango.swarm.config.MangoSwarmProperties;
 
 final class ExecutorFactory {
 	private static final String WORKER_THREAD_PREFIX = "swarm-worker-";
-	private static final boolean VIRTUAL_THREADS_AVAILABLE = false;
+	private static final boolean VIRTUAL_THREADS_AVAILABLE;
+
+	static {
+		boolean available;
+		try {
+			Thread.class.getMethod("ofVirtual");
+			available = true;
+		} catch (NoSuchMethodException ignored) {
+			available = false;
+		}
+		VIRTUAL_THREADS_AVAILABLE = available;
+	}
 
 	private ExecutorFactory() {
 		throw new AssertionError("No instances");
 	}
 
 	static ExecutorService create(MangoSwarmProperties.Executor config) {
+		boolean virtual =
+				config.getVirtualThreads() != MangoSwarmProperties.VirtualThreads.DISABLED && VIRTUAL_THREADS_AVAILABLE;
+		if (virtual) {
+			return createVirtualThreadExecutor();
+		}
 		int maxThreads = resolveMaxThreads(config.getMaxThreads(), false);
 		ThreadPoolExecutor.AbortPolicy abortPolicy = new ThreadPoolExecutor.AbortPolicy();
 		return new ThreadPoolExecutor(
@@ -31,6 +47,22 @@ final class ExecutorFactory {
 				config.getQueueStrategy() == MangoSwarmProperties.QueueStrategy.ABORT
 						? abortPolicy
 						: new ThreadPoolExecutor.CallerRunsPolicy());
+	}
+
+	private static ExecutorService createVirtualThreadExecutor() {
+		try {
+			Object builder = Thread.class.getMethod("ofVirtual").invoke(null);
+			builder = builder.getClass()
+					.getMethod("name", String.class, long.class)
+					.invoke(builder, WORKER_THREAD_PREFIX, 1L);
+			ThreadFactory factory =
+					(ThreadFactory) builder.getClass().getMethod("factory").invoke(builder);
+			return (ExecutorService) Executors.class
+					.getMethod("newThreadPerTaskExecutor", ThreadFactory.class)
+					.invoke(null, factory);
+		} catch (ReflectiveOperationException ex) {
+			throw new IllegalStateException("Virtual thread executor creation failed", ex);
+		}
 	}
 
 	static int resolveMaxThreads(String value, boolean virtualThreads) {

@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
@@ -14,6 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.Test;
 import ie.bitstep.mango.swarm.TaskExecutionContext;
@@ -539,7 +541,8 @@ class MangoSwarmDaemonTest {
 		awaitCounter(() -> repository.completedTaskCalls, 1);
 		assertThat(repository.markInProgressCalls).isEqualTo(1);
 		assertThat(repository.completedTaskCalls).isEqualTo(1);
-		assertThat(((TaskConcurrencyTracker) fieldValue(daemon, "taskConcurrencyTracker")).remaining("email"))
+		assertThat(((Map<?, ?>) fieldValue(daemon, "typeSemaphores")).get("email"))
+				.extracting(s -> ((Semaphore) s).availablePermits())
 				.isEqualTo(1);
 		assertThat(((Semaphore) fieldValue(daemon, "executorCapacity")).availablePermits())
 				.isEqualTo(1);
@@ -583,22 +586,24 @@ class MangoSwarmDaemonTest {
 		MangoSwarmProperties properties = properties(10, 1, 1);
 		FakeRepository repository = new FakeRepository(0);
 		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
-		TaskConcurrencyTracker tracker = (TaskConcurrencyTracker) fieldValue(daemon, "taskConcurrencyTracker");
-		assertThat(tracker.tryAcquire("email")).isTrue();
+		Semaphore emailSemaphore = ((Map<String, Semaphore>) fieldValue(daemon, "typeSemaphores")).get("email");
+		assertThat(emailSemaphore.tryAcquire()).isTrue();
 		TaskRecord task = taskRecord("email", Instant.parse("2026-05-20T10:00:00Z"));
+		try {
+			Object dispatchDecision = invokeInstance(
+					daemon,
+					"dispatch",
+					new Class<?>[] {TaskRecord.class, Instant.class},
+					task,
+					Instant.parse("2026-05-20T10:00:00Z"));
 
-		Object dispatchDecision = invokeInstance(
-				daemon,
-				"dispatch",
-				new Class<?>[] {TaskRecord.class, Instant.class},
-				task,
-				Instant.parse("2026-05-20T10:00:00Z"));
-
-		assertThat(invokeAccessor(dispatchDecision, "dispatched")).isEqualTo(false);
-		assertThat(repository.requeueCalls).isEqualTo(1);
-		assertThat(repository.lastRequeueReason).contains("task-type concurrency");
-		tracker.release("email");
-		daemon.stop();
+			assertThat(invokeAccessor(dispatchDecision, "dispatched")).isEqualTo(false);
+			assertThat(repository.requeueCalls).isEqualTo(1);
+			assertThat(repository.lastRequeueReason).contains("task-type concurrency");
+		} finally {
+			emailSemaphore.release();
+			daemon.stop();
+		}
 	}
 
 	@Test
@@ -610,21 +615,24 @@ class MangoSwarmDaemonTest {
 		Semaphore executorCapacity = (Semaphore) fieldValue(daemon, "executorCapacity");
 		assertThat(executorCapacity.tryAcquire()).isTrue();
 		TaskRecord task = taskRecord("email", Instant.parse("2026-05-20T10:00:00Z"));
+		try {
+			Object dispatchDecision = invokeInstance(
+					daemon,
+					"dispatch",
+					new Class<?>[] {TaskRecord.class, Instant.class},
+					task,
+					Instant.parse("2026-05-20T10:00:00Z"));
 
-		Object dispatchDecision = invokeInstance(
-				daemon,
-				"dispatch",
-				new Class<?>[] {TaskRecord.class, Instant.class},
-				task,
-				Instant.parse("2026-05-20T10:00:00Z"));
-
-		assertThat(invokeAccessor(dispatchDecision, "dispatched")).isEqualTo(false);
-		assertThat(repository.requeueCalls).isEqualTo(1);
-		assertThat(repository.lastRequeueReason).contains("executor capacity");
-		assertThat(((TaskConcurrencyTracker) fieldValue(daemon, "taskConcurrencyTracker")).remaining("email"))
-				.isEqualTo(1);
-		executorCapacity.release();
-		daemon.stop();
+			assertThat(invokeAccessor(dispatchDecision, "dispatched")).isEqualTo(false);
+			assertThat(repository.requeueCalls).isEqualTo(1);
+			assertThat(repository.lastRequeueReason).contains("executor capacity");
+			assertThat(((Map<?, ?>) fieldValue(daemon, "typeSemaphores")).get("email"))
+					.extracting(s -> ((Semaphore) s).availablePermits())
+					.isEqualTo(1);
+		} finally {
+			executorCapacity.release();
+			daemon.stop();
+		}
 	}
 
 	@Test
@@ -801,7 +809,7 @@ class MangoSwarmDaemonTest {
 	}
 
 	@Test
-	void privateTimingHelpersHandleNullZeroAndPositiveDurations() {
+	void emptyQueueBackoffIsZeroForNullNegativeAndZeroIntervals() {
 		assertThat(MangoSwarmDaemon.emptyQueueBackoff(null, 1)).isEqualTo(Duration.ZERO);
 		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofMillis(-1), 1)).isEqualTo(Duration.ZERO);
 		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ZERO, 1)).isEqualTo(Duration.ZERO);
@@ -809,7 +817,10 @@ class MangoSwarmDaemonTest {
 				.isEqualTo(Duration.ofMillis(250));
 		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofSeconds(3), 2)).isEqualTo(Duration.ofSeconds(5));
 		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofMillis(1), 20)).isEqualTo(Duration.ofSeconds(5));
+	}
 
+	@Test
+	void minPositiveSelectsSmallerPositiveOrNonNullOperand() {
 		assertThat(MangoSwarmDaemon.minPositive(null, Duration.ZERO)).isNull();
 		assertThat(MangoSwarmDaemon.minPositive(null, Duration.ofMillis(5))).isEqualTo(Duration.ofMillis(5));
 		assertThat(MangoSwarmDaemon.minPositive(Duration.ofMillis(10), Duration.ZERO))
@@ -818,11 +829,17 @@ class MangoSwarmDaemonTest {
 				.isEqualTo(Duration.ofMillis(5));
 		assertThat(MangoSwarmDaemon.minPositive(Duration.ofMillis(10), Duration.ofMillis(50)))
 				.isEqualTo(Duration.ofMillis(10));
+	}
 
+	@Test
+	void isPositiveReturnsFalseForNullAndZero() {
 		assertThat(MangoSwarmDaemon.isPositive(null)).isFalse();
 		assertThat(MangoSwarmDaemon.isPositive(Duration.ZERO)).isFalse();
 		assertThat(MangoSwarmDaemon.isPositive(Duration.ofNanos(1))).isTrue();
+	}
 
+	@Test
+	void sleepIfPositiveDoesNotThrow() {
 		assertThatCode(() -> {
 					MangoSwarmDaemon.sleepIfPositive(Duration.ZERO);
 					MangoSwarmDaemon.sleepIfPositive(Duration.ofNanos(1));
@@ -842,7 +859,7 @@ class MangoSwarmDaemonTest {
 			TaskHandler<?> handler) {
 		TaskHandlerRegistry registry = new TaskHandlerRegistry(
 				List.of(handler), properties.getTaskTypes().keySet(), false);
-		return new MangoSwarmDaemon(workers, repository, registry, properties);
+		return new MangoSwarmDaemon(workers, repository, registry, properties, new ObjectMapper());
 	}
 
 	private static MangoSwarmProperties properties(int rate, int concurrency, int batchSize) {

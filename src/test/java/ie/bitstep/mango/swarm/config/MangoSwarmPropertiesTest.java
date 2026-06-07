@@ -66,48 +66,42 @@ class MangoSwarmPropertiesTest {
 
 	@Test
 	void nestedSettersRoundTripConfiguredValues() {
-		MangoSwarmProperties.Database database = new MangoSwarmProperties.Database();
-		database.setSchema("app_schema");
-		database.setApplySchemaToHibernateDefault(false);
+		MangoSwarmProperties properties = new MangoSwarmProperties();
 
-		MangoSwarmProperties.Worker worker = new MangoSwarmProperties.Worker();
-		worker.setHeartbeatInterval(Duration.ofSeconds(2));
-		worker.setStaleAfter(Duration.ofSeconds(9));
+		properties.getDatabase().setSchema("app_schema");
+		properties.getDatabase().setApplySchemaToHibernateDefault(false);
+		properties.getWorker().setHeartbeatInterval(Duration.ofSeconds(2));
+		properties.getWorker().setStaleAfter(Duration.ofSeconds(9));
+		properties.getCleanup().setEnabled(false);
+		properties.getCleanup().setInterval(Duration.ofMinutes(2));
+		properties.getCleanup().setCompletedRetention(Duration.ofDays(7));
+		properties.getCleanup().setFailedRetention(Duration.ofDays(8));
+		properties.getCleanup().setBatchSize(500);
+		properties.getExecutor().setMaxThreads("32");
+		properties.getExecutor().setPollInterval(Duration.ofMillis(25));
+		properties.getExecutor().setQueueStrategy(MangoSwarmProperties.QueueStrategy.ABORT);
+		properties.getExecutor().setVirtualThreads(MangoSwarmProperties.VirtualThreads.DISABLED);
+		properties.getRetry().setBaseDelay(Duration.ofSeconds(3));
+		properties.getRetry().setMultiplier(3.5d);
+		properties.getRetry().setMaxDelay(Duration.ofMinutes(4));
 
-		MangoSwarmProperties.Cleanup cleanup = new MangoSwarmProperties.Cleanup();
-		cleanup.setEnabled(false);
-		cleanup.setInterval(Duration.ofMinutes(2));
-		cleanup.setCompletedRetention(Duration.ofDays(7));
-		cleanup.setFailedRetention(Duration.ofDays(8));
-		cleanup.setBatchSize(500);
-
-		MangoSwarmProperties.Executor executor = new MangoSwarmProperties.Executor();
-		executor.setMaxThreads("32");
-		executor.setPollInterval(Duration.ofMillis(25));
-		executor.setQueueStrategy(MangoSwarmProperties.QueueStrategy.ABORT);
-		executor.setVirtualThreads(MangoSwarmProperties.VirtualThreads.DISABLED);
-
-		MangoSwarmProperties.Retry retry = new MangoSwarmProperties.Retry();
-		retry.setBaseDelay(Duration.ofSeconds(3));
-		retry.setMultiplier(3.5d);
-		retry.setMaxDelay(Duration.ofMinutes(4));
-
-		assertThat(database.getSchema()).isEqualTo("app_schema");
-		assertThat(database.isApplySchemaToHibernateDefault()).isFalse();
-		assertThat(worker.getHeartbeatInterval()).isEqualTo(Duration.ofSeconds(2));
-		assertThat(worker.getStaleAfter()).isEqualTo(Duration.ofSeconds(9));
-		assertThat(cleanup.isEnabled()).isFalse();
-		assertThat(cleanup.getInterval()).isEqualTo(Duration.ofMinutes(2));
-		assertThat(cleanup.getCompletedRetention()).isEqualTo(Duration.ofDays(7));
-		assertThat(cleanup.getFailedRetention()).isEqualTo(Duration.ofDays(8));
-		assertThat(cleanup.getBatchSize()).isEqualTo(500);
-		assertThat(executor.getMaxThreads()).isEqualTo("32");
-		assertThat(executor.getPollInterval()).isEqualTo(Duration.ofMillis(25));
-		assertThat(executor.getQueueStrategy()).isEqualTo(MangoSwarmProperties.QueueStrategy.ABORT);
-		assertThat(executor.getVirtualThreads()).isEqualTo(MangoSwarmProperties.VirtualThreads.DISABLED);
-		assertThat(retry.getBaseDelay()).isEqualTo(Duration.ofSeconds(3));
-		assertThat(retry.getMultiplier()).isEqualTo(3.5d);
-		assertThat(retry.getMaxDelay()).isEqualTo(Duration.ofMinutes(4));
+		assertThat(properties.getDatabase().getSchema()).isEqualTo("app_schema");
+		assertThat(properties.getDatabase().isApplySchemaToHibernateDefault()).isFalse();
+		assertThat(properties.getWorker().getHeartbeatInterval()).isEqualTo(Duration.ofSeconds(2));
+		assertThat(properties.getWorker().getStaleAfter()).isEqualTo(Duration.ofSeconds(9));
+		assertThat(properties.getCleanup().isEnabled()).isFalse();
+		assertThat(properties.getCleanup().getInterval()).isEqualTo(Duration.ofMinutes(2));
+		assertThat(properties.getCleanup().getCompletedRetention()).isEqualTo(Duration.ofDays(7));
+		assertThat(properties.getCleanup().getFailedRetention()).isEqualTo(Duration.ofDays(8));
+		assertThat(properties.getCleanup().getBatchSize()).isEqualTo(500);
+		assertThat(properties.getExecutor().getMaxThreads()).isEqualTo("32");
+		assertThat(properties.getExecutor().getPollInterval()).isEqualTo(Duration.ofMillis(25));
+		assertThat(properties.getExecutor().getQueueStrategy()).isEqualTo(MangoSwarmProperties.QueueStrategy.ABORT);
+		assertThat(properties.getExecutor().getVirtualThreads())
+				.isEqualTo(MangoSwarmProperties.VirtualThreads.DISABLED);
+		assertThat(properties.getRetry().getBaseDelay()).isEqualTo(Duration.ofSeconds(3));
+		assertThat(properties.getRetry().getMultiplier()).isEqualTo(3.5d);
+		assertThat(properties.getRetry().getMaxDelay()).isEqualTo(Duration.ofMinutes(4));
 	}
 
 	@Test

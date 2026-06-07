@@ -11,6 +11,7 @@ import ie.bitstep.mango.swarm.config.MangoSwarmProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class ExecutorFactoryTest {
 
@@ -24,6 +25,7 @@ class ExecutorFactoryTest {
 
 	@Test
 	void virtualThreadsAreUnavailableForJavaSeventeenBuild() {
+		assumeTrue(Runtime.version().feature() < 21, "only applies to Java < 21");
 		assertThat(ExecutorFactory.virtualThreadsAvailable()).isFalse();
 	}
 
@@ -56,14 +58,15 @@ class ExecutorFactoryTest {
 		config.setQueueStrategy(MangoSwarmProperties.QueueStrategy.ABORT);
 		var executor = ExecutorFactory.create(config);
 		CountDownLatch release = new CountDownLatch(1);
+		try {
+			executor.submit(() -> await(release));
+			executor.submit(() -> {});
 
-		executor.submit(() -> await(release));
-		executor.submit(() -> {});
-
-		assertThatThrownBy(() -> executor.submit(() -> {})).isInstanceOf(RejectedExecutionException.class);
-
-		release.countDown();
-		executor.shutdownNow();
+			assertThatThrownBy(() -> executor.submit(() -> {})).isInstanceOf(RejectedExecutionException.class);
+		} finally {
+			release.countDown();
+			executor.shutdownNow();
+		}
 	}
 
 	@Test
@@ -74,16 +77,18 @@ class ExecutorFactoryTest {
 		config.setQueueStrategy(MangoSwarmProperties.QueueStrategy.CALLER_RUNS);
 		var executor = ExecutorFactory.create(config);
 		CountDownLatch release = new CountDownLatch(1);
-
-		executor.submit(() -> await(release));
-		executor.submit(() -> {});
 		String callerThread = Thread.currentThread().getName();
-		String overflowThread =
-				executor.submit(() -> Thread.currentThread().getName()).get(5, TimeUnit.SECONDS);
+		try {
+			executor.submit(() -> await(release));
+			executor.submit(() -> {});
+			String overflowThread =
+					executor.submit(() -> Thread.currentThread().getName()).get(5, TimeUnit.SECONDS);
 
-		release.countDown();
-		executor.shutdownNow();
-		assertThat(overflowThread).isEqualTo(callerThread);
+			assertThat(overflowThread).isEqualTo(callerThread);
+		} finally {
+			release.countDown();
+			executor.shutdownNow();
+		}
 	}
 
 	private static void await(CountDownLatch latch) {

@@ -22,27 +22,26 @@ public record SchemaQualifiedTables(String schema) {
 	}
 
 	public <T> T withSearchPath(Connection connection, SqlWork<T> work) throws SQLException {
-		if (schema == null) {
-			return work.execute(connection);
-		}
-		boolean autoCommit = connection.getAutoCommit();
-		if (autoCommit) {
+		boolean manageTransaction = connection.getAutoCommit();
+		if (manageTransaction) {
 			connection.setAutoCommit(false);
 		}
 		try {
-			applySearchPath(connection);
+			if (schema != null) {
+				applySearchPath(connection);
+			}
 			T result = work.execute(connection);
-			if (autoCommit) {
+			if (manageTransaction) {
 				connection.commit();
 			}
 			return result;
 		} catch (SQLException | RuntimeException ex) {
-			if (autoCommit) {
+			if (manageTransaction) {
 				connection.rollback();
 			}
 			throw ex;
 		} finally {
-			if (autoCommit) {
+			if (manageTransaction) {
 				connection.setAutoCommit(true);
 			}
 		}

@@ -1,7 +1,9 @@
 package ie.bitstep.mango.swarm;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 
@@ -23,15 +25,14 @@ class UuidV7Test {
 	}
 
 	@Test
-	void generatedIdsUseRandomBitsWithinUuidV7Layout() {
+	void generatedIdsAreUnique() {
 		Instant now = Instant.parse("2026-05-25T10:15:30.123Z");
 
-		UUID first = UuidV7.generate(now);
-		UUID second = UuidV7.generate(now);
+		List<UUID> ids =
+				IntStream.range(0, 100).mapToObj(i -> UuidV7.generate(now)).toList();
 
-		assertThat(first).isNotEqualTo(second);
-		assertThat(first.version()).isEqualTo(7);
-		assertThat(second.version()).isEqualTo(7);
+		assertThat(ids).doesNotHaveDuplicates();
+		assertThat(ids).allMatch(id -> id.version() == 7);
 	}
 
 	@Test

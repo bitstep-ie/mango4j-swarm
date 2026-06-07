@@ -74,8 +74,9 @@ public class MangoSwarmAutoConfiguration {
 			WorkerRegistry workerRegistry,
 			TaskRepository taskRepository,
 			TaskHandlerRegistry handlerRegistry,
-			MangoSwarmProperties properties) {
-		return new MangoSwarmDaemon(workerRegistry, taskRepository, handlerRegistry, properties);
+			MangoSwarmProperties properties,
+			ObjectMapper objectMapper) {
+		return new MangoSwarmDaemon(workerRegistry, taskRepository, handlerRegistry, properties, objectMapper);
 	}
 
 	@Bean
