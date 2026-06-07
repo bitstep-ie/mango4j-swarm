@@ -14,14 +14,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>Supports aliases, defaults, nested paths, validation and clear extraction errors.
  */
 public final class PayloadReader {
-	private static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
-
 	private final JsonNode root;
 	private final ObjectMapper objectMapper;
-
-	public PayloadReader(JsonNode root) {
-		this(root, DEFAULT_OBJECT_MAPPER);
-	}
 
 	public PayloadReader(JsonNode root, ObjectMapper objectMapper) {
 		this.root = Objects.requireNonNull(root, "root");

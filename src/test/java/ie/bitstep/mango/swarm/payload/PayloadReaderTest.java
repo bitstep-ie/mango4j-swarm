@@ -18,7 +18,7 @@ class PayloadReaderTest {
 				"userId": "123",
 				"priority": 8
 				}
-				"""));
+				"""), objectMapper);
 
 		EmailPayload payload = new EmailPayload(
 				reader.required(String.class, "customerId", "userId", "customer.id"),
@@ -33,20 +33,19 @@ class PayloadReaderTest {
 
 	@Test
 	void staticExtractorConvenienceWrapsPayloadReader() throws Exception {
-		String customerId = PayloadExtractor.extract(
+		String customerId = new PayloadReader(
 				objectMapper.readTree("""
 				{
 				"customerId": "customer-1"
 				}
-				"""),
-				reader -> reader.required(String.class, "customerId"));
+				"""), objectMapper).required(String.class, "customerId");
 
 		assertThat(customerId).isEqualTo("customer-1");
 	}
 
 	@Test
 	void failsClearlyForMissingRequiredData() throws Exception {
-		PayloadReader reader = new PayloadReader(objectMapper.readTree("{}"));
+		PayloadReader reader = new PayloadReader(objectMapper.readTree("{}"), objectMapper);
 
 		assertThatThrownBy(() -> reader.required(String.class, "customerId", "userId"))
 				.isInstanceOf(PayloadExtractionException.class)
@@ -60,7 +59,7 @@ class PayloadReaderTest {
 				{
 				"priority": 8
 				}
-				"""));
+				"""), objectMapper);
 
 		PayloadReader.OptionalValue<Integer> priority = reader.optional(Integer.class, "priority");
 		PayloadReader.OptionalValue<String> template = reader.optional(String.class, "template");
@@ -83,7 +82,7 @@ class PayloadReaderTest {
 				"priority": -1,
 				"count": "not-a-number"
 				}
-				"""));
+				"""), objectMapper);
 		PayloadReader.OptionalValue<Integer> priority = invalid.optional(Integer.class, "priority");
 
 		assertThatThrownBy(() -> priority.validate(value -> value > 0, "must be positive"))
