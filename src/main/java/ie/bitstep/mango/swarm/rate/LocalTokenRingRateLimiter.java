@@ -2,14 +2,14 @@ package ie.bitstep.mango.swarm.rate;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.LinkedList;
+import java.util.ArrayDeque;
 import java.util.Objects;
 
 /** Fixed-size, object-reusing token ring for local per-worker task start pacing. */
 public final class LocalTokenRingRateLimiter {
 	private final Token[] tokens;
-	private final LinkedList<Token> activeRing = new LinkedList<>();
-	private final LinkedList<Token> blockedRing = new LinkedList<>();
+	private final ArrayDeque<Token> activeRing = new ArrayDeque<>();
+	private final ArrayDeque<Token> blockedRing = new ArrayDeque<>();
 	private Duration spacing = Duration.ofSeconds(1);
 	private boolean disabled = true;
 	private boolean initialized;
