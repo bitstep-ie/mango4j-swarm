@@ -72,9 +72,14 @@ public class MangoSwarmDaemon {
 		this.handlerRegistry = handlerRegistry;
 		this.properties = properties;
 		this.objectMapper = objectMapper;
-		this.executorService = ExecutorFactory.create(properties.getExecutor());
 		boolean virtual = properties.getExecutor().getVirtualThreads() != MangoSwarmProperties.VirtualThreads.DISABLED
 				&& ExecutorFactory.virtualThreadsAvailable();
+		log.info(
+				"swarm executor: virtualThreadsAvailable={}, configured={}, usingVirtual={}",
+				ExecutorFactory.virtualThreadsAvailable(),
+				properties.getExecutor().getVirtualThreads(),
+				virtual);
+		this.executorService = ExecutorFactory.create(properties.getExecutor());
 		int maxThreads =
 				ExecutorFactory.resolveMaxThreads(properties.getExecutor().getMaxThreads(), virtual);
 		this.executorCapacity = new Semaphore(maxThreads);

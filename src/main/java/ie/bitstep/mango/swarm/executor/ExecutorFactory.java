@@ -18,6 +18,7 @@ final class ExecutorFactory {
 		boolean available;
 		try {
 			Thread.class.getMethod("ofVirtual");
+			Executors.class.getMethod("newThreadPerTaskExecutor", ThreadFactory.class);
 			available = true;
 		} catch (NoSuchMethodException ignored) {
 			available = false;
