@@ -171,7 +171,7 @@ LIMIT ?
 UPDATE mango_swarm_tasks
 SET status = 'failed',
 failed_at = ?,
-execution_time_ms = ?,
+execution_time_ms = NULL,
 updated_at = ?,
 last_error_message = 'Task timed out and reclaim is disabled'
 WHERE id IN (
@@ -477,11 +477,10 @@ LIMIT ?
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(MARK_TIMED_OUT_FAILED_SQL)) {
 						statement.setTimestamp(1, Timestamp.from(now));
-						statement.setLong(2, Math.max(0L, timeout.toMillis()));
-						statement.setTimestamp(3, Timestamp.from(now));
-						statement.setString(4, taskType);
-						statement.setTimestamp(5, Timestamp.from(now.minus(timeout)));
-						statement.setInt(6, limit);
+						statement.setTimestamp(2, Timestamp.from(now));
+						statement.setString(3, taskType);
+						statement.setTimestamp(4, Timestamp.from(now.minus(timeout)));
+						statement.setInt(5, limit);
 						return statement.executeUpdate();
 					}
 				}),
