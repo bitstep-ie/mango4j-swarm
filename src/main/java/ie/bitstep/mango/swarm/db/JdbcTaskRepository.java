@@ -216,8 +216,7 @@ LIMIT ?
 	private final JdbcTemplate jdbcTemplate;
 	private final ObjectMapper objectMapper;
 	private final SchemaQualifiedTables tables;
-	private volatile boolean h2;
-	private volatile boolean h2Initialized;
+	private volatile Boolean h2;
 
 	public JdbcTaskRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
 		this(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
@@ -672,11 +671,10 @@ LIMIT ?
 	}
 
 	private boolean isH2() {
-		if (!h2Initialized) {
+		if (h2 == null) {
 			synchronized (this) {
-				if (!h2Initialized) {
+				if (h2 == null) {
 					h2 = detectH2();
-					h2Initialized = true;
 				}
 			}
 		}

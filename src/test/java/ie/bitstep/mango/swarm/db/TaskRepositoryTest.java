@@ -831,11 +831,8 @@ class TaskRepositoryTest extends H2TestSupport {
 
 	private static void setH2(JdbcTaskRepository repository) throws Exception {
 		java.lang.reflect.Field h2 = JdbcTaskRepository.class.getDeclaredField("h2");
-		java.lang.reflect.Field h2Initialized = JdbcTaskRepository.class.getDeclaredField("h2Initialized");
 		h2.setAccessible(true);
-		h2Initialized.setAccessible(true);
-		h2.setBoolean(repository, true);
-		h2Initialized.setBoolean(repository, true);
+		h2.set(repository, Boolean.TRUE);
 	}
 
 	private static ResultSet resultSet(Map<String, Object> row) {
