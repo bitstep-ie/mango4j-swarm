@@ -225,15 +225,11 @@ public class MangoSwarmDaemon {
 			return MAX_EMPTY_QUEUE_BACKOFF;
 		}
 		int steps = Math.max(0, consecutiveEmptyPolls - 1);
-		if (steps == 0) {
-			return base;
-		}
-		int maxSafeShift = Long.numberOfLeadingZeros(nanos) - 1;
-		if (steps > maxSafeShift) {
+		if (steps >= 63) {
 			return MAX_EMPTY_QUEUE_BACKOFF;
 		}
 		long scaled = nanos << steps;
-		return scaled >= maxNanos ? MAX_EMPTY_QUEUE_BACKOFF : Duration.ofNanos(scaled);
+		return scaled < 0 || scaled >= maxNanos ? MAX_EMPTY_QUEUE_BACKOFF : Duration.ofNanos(scaled);
 	}
 
 	int calculateBatchSize(String taskType, MangoSwarmProperties.TaskType config, double effectiveRate, Instant now) {
