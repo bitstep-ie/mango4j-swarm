@@ -45,6 +45,7 @@ AND status = 'queued'
 AND available_at <= ?
 ORDER BY available_at, id
 LIMIT ?
+FOR UPDATE SKIP LOCKED
 """;
 	private static final String CLAIM_TASK_SQL =
 			"""
@@ -368,8 +369,8 @@ LIMIT ?
 						statement.setObject(5, workerId);
 						int updated = statement.executeUpdate();
 						if (updated > 0) {
-							upsertRuntime(scoped, taskId, workerId, now, "completed", 100, "finished",
-									executionTimeMillis);
+							upsertRuntime(
+									scoped, taskId, workerId, now, "completed", 100, "finished", executionTimeMillis);
 						}
 						return updated;
 					}
@@ -391,8 +392,8 @@ LIMIT ?
 						statement.setObject(6, workerId);
 						int updated = statement.executeUpdate();
 						if (updated > 0) {
-							upsertRuntime(scoped, taskId, workerId, now, "failed", null, errorMessage,
-									executionTimeMillis);
+							upsertRuntime(
+									scoped, taskId, workerId, now, "failed", null, errorMessage, executionTimeMillis);
 						}
 						return updated;
 					}
@@ -519,7 +520,14 @@ LIMIT ?
 			Integer progressPercent,
 			String message)
 			throws SQLException {
-		upsertRuntime(connection, taskId, workerId, now, executionState, progressPercent, message,
+		upsertRuntime(
+				connection,
+				taskId,
+				workerId,
+				now,
+				executionState,
+				progressPercent,
+				message,
 				executionTimeMillis(connection, taskId, now));
 	}
 
@@ -553,8 +561,8 @@ LIMIT ?
 			return;
 		}
 		try (PreparedStatement statement = connection.prepareStatement(UPSERT_RUNTIME_SQL)) {
-			bindRuntimeInsert(statement, taskId, workerId, now, executionState, progressPercent, message,
-					executionTimeMillis);
+			bindRuntimeInsert(
+					statement, taskId, workerId, now, executionState, progressPercent, message, executionTimeMillis);
 			statement.executeUpdate();
 		}
 	}
