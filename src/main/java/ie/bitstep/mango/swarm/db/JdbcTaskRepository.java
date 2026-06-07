@@ -338,7 +338,7 @@ LIMIT ?
 						int updated = statement.executeUpdate();
 						if (updated > 0) {
 							deleteRuntime(scoped, taskId);
-							insertRuntime(scoped, taskId, workerId, now, "running", null, null);
+							insertRuntime(scoped, new RuntimeUpdate(taskId, workerId, now, "running", null, null, 0L));
 						}
 						return updated;
 					}
@@ -351,7 +351,16 @@ LIMIT ?
 			UUID taskId, UUID workerId, Instant now, String executionState, Integer progressPercent, String message) {
 		executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
-					upsertRuntime(scoped, taskId, workerId, now, executionState, progressPercent, message);
+					upsertRuntime(
+							scoped,
+							new RuntimeUpdate(
+									taskId,
+									workerId,
+									now,
+									executionState,
+									progressPercent,
+									message,
+									executionTimeMillis(scoped, taskId, now)));
 					return 1;
 				}),
 				"update task runtime");
@@ -371,7 +380,9 @@ LIMIT ?
 						int updated = statement.executeUpdate();
 						if (updated > 0) {
 							upsertRuntime(
-									scoped, taskId, workerId, now, "completed", 100, "finished", executionTimeMillis);
+									scoped,
+									new RuntimeUpdate(
+											taskId, workerId, now, "completed", 100, "finished", executionTimeMillis));
 						}
 						return updated;
 					}
@@ -394,7 +405,9 @@ LIMIT ?
 						int updated = statement.executeUpdate();
 						if (updated > 0) {
 							upsertRuntime(
-									scoped, taskId, workerId, now, "failed", null, errorMessage, executionTimeMillis);
+									scoped,
+									new RuntimeUpdate(
+											taskId, workerId, now, "failed", null, errorMessage, executionTimeMillis));
 						}
 						return updated;
 					}
@@ -512,80 +525,41 @@ LIMIT ?
 				"delete failed tasks");
 	}
 
-	private void upsertRuntime(
-			java.sql.Connection connection,
-			UUID taskId,
-			UUID workerId,
-			Instant now,
-			String executionState,
-			Integer progressPercent,
-			String message)
-			throws SQLException {
-		upsertRuntime(
-				connection,
-				taskId,
-				workerId,
-				now,
-				executionState,
-				progressPercent,
-				message,
-				executionTimeMillis(connection, taskId, now));
-	}
-
-	private void upsertRuntime(
-			java.sql.Connection connection,
-			UUID taskId,
-			UUID workerId,
-			Instant now,
-			String executionState,
-			Integer progressPercent,
-			String message,
-			long executionTimeMillis)
-			throws SQLException {
+	private void upsertRuntime(java.sql.Connection connection, RuntimeUpdate runtime) throws SQLException {
 		if (isH2()) {
 			try (PreparedStatement update = connection.prepareStatement(UPDATE_RUNTIME_H2_SQL)) {
-				update.setObject(1, workerId);
-				update.setString(2, truncate(executionState));
-				setNullableInteger(update, 3, progressPercent);
-				update.setString(4, truncate(message));
-				update.setTimestamp(5, Timestamp.from(now));
-				update.setLong(6, executionTimeMillis);
-				update.setObject(7, taskId);
+				update.setObject(1, runtime.workerId());
+				update.setString(2, truncate(runtime.executionState()));
+				setNullableInteger(update, 3, runtime.progressPercent());
+				update.setString(4, truncate(runtime.message()));
+				update.setTimestamp(5, Timestamp.from(runtime.now()));
+				update.setLong(6, runtime.executionTimeMillis());
+				update.setObject(7, runtime.taskId());
 				if (update.executeUpdate() > 0) {
 					return;
 				}
 			}
 			try (PreparedStatement insert = connection.prepareStatement(INSERT_RUNTIME_SQL)) {
-				bindRuntimeInsert(insert, taskId, workerId, now, executionState, progressPercent, message, 0L);
+				bindRuntimeInsert(insert, runtime.withExecutionTimeMillis(0L));
 				insert.executeUpdate();
 			}
 			return;
 		}
 		try (PreparedStatement statement = connection.prepareStatement(UPSERT_RUNTIME_SQL)) {
-			bindRuntimeInsert(
-					statement, taskId, workerId, now, executionState, progressPercent, message, executionTimeMillis);
+			bindRuntimeInsert(statement, runtime);
 			statement.executeUpdate();
 		}
 	}
 
-	private static void bindRuntimeInsert(
-			PreparedStatement statement,
-			UUID taskId,
-			UUID workerId,
-			Instant now,
-			String executionState,
-			Integer progressPercent,
-			String message,
-			long executionTimeMillis)
-			throws SQLException {
-		statement.setObject(1, taskId);
-		statement.setObject(2, workerId);
-		statement.setString(3, truncate(executionState));
-		setNullableInteger(statement, 4, progressPercent);
-		statement.setString(5, truncate(message));
-		statement.setTimestamp(6, Timestamp.from(now));
-		statement.setTimestamp(7, Timestamp.from(now));
-		statement.setLong(8, executionTimeMillis);
+	private static void bindRuntimeInsert(PreparedStatement statement, RuntimeUpdate runtime) throws SQLException {
+		statement.setObject(1, runtime.taskId());
+		statement.setObject(2, runtime.workerId());
+		statement.setString(3, truncate(runtime.executionState()));
+		setNullableInteger(statement, 4, runtime.progressPercent());
+		statement.setString(5, truncate(runtime.message()));
+		statement.setTimestamp(6, Timestamp.from(runtime.now()));
+		statement.setTimestamp(7, Timestamp.from(runtime.now()));
+		statement.setLong(8, runtime.executionTimeMillis());
 	}
 
 	private static void setNullableInteger(PreparedStatement statement, int index, Integer value) throws SQLException {
@@ -596,18 +570,24 @@ LIMIT ?
 		}
 	}
 
-	private void insertRuntime(
-			java.sql.Connection connection,
+	private void insertRuntime(java.sql.Connection connection, RuntimeUpdate runtime) throws SQLException {
+		try (PreparedStatement insert = connection.prepareStatement(INSERT_RUNTIME_SQL)) {
+			bindRuntimeInsert(insert, runtime);
+			insert.executeUpdate();
+		}
+	}
+
+	private record RuntimeUpdate(
 			UUID taskId,
 			UUID workerId,
 			Instant now,
 			String executionState,
 			Integer progressPercent,
-			String message)
-			throws SQLException {
-		try (PreparedStatement insert = connection.prepareStatement(INSERT_RUNTIME_SQL)) {
-			bindRuntimeInsert(insert, taskId, workerId, now, executionState, progressPercent, message, 0L);
-			insert.executeUpdate();
+			String message,
+			long executionTimeMillis) {
+		private RuntimeUpdate withExecutionTimeMillis(long executionTimeMillis) {
+			return new RuntimeUpdate(
+					taskId, workerId, now, executionState, progressPercent, message, executionTimeMillis);
 		}
 	}
 

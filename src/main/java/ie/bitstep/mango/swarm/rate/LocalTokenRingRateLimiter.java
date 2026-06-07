@@ -3,10 +3,13 @@ package ie.bitstep.mango.swarm.rate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
+import java.util.Iterator;
 import java.util.Objects;
 
 /** Fixed-size, object-reusing token ring for local per-worker task start pacing. */
 public final class LocalTokenRingRateLimiter {
+	private static final String NOW_REQUIRED = "now must not be null";
+
 	private final Token[] tokens;
 	private final ArrayDeque<Token> activeRing = new ArrayDeque<>();
 	private final ArrayDeque<Token> blockedRing = new ArrayDeque<>();
@@ -26,7 +29,7 @@ public final class LocalTokenRingRateLimiter {
 
 	public synchronized void configure(double rate, Duration period, Instant now) {
 		Objects.requireNonNull(period, "period must not be null");
-		Objects.requireNonNull(now, "now must not be null");
+		Objects.requireNonNull(now, NOW_REQUIRED);
 		if (rate <= 0.0d || period.isNegative() || period.isZero()) {
 			disabled = true;
 			return;
@@ -44,7 +47,7 @@ public final class LocalTokenRingRateLimiter {
 	}
 
 	public synchronized Acquisition acquire(Instant now) {
-		Objects.requireNonNull(now, "now must not be null");
+		Objects.requireNonNull(now, NOW_REQUIRED);
 		if (disabled) {
 			return Acquisition.deny();
 		}
@@ -65,18 +68,17 @@ public final class LocalTokenRingRateLimiter {
 	}
 
 	public synchronized int availablePermits(Instant now, int max) {
-		Objects.requireNonNull(now, "now must not be null");
+		Objects.requireNonNull(now, NOW_REQUIRED);
 		if (max <= 0 || disabled) {
 			return 0;
 		}
 		skipExpired(now);
 		int available = 0;
-		for (Token token : activeRing) {
-			if (available >= max) {
-				break;
-			}
+		Iterator<Token> iterator = activeRing.iterator();
+		while (available < max && iterator.hasNext()) {
+			Token token = iterator.next();
 			if (token.availableAt.isAfter(now) || isExpired(token, now)) {
-				break;
+				return available;
 			}
 			available++;
 		}
@@ -84,7 +86,7 @@ public final class LocalTokenRingRateLimiter {
 	}
 
 	public synchronized Duration timeUntilNextPermit(Instant now) {
-		Objects.requireNonNull(now, "now must not be null");
+		Objects.requireNonNull(now, NOW_REQUIRED);
 		if (disabled) {
 			return Duration.ZERO;
 		}

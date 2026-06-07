@@ -132,8 +132,9 @@ class MangoTasksTest {
 	@Test
 	void rejectsUnconfiguredTaskType() {
 		MangoTasks tasks = new MangoTasks(new RecordingRepository(), new ObjectMapper(), properties());
+		ObjectNode payload = JsonNodeFactory.instance.objectNode();
 
-		assertThatThrownBy(() -> tasks.queue("unknown", JsonNodeFactory.instance.objectNode()))
+		assertThatThrownBy(() -> tasks.queue("unknown", payload))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("Task type is not configured: unknown");
 	}
@@ -213,7 +214,9 @@ class MangoTasksTest {
 		}
 
 		@Override
-		public void markInProgress(UUID taskId, UUID workerId, Instant now) {}
+		public void markInProgress(UUID taskId, UUID workerId, Instant now) {
+			// No-op: queueing tests only exercise task creation.
+		}
 
 		@Override
 		public void updateRuntime(
@@ -222,20 +225,30 @@ class MangoTasksTest {
 				Instant now,
 				String executionState,
 				Integer progressPercent,
-				String message) {}
+				String message) {
+			// No-op: queueing tests only exercise task creation.
+		}
 
 		@Override
-		public void markCompleted(UUID taskId, UUID workerId, Instant now) {}
+		public void markCompleted(UUID taskId, UUID workerId, Instant now) {
+			// No-op: queueing tests only exercise task creation.
+		}
 
 		@Override
-		public void markFailed(UUID taskId, UUID workerId, Instant now, String errorMessage) {}
+		public void markFailed(UUID taskId, UUID workerId, Instant now, String errorMessage) {
+			// No-op: queueing tests only exercise task creation.
+		}
 
 		@Override
 		public void rescheduleAfterFailure(
-				UUID taskId, UUID workerId, Instant now, Instant availableAt, String errorMessage) {}
+				UUID taskId, UUID workerId, Instant now, Instant availableAt, String errorMessage) {
+			// No-op: queueing tests only exercise task creation.
+		}
 
 		@Override
-		public void requeueClaimed(UUID taskId, UUID workerId, Instant now, Instant availableAt, String reason) {}
+		public void requeueClaimed(UUID taskId, UUID workerId, Instant now, Instant availableAt, String reason) {
+			// No-op: queueing tests only exercise task creation.
+		}
 
 		@Override
 		public int reclaimTimedOut(String taskType, Duration timeout, Instant now, int limit) {

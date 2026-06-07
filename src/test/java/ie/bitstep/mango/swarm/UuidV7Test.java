@@ -31,8 +31,7 @@ class UuidV7Test {
 		List<UUID> ids =
 				IntStream.range(0, 100).mapToObj(i -> UuidV7.generate(now)).toList();
 
-		assertThat(ids).doesNotHaveDuplicates();
-		assertThat(ids).allMatch(id -> id.version() == 7);
+		assertThat(ids).doesNotHaveDuplicates().allMatch(id -> id.version() == 7);
 	}
 
 	@Test

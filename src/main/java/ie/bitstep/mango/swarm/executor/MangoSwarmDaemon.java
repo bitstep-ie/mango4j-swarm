@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -52,9 +53,9 @@ public class MangoSwarmDaemon {
 	private final ExecutorService executorService;
 	private final Semaphore executorCapacity;
 	private final AtomicBoolean running = new AtomicBoolean(false);
+	private final AtomicReference<Thread> daemonThread = new AtomicReference<>();
 	private final int runtimeProgressThresholdPercent;
 	private final Duration runtimeMinUpdateInterval;
-	private volatile Thread daemonThread;
 	private int activeWorkers = 1;
 	private Instant lastHeartbeat = Instant.EPOCH;
 	private Instant lastCleanup = Instant.EPOCH;
@@ -101,13 +102,14 @@ public class MangoSwarmDaemon {
 		if (!running.compareAndSet(false, true)) {
 			return;
 		}
-		daemonThread = new Thread(this::runLoop, "mango-swarm-daemon");
-		daemonThread.start();
+		Thread thread = new Thread(this::runLoop, "mango-swarm-daemon");
+		daemonThread.set(thread);
+		thread.start();
 	}
 
 	public void stop() {
 		running.set(false);
-		Thread thread = daemonThread;
+		Thread thread = daemonThread.getAndSet(null);
 		if (thread != null) {
 			thread.interrupt();
 			try {

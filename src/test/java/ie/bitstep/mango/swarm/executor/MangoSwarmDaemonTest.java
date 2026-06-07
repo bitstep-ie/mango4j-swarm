@@ -13,6 +13,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,7 +45,9 @@ class MangoSwarmDaemonTest {
 
 		daemon.start();
 		daemon.start();
-		Thread daemonThread = (Thread) fieldValue(daemon, "daemonThread");
+		@SuppressWarnings("unchecked")
+		AtomicReference<Thread> daemonThreadReference = (AtomicReference<Thread>) fieldValue(daemon, "daemonThread");
+		Thread daemonThread = daemonThreadReference.get();
 		assertThat(daemonThread.isAlive()).isTrue();
 		daemon.stop();
 
