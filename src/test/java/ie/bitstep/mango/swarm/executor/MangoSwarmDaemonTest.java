@@ -217,7 +217,7 @@ class MangoSwarmDaemonTest {
 	}
 
 	@Test
-	void reclaimsTimedOutOnlyForIdempotentTypes() {
+	void failsTimedOutTasksWhenReclaimOnTimeoutButNotIdempotent() {
 		MangoSwarmProperties properties = properties(10, 1, 1);
 		properties.getTaskTypes().get("email").setReclaimOnTimeout(true);
 		properties.getTaskTypes().get("email").setIdempotent(false);
@@ -227,7 +227,7 @@ class MangoSwarmDaemonTest {
 		daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
 
 		assertThat(repository.reclaimCalls).isZero();
-		assertThat(repository.failTimedOutCalls).isZero();
+		assertThat(repository.failTimedOutCalls).isOne();
 		daemon.stop();
 	}
 

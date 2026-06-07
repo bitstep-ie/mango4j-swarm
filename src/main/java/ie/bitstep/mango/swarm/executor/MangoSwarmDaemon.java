@@ -359,7 +359,7 @@ public class MangoSwarmDaemon {
 			}
 			if (config.isReclaimOnTimeout() && config.isIdempotent()) {
 				taskRepository.reclaimTimedOut(type, config.getTimeout(), now, batchSize);
-			} else if (!config.isReclaimOnTimeout()) {
+			} else {
 				taskRepository.markTimedOutFailed(type, config.getTimeout(), now, batchSize);
 			}
 		});
