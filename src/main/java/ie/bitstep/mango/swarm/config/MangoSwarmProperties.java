@@ -256,7 +256,12 @@ public class MangoSwarmProperties {
 		ABORT
 	}
 
-	/** Reserved virtual-thread policy. Current Java 17 builds use platform threads. */
+	/**
+	 * Virtual-thread policy for the task executor.
+	 *
+	 * <p>{@link #ENABLED} and {@link #AUTO} both use virtual threads when running on Java 21+ and fall back to platform
+	 * threads silently on earlier JVMs. {@link #DISABLED} always uses platform threads regardless of JVM version.
+	 */
 	public enum VirtualThreads {
 		ENABLED,
 		DISABLED,
