@@ -15,7 +15,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PGobject;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -275,6 +274,41 @@ class TaskRepositoryTest extends H2TestSupport {
 		assertThat(jdbcTemplate.queryForObject(
 						"select execution_time_ms from mango_swarm_tasks where id = ?", Long.class, taskId))
 				.isZero();
+	}
+
+	@Test
+	void markInProgressResetsStartedAtAfterReclaim() {
+		Instant firstStart = Instant.parse("2026-05-20T10:00:00Z");
+		Instant reclaim = firstStart.plusSeconds(90);
+		Instant secondStart = reclaim.plusSeconds(5);
+		Instant completion = secondStart.plusSeconds(10);
+		UUID workerId = UUID.randomUUID();
+		UUID taskId = taskRepository.queue("email", JsonNodeFactory.instance.objectNode(), firstStart);
+
+		// first attempt
+		taskRepository.claimBatch("email", workerId, firstStart, 1);
+		taskRepository.markInProgress(taskId, workerId, firstStart);
+
+		// timeout reclaim returns task to queued
+		taskRepository.reclaimTimedOut("email", Duration.ofSeconds(30), reclaim, 10);
+
+		// second attempt: re-claim and mark in progress
+		taskRepository.claimBatch("email", workerId, reclaim, 1);
+		taskRepository.markInProgress(taskId, workerId, secondStart);
+
+		// started_at must reflect the second attempt, not the first
+		var row = jdbcTemplate.queryForMap(
+				"""
+					select started_at from mango_swarm_task_runtime where task_id = ?
+					""",
+				taskId);
+		assertThat(((java.sql.Timestamp) row.get("started_at")).toInstant()).isEqualTo(secondStart);
+
+		// execution_time_ms on the terminal task row must be ~10s, not ~100s
+		taskRepository.markCompleted(taskId, workerId, completion);
+		assertThat(jdbcTemplate.queryForObject(
+						"select execution_time_ms from mango_swarm_tasks where id = ?", Long.class, taskId))
+				.isEqualTo(10_000L);
 	}
 
 	@Test

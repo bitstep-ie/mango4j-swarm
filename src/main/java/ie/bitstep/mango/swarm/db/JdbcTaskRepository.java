@@ -86,7 +86,7 @@ progress_message = EXCLUDED.progress_message,
 updated_at = EXCLUDED.updated_at,
 execution_time_ms = EXCLUDED.execution_time_ms
 """;
-	private static final String INSERT_RUNTIME_H2_SQL =
+	private static final String INSERT_RUNTIME_SQL =
 			"""
 INSERT INTO mango_swarm_task_runtime(
 task_id, worker_id, execution_state, progress_percent, progress_message, started_at, updated_at, execution_time_ms)
@@ -337,7 +337,8 @@ LIMIT ?
 						statement.setObject(3, workerId);
 						int updated = statement.executeUpdate();
 						if (updated > 0) {
-							upsertRuntime(scoped, taskId, workerId, now, "running", null, null);
+							deleteRuntime(scoped, taskId);
+							insertRuntime(scoped, taskId, workerId, now, "running", null, null);
 						}
 						return updated;
 					}
@@ -554,7 +555,7 @@ LIMIT ?
 					return;
 				}
 			}
-			try (PreparedStatement insert = connection.prepareStatement(INSERT_RUNTIME_H2_SQL)) {
+			try (PreparedStatement insert = connection.prepareStatement(INSERT_RUNTIME_SQL)) {
 				bindRuntimeInsert(insert, taskId, workerId, now, executionState, progressPercent, message, 0L);
 				insert.executeUpdate();
 			}
@@ -592,6 +593,21 @@ LIMIT ?
 			statement.setNull(index, Types.INTEGER);
 		} else {
 			statement.setInt(index, value);
+		}
+	}
+
+	private void insertRuntime(
+			java.sql.Connection connection,
+			UUID taskId,
+			UUID workerId,
+			Instant now,
+			String executionState,
+			Integer progressPercent,
+			String message)
+			throws SQLException {
+		try (PreparedStatement insert = connection.prepareStatement(INSERT_RUNTIME_SQL)) {
+			bindRuntimeInsert(insert, taskId, workerId, now, executionState, progressPercent, message, 0L);
+			insert.executeUpdate();
 		}
 	}
 
