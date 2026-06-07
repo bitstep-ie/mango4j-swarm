@@ -52,12 +52,11 @@ final class ExecutorFactory {
 
 	private static ExecutorService createVirtualThreadExecutor() {
 		try {
+			Class<?> builderType = Class.forName("java.lang.Thread$Builder");
 			Object builder = Thread.class.getMethod("ofVirtual").invoke(null);
-			builder = builder.getClass()
-					.getMethod("name", String.class, long.class)
-					.invoke(builder, WORKER_THREAD_PREFIX, 1L);
+			builder = builderType.getMethod("name", String.class, long.class).invoke(builder, WORKER_THREAD_PREFIX, 1L);
 			ThreadFactory factory =
-					(ThreadFactory) builder.getClass().getMethod("factory").invoke(builder);
+					(ThreadFactory) builderType.getMethod("factory").invoke(builder);
 			return (ExecutorService) Executors.class
 					.getMethod("newThreadPerTaskExecutor", ThreadFactory.class)
 					.invoke(null, factory);
