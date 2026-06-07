@@ -17,10 +17,13 @@ final class ExecutorFactory {
 	static {
 		boolean available;
 		try {
+			Class<?> builderType = Class.forName("java.lang.Thread$Builder");
 			Thread.class.getMethod("ofVirtual");
+			builderType.getMethod("name", String.class, long.class);
+			builderType.getMethod("factory");
 			Executors.class.getMethod("newThreadPerTaskExecutor", ThreadFactory.class);
 			available = true;
-		} catch (NoSuchMethodException ignored) {
+		} catch (ClassNotFoundException | NoSuchMethodException ignored) {
 			available = false;
 		}
 		VIRTUAL_THREADS_AVAILABLE = available;
