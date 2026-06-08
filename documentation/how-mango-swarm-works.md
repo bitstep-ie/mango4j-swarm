@@ -70,7 +70,6 @@ This table is narrow, contains no `jsonb`, and uses `fillfactor = 75` so Postgre
 Important indexes:
 
 - `idx_mango_tasks_queue_claim` on queued tasks by `(task_type, available_at, id)` for batch claiming
-- `idx_mango_task_runtime_worker` on `(worker_id, task_id)` for runtime visibility by worker
 - `idx_mango_tasks_timeout_due` on claimed/in-progress tasks by `(task_type, claimed_at, id)` for timeout recovery
 - cleanup indexes on completed and failed terminal timestamps
 

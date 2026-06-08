@@ -193,7 +193,6 @@ WHERE id IN (
 SELECT id
 FROM mango_swarm_tasks
 WHERE status = 'completed'
-AND completed_at IS NOT NULL
 AND completed_at < ?
 ORDER BY completed_at, id
 LIMIT ?
@@ -206,7 +205,6 @@ WHERE id IN (
 SELECT id
 FROM mango_swarm_tasks
 WHERE status = 'failed'
-AND failed_at IS NOT NULL
 AND failed_at < ?
 ORDER BY failed_at, id
 LIMIT ?

@@ -88,11 +88,6 @@ public abstract class H2TestSupport {
 				""");
 		jdbcTemplate.execute(
 				"""
-				CREATE INDEX idx_mango_task_runtime_worker
-					ON mango_swarm_task_runtime (worker_id, task_id)
-				""");
-		jdbcTemplate.execute(
-				"""
 				CREATE INDEX idx_mango_tasks_timeout_due
 					ON mango_swarm_tasks (task_type, status, claimed_at, id)
 				""");

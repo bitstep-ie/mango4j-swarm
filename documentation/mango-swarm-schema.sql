@@ -37,9 +37,6 @@ CREATE INDEX IF NOT EXISTS idx_mango_tasks_queue_claim
     ON mango_swarm_tasks (task_type, available_at, id)
     WHERE status = 'queued';
 
-CREATE INDEX IF NOT EXISTS idx_mango_task_runtime_worker
-    ON mango_swarm_task_runtime (worker_id, task_id);
-
 CREATE INDEX IF NOT EXISTS idx_mango_tasks_timeout_due
     ON mango_swarm_tasks (task_type, claimed_at, id)
     WHERE status IN ('claimed', 'in_progress');
