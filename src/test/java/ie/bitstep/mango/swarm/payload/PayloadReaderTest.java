@@ -1,6 +1,7 @@
 package ie.bitstep.mango.swarm.payload;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.NullNode;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,6 +55,24 @@ class PayloadReaderTest {
 				.isInstanceOf(PayloadExtractionException.class)
 				.hasMessageContaining("Missing required payload field")
 				.hasMessageContaining("[customerId, userId]");
+	}
+
+	@Test
+	void treatsNullPayloadNodesAsMissingData() throws Exception {
+		PayloadReader reader = new PayloadReader(
+				objectMapper.readTree("""
+				{
+				"customer": null,
+				"legacy": null
+				}
+				"""), objectMapper);
+
+		assertThat(reader.optional(String.class, "customer.id", "legacy").asOptional())
+				.isEmpty();
+		assertThat(new PayloadReader(NullNode.getInstance(), objectMapper)
+						.optional(String.class, "customer.id")
+						.asOptional())
+				.isEmpty();
 	}
 
 	@Test

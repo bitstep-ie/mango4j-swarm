@@ -42,6 +42,7 @@ class MangoSwarmPropertiesTest {
 		MangoSwarmProperties.Worker worker = new MangoSwarmProperties.Worker();
 		MangoSwarmProperties.Cleanup cleanup = new MangoSwarmProperties.Cleanup();
 		MangoSwarmProperties.Executor executor = new MangoSwarmProperties.Executor();
+		MangoSwarmProperties.RuntimeState runtime = new MangoSwarmProperties.RuntimeState();
 		MangoSwarmProperties.Retry retry = new MangoSwarmProperties.Retry();
 		LinkedHashMap<String, MangoSwarmProperties.TaskType> taskTypes = new LinkedHashMap<>();
 
@@ -51,6 +52,7 @@ class MangoSwarmPropertiesTest {
 		properties.setWorker(worker);
 		properties.setCleanup(cleanup);
 		properties.setExecutor(executor);
+		properties.setRuntime(runtime);
 		properties.setRetry(retry);
 		properties.setTaskTypes(taskTypes);
 
@@ -60,6 +62,7 @@ class MangoSwarmPropertiesTest {
 		assertThat(properties.getWorker()).isSameAs(worker);
 		assertThat(properties.getCleanup()).isSameAs(cleanup);
 		assertThat(properties.getExecutor()).isSameAs(executor);
+		assertThat(properties.getRuntime()).isSameAs(runtime);
 		assertThat(properties.getRetry()).isSameAs(retry);
 		assertThat(properties.getTaskTypes()).isSameAs(taskTypes);
 	}
@@ -81,6 +84,8 @@ class MangoSwarmPropertiesTest {
 		properties.getExecutor().setPollInterval(Duration.ofMillis(25));
 		properties.getExecutor().setQueueStrategy(MangoSwarmProperties.QueueStrategy.ABORT);
 		properties.getExecutor().setVirtualThreads(MangoSwarmProperties.VirtualThreads.DISABLED);
+		properties.getRuntime().setProgressThresholdPercent(25);
+		properties.getRuntime().setMinUpdateInterval(Duration.ofSeconds(13));
 		properties.getRetry().setBaseDelay(Duration.ofSeconds(3));
 		properties.getRetry().setMultiplier(3.5d);
 		properties.getRetry().setMaxDelay(Duration.ofMinutes(4));
@@ -99,6 +104,8 @@ class MangoSwarmPropertiesTest {
 		assertThat(properties.getExecutor().getQueueStrategy()).isEqualTo(MangoSwarmProperties.QueueStrategy.ABORT);
 		assertThat(properties.getExecutor().getVirtualThreads())
 				.isEqualTo(MangoSwarmProperties.VirtualThreads.DISABLED);
+		assertThat(properties.getRuntime().getProgressThresholdPercent()).isEqualTo(25);
+		assertThat(properties.getRuntime().getMinUpdateInterval()).isEqualTo(Duration.ofSeconds(13));
 		assertThat(properties.getRetry().getBaseDelay()).isEqualTo(Duration.ofSeconds(3));
 		assertThat(properties.getRetry().getMultiplier()).isEqualTo(3.5d);
 		assertThat(properties.getRetry().getMaxDelay()).isEqualTo(Duration.ofMinutes(4));

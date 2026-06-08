@@ -96,9 +96,14 @@ class MangoSwarmAutoConfigurationTest {
 		HashMap<String, Object> blank = new HashMap<>();
 		configuration.mangoHibernateDefaultSchemaCustomizer(properties).customize(blank);
 
+		properties.getDatabase().setSchema(null);
+		HashMap<String, Object> missing = new HashMap<>();
+		configuration.mangoHibernateDefaultSchemaCustomizer(properties).customize(missing);
+
 		assertThat(existing).containsEntry("hibernate.default_schema", "existing");
 		assertThat(disabled).doesNotContainKey("hibernate.default_schema");
 		assertThat(blank).doesNotContainKey("hibernate.default_schema");
+		assertThat(missing).doesNotContainKey("hibernate.default_schema");
 	}
 
 	private static MangoSwarmProperties properties() {

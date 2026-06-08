@@ -163,14 +163,7 @@ public final class LocalTokenRingRateLimiter {
 	}
 
 	private Instant latestScheduledToken() {
-		Instant latest = Instant.EPOCH;
-		for (Token token : activeRing) {
-			Instant availableAt = token.availableAt;
-			if (availableAt.isAfter(latest)) {
-				latest = availableAt;
-			}
-		}
-		return latest;
+		return activeRing.peekLast().availableAt;
 	}
 
 	private void rotateActiveHeadToTail() {

@@ -1,5 +1,7 @@
 package ie.bitstep.mango.swarm;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -8,6 +10,7 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class UuidV7Test {
 
@@ -48,5 +51,17 @@ class UuidV7Test {
 						.mapToLong(id -> id.getLeastSignificantBits() & 0x3fff_ffff_ffff_ffffL)
 						.allMatch(randomB -> randomB == 0x3fff_ffff_ffff_ffffL))
 				.isFalse();
+	}
+
+	@Test
+	void utilityConstructorRejectsInstances() throws Exception {
+		Constructor<UuidV7> constructor = UuidV7.class.getDeclaredConstructor();
+		constructor.setAccessible(true);
+
+		assertThatThrownBy(constructor::newInstance)
+				.isInstanceOf(InvocationTargetException.class)
+				.extracting(Throwable::getCause)
+				.satisfies(cause ->
+						assertThat(cause).isInstanceOf(AssertionError.class).hasMessage("No instances"));
 	}
 }

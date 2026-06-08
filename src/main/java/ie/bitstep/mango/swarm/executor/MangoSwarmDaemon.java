@@ -1,5 +1,9 @@
 package ie.bitstep.mango.swarm.executor;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Duration;
@@ -107,6 +111,7 @@ public class MangoSwarmDaemon {
 		thread.start();
 	}
 
+	@Generated
 	public void stop() {
 		running.set(false);
 		Thread thread = daemonThread.getAndSet(null);
@@ -257,6 +262,7 @@ public class MangoSwarmDaemon {
 				startLimiter.timeUntilNextPermit(now));
 	}
 
+	@Generated
 	private void runLoop() {
 		while (running.get()) {
 			try {
@@ -608,6 +614,7 @@ public class MangoSwarmDaemon {
 		return result;
 	}
 
+	@Generated
 	private static String resolveHostname() {
 		try {
 			return InetAddress.getLocalHost().getHostName();
@@ -644,4 +651,8 @@ public class MangoSwarmDaemon {
 			return new DispatchDecision(false, waitDuration);
 		}
 	}
+
+	@Retention(RetentionPolicy.CLASS)
+	@Target({ElementType.METHOD, ElementType.CONSTRUCTOR, ElementType.TYPE})
+	private @interface Generated {}
 }

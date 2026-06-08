@@ -1,5 +1,7 @@
 package ie.bitstep.mango.swarm.executor;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
@@ -30,10 +32,27 @@ class ExecutorFactoryTest {
 	}
 
 	@Test
+	void utilityConstructorRejectsInstances() throws Exception {
+		Constructor<ExecutorFactory> constructor = ExecutorFactory.class.getDeclaredConstructor();
+		constructor.setAccessible(true);
+
+		assertThatThrownBy(constructor::newInstance)
+				.isInstanceOf(InvocationTargetException.class)
+				.extracting(Throwable::getCause)
+				.satisfies(cause ->
+						assertThat(cause).isInstanceOf(AssertionError.class).hasMessage("No instances"));
+	}
+
+	@Test
 	void namingFactoryPreservesNullDelegateThreads() throws Exception {
 		ThreadFactory factory = (ThreadFactory) invokeStatic("namingFactory", (ThreadFactory) runnable -> null);
 
 		assertThat(factory.newThread(() -> {})).isNull();
+	}
+
+	@Test
+	void namingFactoryAllowsNullDelegate() throws Exception {
+		assertThat(invokeStatic("namingFactory", new Object[] {null})).isNull();
 	}
 
 	@Test
@@ -102,7 +121,9 @@ class ExecutorFactoryTest {
 	private static Object invokeStatic(String name, Object... args) throws Exception {
 		Class<?>[] parameterTypes = new Class<?>[args.length];
 		for (int i = 0; i < args.length; i++) {
-			if (args[i] instanceof MangoSwarmProperties.VirtualThreads) {
+			if (args[i] == null) {
+				parameterTypes[i] = ThreadFactory.class;
+			} else if (args[i] instanceof MangoSwarmProperties.VirtualThreads) {
 				parameterTypes[i] = MangoSwarmProperties.VirtualThreads.class;
 			} else if (args[i] instanceof ThreadFactory) {
 				parameterTypes[i] = ThreadFactory.class;

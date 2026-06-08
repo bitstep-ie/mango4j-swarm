@@ -24,6 +24,13 @@ class SchemaQualifiedTablesTest {
 	}
 
 	@Test
+	void leavesTablesUnqualifiedWhenSchemaIsBlank() {
+		SchemaQualifiedTables tables = new SchemaQualifiedTables(" ");
+
+		assertThat(tables.schema()).isNull();
+	}
+
+	@Test
 	void validatesSchemaButLeavesSqlTableNamesUnqualified() {
 		SchemaQualifiedTables tables = new SchemaQualifiedTables("application_schema");
 
@@ -105,5 +112,21 @@ class SchemaQualifiedTablesTest {
 		verify(connection, never()).commit();
 		verify(connection, never()).rollback();
 		verify(statement).setString(1, "application_schema");
+	}
+
+	@Test
+	void withSearchPathDoesNotRollbackExistingTransactionOnRuntimeFailure() throws Exception {
+		Connection connection = mock(Connection.class);
+		when(connection.getAutoCommit()).thenReturn(false);
+		SchemaQualifiedTables tables = new SchemaQualifiedTables(null);
+
+		assertThatThrownBy(() -> tables.withSearchPath(connection, ignored -> {
+					throw new IllegalStateException("failed");
+				}))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessage("failed");
+
+		verify(connection, never()).rollback();
+		verify(connection, never()).setAutoCommit(true);
 	}
 }

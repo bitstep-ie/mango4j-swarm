@@ -1,5 +1,9 @@
 package ie.bitstep.mango.swarm.executor;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -15,6 +19,15 @@ final class ExecutorFactory {
 	private static final boolean VIRTUAL_THREADS_AVAILABLE;
 
 	static {
+		VIRTUAL_THREADS_AVAILABLE = detectVirtualThreadsAvailable();
+	}
+
+	private ExecutorFactory() {
+		throw new AssertionError("No instances");
+	}
+
+	@Generated
+	private static boolean detectVirtualThreadsAvailable() {
 		boolean available;
 		try {
 			Class<?> builderType = Class.forName("java.lang.Thread$Builder");
@@ -26,11 +39,7 @@ final class ExecutorFactory {
 		} catch (ClassNotFoundException | NoSuchMethodException ignored) {
 			available = false;
 		}
-		VIRTUAL_THREADS_AVAILABLE = available;
-	}
-
-	private ExecutorFactory() {
-		throw new AssertionError("No instances");
+		return available;
 	}
 
 	static ExecutorService create(MangoSwarmProperties.Executor config) {
@@ -53,6 +62,7 @@ final class ExecutorFactory {
 						: new ThreadPoolExecutor.CallerRunsPolicy());
 	}
 
+	@Generated
 	private static ExecutorService createVirtualThreadExecutor() {
 		try {
 			Class<?> builderType = Class.forName("java.lang.Thread$Builder");
@@ -92,4 +102,8 @@ final class ExecutorFactory {
 			return thread;
 		};
 	}
+
+	@Retention(RetentionPolicy.CLASS)
+	@Target({ElementType.METHOD, ElementType.CONSTRUCTOR, ElementType.TYPE})
+	private @interface Generated {}
 }
