@@ -628,10 +628,25 @@ spring:
 
 The library does not ship a runtime migration in its jar. Application teams should create and manage these tables in their own schema/migration pipeline.
 
-A reference DDL is provided in:
+The reference DDL is the sample app migration:
 
 ```text
+examples/reference-email-app/src/main/resources/db/migration/V1__mango_swarm.sql
+```
+
+A matching test migration and documentation copy are provided in:
+
+```text
+src/test/resources/db/migration/V1__mango_swarm.sql
 documentation/mango-swarm-schema.sql
+```
+
+These SQL files should match the sample app migration exactly.
+
+The schema is documented in:
+
+```text
+documentation/mango-swarm-schema.md
 ```
 
 ***

@@ -9,6 +9,8 @@ It also reports progress stages (for example `preparing`) and the library writes
 
 The swarm library does not ship a runtime migration. The application owns schema creation, table creation, and schema selection.
 
+The reference DDL is in `src/main/resources/db/migration/V1__mango_swarm.sql`. The repository root also keeps matching copies at `src/test/resources/db/migration/V1__mango_swarm.sql` and `documentation/mango-swarm-schema.sql`. The schema is documented at `documentation/mango-swarm-schema.md`.
+
 This reference app does that in `application.yml`:
 
 ```yaml

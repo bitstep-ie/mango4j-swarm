@@ -73,9 +73,12 @@ Important indexes:
 - `idx_mango_tasks_timeout_due` on claimed/in-progress tasks by `(task_type, claimed_at, id)` for timeout recovery
 - cleanup indexes on completed and failed terminal timestamps
 
-Reference SQL:
+Reference schema docs:
 
+- `examples/reference-email-app/src/main/resources/db/migration/V1__mango_swarm.sql`
+- `src/test/resources/db/migration/V1__mango_swarm.sql`
 - `documentation/mango-swarm-schema.sql`
+- `documentation/mango-swarm-schema.md`
 
 ## End-to-end runtime flow
 
