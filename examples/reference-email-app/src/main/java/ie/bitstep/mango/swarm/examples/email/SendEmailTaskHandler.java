@@ -1,4 +1,4 @@
-package ie.bitstep.mango.examples.email;
+package ie.bitstep.mango.swarm.examples.email;
 
 import ie.bitstep.mango.swarm.TaskExecutionContext;
 import ie.bitstep.mango.swarm.TaskExecutionResult;
