@@ -23,6 +23,7 @@ esac
 version=${snapshot_version%-SNAPSHOT}
 tag="v${version}"
 branch="release/${tag}"
+tmp_branch="tmp/${tag}-next-snapshot"
 
 if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
   echo "Tag ${tag} already exists." >&2
@@ -31,6 +32,11 @@ fi
 
 if git rev-parse -q --verify "refs/heads/${branch}" >/dev/null; then
   echo "Branch ${branch} already exists." >&2
+  exit 1
+fi
+
+if git rev-parse -q --verify "refs/heads/${tmp_branch}" >/dev/null; then
+  echo "Branch ${tmp_branch} already exists." >&2
   exit 1
 fi
 
@@ -61,14 +67,16 @@ git add pom.xml
 git commit -m "chore: release ${version}"
 git tag -a "${tag}" -m "Release ${tag}"
 
+rm -f "$original_pom"
+trap - EXIT INT HUP TERM
+
+git switch -c "$tmp_branch"
 next_snapshot=$(scripts/bump-version.py --pom pom.xml --snapshot)
 git add pom.xml
 git commit -m "chore: bump version to ${next_snapshot}"
 
-rm -f "$original_pom"
-trap - EXIT INT HUP TERM
-
 git switch main
-git merge --no-ff "$branch" -m "chore: merge ${branch}"
+git merge --no-ff "$tmp_branch" -m "chore: merge ${tmp_branch}"
+git branch -d "$tmp_branch"
 
-echo "Created release branch ${branch}, tag ${tag}, and bumped main to ${next_snapshot}."
+echo "Created release branch ${branch}, tag ${tag}, and bumped main to ${next_snapshot} through ${tmp_branch}."
