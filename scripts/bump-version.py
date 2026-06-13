@@ -82,9 +82,7 @@ def main():
     if args.release_from_snapshot:
         current, next_version = release_from_snapshot(args.pom)
     else:
-        part = args.part or args.bump
-        if part is None:
-            raise SystemExit("Choose a bump: major, minor, or patch.")
+        part = args.part or args.bump or "patch"
         current, next_version = bump_version(args.pom, part)
 
     github_output = os.environ.get("GITHUB_OUTPUT")
