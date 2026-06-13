@@ -43,7 +43,7 @@
         <sonar-maven-plugin.version>5.7.0.6970</sonar-maven-plugin.version>
         <sonar.projectKey>bitstep-ie_mango4j-swarm</sonar.projectKey>
         <sonar.organization>bitstep-ie</sonar.organization>
-        <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <sonar.coverage.jacoco.xmlReportPaths>target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
         <sonar.java.source>${maven.compiler.release}</sonar.java.source>
         <sonar.sourceEncoding>${project.build.sourceEncoding}</sonar.sourceEncoding>
         <spotless-maven-plugin.version>2.43.0</spotless-maven-plugin.version>
@@ -147,7 +147,7 @@
                             <goal>report</goal>
                         </goals>
                         <configuration>
-                            <outputDirectory>${project.build.directory}/site/jacoco</outputDirectory>
+                            <outputDirectory>${project.basedir}/target/site/jacoco</outputDirectory>
                             <formats>
                                 <format>XML</format>
                             </formats>
