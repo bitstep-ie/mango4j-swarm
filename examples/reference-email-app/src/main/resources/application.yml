@@ -3,9 +3,9 @@ spring:
     name: mango4j-reference-email-app
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/mango_reference
-    username: mango
-    password: mango
+    url: jdbc:postgresql://localhost:5432/${POSTGRES_DB:mango_reference}
+    username: ${POSTGRES_USER:mango}
+    password: ${POSTGRES_PASSWORD:mango}
 
   flyway:
     # The application owns schema and table creation. This example ships
