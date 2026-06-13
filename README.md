@@ -1,30 +1,47 @@
 # mango-swarm
 
-Distributed PostgreSQL-backed, rate-limited task execution for Spring Boot applications.
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=bitstep-ie_mango4j-swarm&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=bitstep-ie_mango4j-swarm)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=bitstep-ie_mango4j-swarm&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=bitstep-ie_mango4j-swarm)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=bitstep-ie_mango4j-swarm&metric=coverage)](https://sonarcloud.io/summary/new_code?id=bitstep-ie_mango4j-swarm)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=bitstep-ie_mango4j-swarm&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=bitstep-ie_mango4j-swarm)
 
-<br/>
 
+[![CI](https://github.com/bitstep-ie/mango4j-swarm/actions/workflows/packages.yml/badge.svg)](https://github.com/bitstep-ie/mango4j-swarm/actions/workflows/packages.yml)
+[![CodeQL](https://github.com/bitstep-ie/mango4j-swarm/actions/workflows/codeql.yml/badge.svg)](https://github.com/bitstep-ie/mango4j-swarm/actions/workflows/codeql.yml)
+[![Dependabot](https://github.com/bitstep-ie/mango4j-swarm/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/bitstep-ie/mango4j-swarm/actions/workflows/dependabot/dependabot-updates)
+
+
+<br />
 <div align="center">
-  <picture>
-    <source srcset="documentation/docs/assets/mango-with-text-black.png" media="(prefers-color-scheme: light)">
-    <source srcset="documentation/docs/assets/mango-with-text-white.png" media="(prefers-color-scheme: dark)">
-    <img src="documentation/docs/assets/mango-with-text-black.png" alt="mango Logo">
-  </picture>
-
-  <h3 align="center">mango-swarm</h3>
-
-  <p align="center">
-    Durable JSON tasks, self-coordinating workers, token-ring rate limits, retries, and PostgreSQL-safe claiming.
-    <br/><br/>
-    <a href="documentation/how-mango-swarm-works.md"><strong>How It Works</strong></a>
-    <br/>
-    <a href="documentation/why-mango4j-swarm.md"><strong>Why mango-swarm?</strong></a>
-    <br/><br/>
-    <a href="examples/reference-email-app"><strong>Reference Email App</strong></a>
-  </p>
+    <a href="https://github.com/bitstep-ie/mango4j-swarm">
+    <picture>
+        <source srcset="documentation/docs/assets/mango-with-text-black.png" media="(prefers-color-scheme: light)">
+        <source srcset="documentation/docs/assets/mango-with-text-white.png" media="(prefers-color-scheme: dark)">
+        <img src="documentation/docs/assets/mango-with-text-black.png" alt="mango Logo">
+    </picture>
+    </a>
+    <h3 align="center">mango-swarm</h3>
+    <p align="center">
+        Distributed PostgreSQL-backed, rate-limited task execution for Spring Boot applications.
+        <br />
+        <br />
+        <a href="documentation/how-mango-swarm-works.md"><strong>How It Works</strong></a>
+        &middot;
+        <a href="documentation/why-mango4j-swarm.md"><strong>Why mango-swarm?</strong></a>
+        &middot;
+        <a href="examples/reference-email-app"><strong>Reference Email App</strong></a>
+        <br />
+        <br />
+        <a href="https://github.com/bitstep-ie/mango4j-swarm/issues/new?template=bug_report.md" target="_blank">
+            🐛 Report Bug
+        </a>
+        &middot;
+        <a href="https://github.com/bitstep-ie/mango4j-swarm/issues/new?template=feature_request.md" target="_blank">
+            💡 Request Feature
+        </a>
+    </p>
 </div>
-
-<br/>
+<br />
 
 > **DRAFT**
 >
