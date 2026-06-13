@@ -10,6 +10,27 @@
     <name>mango-swarm</name>
     <description>PostgreSQL-backed, rate-limited, distributed task executor for Spring Boot applications.</description>
 
+    <url>https://github.com/bitstep-ie/mango4j-swarm</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Bitstep</name>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git://github.com/bitstep-ie/mango4j-swarm.git</connection>
+        <developerConnection>scm:git:ssh://github.com/bitstep-ie/mango4j-swarm.git</developerConnection>
+        <url>https://github.com/bitstep-ie/mango4j-swarm</url>
+    </scm>
+
     <properties>
         <java.version>17</java.version>
         <maven.compiler.release>17</maven.compiler.release>
@@ -25,6 +46,8 @@
         <sonar.sourceEncoding>${project.build.sourceEncoding}</sonar.sourceEncoding>
         <spotless-maven-plugin.version>2.43.0</spotless-maven-plugin.version>
         <spotless-palantir-maven-plugin.version>2.59.0</spotless-palantir-maven-plugin.version>
+        <maven.deploy.plugin.version>3.1.4</maven.deploy.plugin.version>
+        <maven.javadoc.plugin.version>3.12.0</maven.javadoc.plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -176,6 +199,82 @@
                         </simple>
                     </json>
                 </configuration>
+            </plugin>
+
+            <!--     Deploy to Maven Central       -->
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <version>0.9.0</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <publishingServerId>central</publishingServerId>
+                    <waitUntil>published</waitUntil>
+                    <deployAtEnd>true</deployAtEnd>
+                </configuration>
+            </plugin>
+
+            <!--     Versions     -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>versions-maven-plugin</artifactId>
+                <version>2.16.1</version>
+                <configuration>
+                    <ruleSet>
+                        <ignoreVersion>
+                            <type>regex</type>
+                            <version>(.+-.*)</version>
+                        </ignoreVersion>
+                    </ruleSet>
+                    <allowMajorUpdates>false</allowMajorUpdates>
+                    <allowSnapshots>false</allowSnapshots>
+                </configuration>
+            </plugin>
+
+            <!--     JavaDocs     -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>${maven.javadoc.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- GPG signing -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Sources -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.3.0</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
