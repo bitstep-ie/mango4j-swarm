@@ -41,6 +41,8 @@
         <pitest.maven.plugin.version>1.25.0</pitest.maven.plugin.version>
         <pitest.junit5.plugin.version>1.2.3</pitest.junit5.plugin.version>
         <sonar-maven-plugin.version>5.7.0.6970</sonar-maven-plugin.version>
+        <sonar.projectKey>bitstep-ie_mango4j-swarm</sonar.projectKey>
+        <sonar.organization>bitstep-ie</sonar.organization>
         <sonar.coverage.jacoco.xmlReportPaths>${project.reporting.outputDirectory}/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
         <sonar.java.source>${maven.compiler.release}</sonar.java.source>
         <sonar.sourceEncoding>${project.build.sourceEncoding}</sonar.sourceEncoding>
