@@ -1,0 +1,62 @@
+name: Bump Patch Version
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "pom.xml"
+      - "src/**"
+      - "examples/**"
+      - "documentation/**"
+      - "README.md"
+      - ".github/workflows/**"
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    name: Bump patch version
+    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, 'chore: bump version to')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ github.token }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Check whether this commit already updated the POM
+        id: changed
+        run: |
+          if git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep -qx 'pom.xml'; then
+            echo "pom_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pom_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump root POM patch version
+        id: version
+        if: steps.changed.outputs.pom_changed != 'true'
+        run: scripts/bump-patch-version.py --pom pom.xml
+
+      - name: Validate bumped version
+        if: steps.changed.outputs.pom_changed != 'true'
+        run: mvn --batch-mode --no-transfer-progress -DskipTests package
+
+      - name: Commit version bump
+        if: steps.changed.outputs.pom_changed != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pom.xml
+          git commit -m "chore: bump version to ${{ steps.version.outputs.version }}"
+          git push

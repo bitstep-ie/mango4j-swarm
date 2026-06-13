@@ -1,0 +1,76 @@
+name: Packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  maven:
+    name: Maven package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Test
+        run: mvn --batch-mode --no-transfer-progress verify
+
+      - name: Stage package artifacts
+        run: |
+          version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          build_dir=$(mvn help:evaluate -Dexpression=project.build.directory -q -DforceStdout)
+          final_name=$(mvn help:evaluate -Dexpression=project.build.finalName -q -DforceStdout)
+          package_name="mango-swarm-${version}"
+          package_dir="dist/${package_name}"
+          mkdir -p "$package_dir"
+          cp README.md "$package_dir/"
+          cp "${build_dir}/${final_name}.jar" "$package_dir/"
+          tar -C dist -czf "dist/${package_name}.tar.gz" "$package_name"
+
+      - name: Upload Maven artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: maven-package
+          path: dist/mango-swarm-*/*.jar
+
+      - name: Upload release tarball artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-tarball
+          path: dist/*.tar.gz
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - maven
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: dist
+
+      - name: Attach packages to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "Release $GITHUB_REF_NAME"
+          files=$(find dist -type f \( -name '*.jar' -o -name '*.tar.gz' \) -print)
+          gh release upload "$GITHUB_REF_NAME" $files --clobber

@@ -24,5 +24,7 @@ hs_err_pid*
 replay_pid*
 /.idea/
 /target/
+/tmp/
+/?/
 /examples/reference-email-app/target/
 /mango-swarm.iml
