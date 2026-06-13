@@ -24,10 +24,7 @@ public class MangoTasks {
 	private final Clock clock;
 
 	public MangoTasks(
-			TaskRepository taskRepository,
-			ObjectMapper objectMapper,
-			MangoSwarmProperties properties,
-			Clock clock) {
+			TaskRepository taskRepository, ObjectMapper objectMapper, MangoSwarmProperties properties, Clock clock) {
 		this.taskRepository = taskRepository;
 		this.objectMapper = objectMapper;
 		this.properties = properties;
