@@ -14,7 +14,7 @@ if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
   exit 1
 fi
 
-mvn --batch-mode --no-transfer-progress -DskipTests package
+mvn --batch-mode --no-transfer-progress -P hammer-time
 
 git add pom.xml
 git commit -m "chore: bump version to ${version}"
