@@ -43,10 +43,6 @@
 </div>
 <br />
 
-> **DRAFT**
->
-> mango-swarm is currently under active design and implementation. APIs, configuration properties, table names, and migration structure may change before the first stable release.
-
 # Introduction
 
 **mango-swarm** is a small Spring Boot library for running background tasks across one or more instances of the same application.
