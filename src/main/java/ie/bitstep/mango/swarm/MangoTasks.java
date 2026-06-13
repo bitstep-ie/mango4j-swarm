@@ -1,5 +1,6 @@
 package ie.bitstep.mango.swarm;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
@@ -20,11 +21,17 @@ public class MangoTasks {
 	private final TaskRepository taskRepository;
 	private final ObjectMapper objectMapper;
 	private final MangoSwarmProperties properties;
+	private final Clock clock;
 
-	public MangoTasks(TaskRepository taskRepository, ObjectMapper objectMapper, MangoSwarmProperties properties) {
+	public MangoTasks(
+			TaskRepository taskRepository,
+			ObjectMapper objectMapper,
+			MangoSwarmProperties properties,
+			Clock clock) {
 		this.taskRepository = taskRepository;
 		this.objectMapper = objectMapper;
 		this.properties = properties;
+		this.clock = clock;
 	}
 
 	/**
@@ -35,7 +42,7 @@ public class MangoTasks {
 	 * @return persisted task id
 	 */
 	public UUID queue(String taskType, JsonNode payload) {
-		return at(Instant.now(), taskType, payload);
+		return at(Instant.now(clock), taskType, payload);
 	}
 
 	/**
@@ -46,7 +53,7 @@ public class MangoTasks {
 	 * @return persisted task id
 	 */
 	public UUID queue(String taskType, Object payload) {
-		return at(Instant.now(), taskType, payload);
+		return at(Instant.now(clock), taskType, payload);
 	}
 
 	/**
@@ -59,7 +66,7 @@ public class MangoTasks {
 	 */
 	public UUID after(Duration delay, String taskType, JsonNode payload) {
 		Objects.requireNonNull(delay, "delay must not be null");
-		return at(Instant.now().plus(delay), taskType, payload);
+		return at(Instant.now(clock).plus(delay), taskType, payload);
 	}
 
 	/**
@@ -72,7 +79,7 @@ public class MangoTasks {
 	 */
 	public UUID after(Duration delay, String taskType, Object payload) {
 		Objects.requireNonNull(delay, "delay must not be null");
-		return at(Instant.now().plus(delay), taskType, payload);
+		return at(Instant.now(clock).plus(delay), taskType, payload);
 	}
 
 	/**

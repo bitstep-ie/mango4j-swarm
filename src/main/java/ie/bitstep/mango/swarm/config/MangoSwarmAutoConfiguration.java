@@ -1,5 +1,6 @@
 package ie.bitstep.mango.swarm.config;
 
+import java.time.Clock;
 import java.util.List;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -57,7 +58,7 @@ public class MangoSwarmAutoConfiguration {
 	@Bean
 	@ConditionalOnMissingBean
 	MangoTasks mangoTasks(TaskRepository taskRepository, ObjectMapper objectMapper, MangoSwarmProperties properties) {
-		return new MangoTasks(taskRepository, objectMapper, properties);
+		return new MangoTasks(taskRepository, objectMapper, properties, Clock.systemUTC());
 	}
 
 	@Bean
