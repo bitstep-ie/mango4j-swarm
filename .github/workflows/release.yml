@@ -93,7 +93,7 @@ jobs:
 
       - name: Publish Release
         if: github.ref == 'refs/heads/main'
-        run: mvn -B deploy
+        run: mvn -B deploy -Dgpg.skip=false
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
