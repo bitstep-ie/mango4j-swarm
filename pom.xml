@@ -6,7 +6,7 @@
 
     <groupId>ie.bitstep.mango</groupId>
     <artifactId>mango-swarm</artifactId>
-    <version>0.1.4-SNAPSHOT</version>
+    <version>0.1.4</version>
     <name>mango-swarm</name>
     <description>PostgreSQL-backed, rate-limited, distributed task executor for Spring Boot applications.</description>
 
