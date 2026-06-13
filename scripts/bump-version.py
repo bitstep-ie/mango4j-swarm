@@ -31,9 +31,9 @@ def parse_version(version):
     return int(major), int(minor), int(patch), suffix or ""
 
 
-def bump_version(pom, part):
+def bump_version(pom, part, snapshot):
     current = find_project_version(pom)
-    major, minor, patch, suffix = parse_version(current)
+    major, minor, patch, current_suffix = parse_version(current)
 
     if part == "major":
         major += 1
@@ -47,6 +47,7 @@ def bump_version(pom, part):
     else:
         raise SystemExit(f"Unsupported bump part: {part}")
 
+    suffix = "-SNAPSHOT" if snapshot else current_suffix
     next_version = f"{major}.{minor}.{patch}{suffix}"
     replace_project_version(pom, current, next_version)
     return current, next_version
@@ -72,6 +73,7 @@ def main():
         action="store_true",
         help="Convert the current snapshot version to its release version.",
     )
+    parser.add_argument("--snapshot", action="store_true", help="Write bumped versions as snapshots.")
     parser.add_argument("--current", action="store_true", help="Print the current project version without changing it.")
     args = parser.parse_args()
 
@@ -83,7 +85,7 @@ def main():
         current, next_version = release_from_snapshot(args.pom)
     else:
         part = args.part or args.bump or "patch"
-        current, next_version = bump_version(args.pom, part)
+        current, next_version = bump_version(args.pom, part, args.snapshot)
 
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:
