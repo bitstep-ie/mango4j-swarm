@@ -1,8 +1,11 @@
 package ie.bitstep.mango.swarm.db;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -16,6 +19,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PGobject;
@@ -159,12 +163,9 @@ class TaskRepositoryTest extends H2TestSupport {
 				""");
 		assertThat(rows).hasSize(3);
 		assertThat(rows).extracting(row -> row.get("id")).containsExactlyInAnyOrder(first, second, third);
-		assertThat(toInstant(rows.get(0).get("available_at")))
-				.isEqualTo(now);
-		assertThat(toInstant(rows.get(1).get("available_at")))
-				.isEqualTo(now);
-		assertThat(toInstant(rows.get(2).get("available_at")))
-				.isEqualTo(now.plusSeconds(1));
+		assertThat(toInstant(rows.get(0).get("available_at"))).isEqualTo(now);
+		assertThat(toInstant(rows.get(1).get("available_at"))).isEqualTo(now);
+		assertThat(toInstant(rows.get(2).get("available_at"))).isEqualTo(now.plusSeconds(1));
 	}
 
 	@Test
@@ -778,6 +779,56 @@ class TaskRepositoryTest extends H2TestSupport {
 	}
 
 	@Test
+	void postgresUuidArrayTypeUsesLowercaseUuid() throws Exception {
+		JdbcTaskRepository repository =
+				new JdbcTaskRepository(mock(JdbcTemplate.class), objectMapper, new SchemaQualifiedTables(null));
+		setH2(repository, Boolean.FALSE);
+		Method method = JdbcTaskRepository.class.getDeclaredMethod("uuidArrayType");
+		method.setAccessible(true);
+
+		assertThat(method.invoke(repository)).isEqualTo("uuid");
+	}
+
+	@Test
+	void claimedTasksInSelectionOrderSkipsRowsNotReturnedByDatabase() throws Exception {
+		UUID first = UUID.randomUUID();
+		UUID missing = UUID.randomUUID();
+		UUID second = UUID.randomUUID();
+		Map<UUID, TaskRecord> claimedById = Map.of(first, taskRecord(first), second, taskRecord(second));
+		Method method =
+				JdbcTaskRepository.class.getDeclaredMethod("claimedTasksInSelectionOrder", List.class, Map.class);
+		method.setAccessible(true);
+
+		@SuppressWarnings("unchecked")
+		List<TaskRecord> claimed = (List<TaskRecord>) method.invoke(null, List.of(first, missing, second), claimedById);
+
+		assertThat(claimed).extracting(TaskRecord::id).containsExactly(first, second);
+	}
+
+	@Test
+	void jsonSerializationFailuresBecomeSqlExceptions() throws Exception {
+		ObjectMapper failingMapper = new ObjectMapper() {
+			@Override
+			public String writeValueAsString(Object value) throws com.fasterxml.jackson.core.JsonProcessingException {
+				throw new com.fasterxml.jackson.core.JsonProcessingException("broken") {};
+			}
+		};
+		JdbcTaskRepository repository =
+				new JdbcTaskRepository(mock(JdbcTemplate.class), failingMapper, new SchemaQualifiedTables(null));
+		setH2(repository, Boolean.TRUE);
+		PreparedStatement statement = mock(PreparedStatement.class);
+		Method method = JdbcTaskRepository.class.getDeclaredMethod(
+				"setJson", PreparedStatement.class, com.fasterxml.jackson.databind.JsonNode.class);
+		method.setAccessible(true);
+
+		assertThatThrownBy(() -> method.invoke(repository, statement, JsonNodeFactory.instance.objectNode()))
+				.isInstanceOf(InvocationTargetException.class)
+				.extracting(Throwable::getCause)
+				.satisfies(cause ->
+						assertThat(cause).isInstanceOf(SQLException.class).hasMessage("Cannot serialize task payload"));
+	}
+
+	@Test
 	void rejectsNullJdbcTemplateExecuteResult() {
 		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
 		JdbcTaskRepository repository =
@@ -861,9 +912,28 @@ class TaskRepositoryTest extends H2TestSupport {
 	}
 
 	private static void setH2(JdbcTaskRepository repository) throws Exception {
+		setH2(repository, Boolean.TRUE);
+	}
+
+	private static void setH2(JdbcTaskRepository repository, Boolean value) throws Exception {
 		java.lang.reflect.Field h2 = JdbcTaskRepository.class.getDeclaredField("h2");
 		h2.setAccessible(true);
-		h2.set(repository, Boolean.TRUE);
+		h2.set(repository, value);
+	}
+
+	private static TaskRecord taskRecord(UUID id) {
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		return new TaskRecord(
+				id,
+				"email",
+				JsonNodeFactory.instance.objectNode(),
+				TaskStatus.CLAIMED,
+				now,
+				UUID.randomUUID(),
+				now,
+				1,
+				now,
+				now);
 	}
 
 	private static Instant toInstant(Object value) {

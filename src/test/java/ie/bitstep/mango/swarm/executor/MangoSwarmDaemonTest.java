@@ -562,9 +562,11 @@ class MangoSwarmDaemonTest {
 		invokeReport(reporter, "running", null, null);
 		invokeReport(reporter, "running", 25, null);
 		invokeReport(reporter, "running", null, null);
+		invokeReport(reporter, null, 10, null);
 
-		assertThat(repository.progressCalls).isEqualTo(3);
-		assertThat(repository.lastProgressPercent).isEqualTo(-1);
+		assertThat(repository.progressCalls).isEqualTo(4);
+		assertThat(repository.lastProgressState).isEqualTo("running");
+		assertThat(repository.lastProgressPercent).isEqualTo(10);
 		daemon.stop();
 	}
 
@@ -1229,6 +1231,7 @@ class MangoSwarmDaemonTest {
 		private int progressCalls;
 		private int markInProgressCalls;
 		private int requeueCalls;
+		private String lastProgressState;
 		private int lastProgressPercent;
 		private String lastProgressDescription;
 		private String lastFailureMessage;
@@ -1292,6 +1295,7 @@ class MangoSwarmDaemonTest {
 				Integer progressPercent,
 				String message) {
 			progressCalls++;
+			lastProgressState = executionState;
 			lastProgressPercent = progressPercent == null ? -1 : progressPercent;
 			lastProgressDescription = message;
 		}
