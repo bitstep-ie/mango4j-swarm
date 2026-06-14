@@ -35,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class TaskRepositoryTest extends H2TestSupport {
@@ -868,6 +869,37 @@ class TaskRepositoryTest extends H2TestSupport {
 	}
 
 	@Test
+	void detectsH2DatabaseProductName() throws Exception {
+		JdbcTaskRepository repository = repositoryDetectingDatabaseProduct("H2 Database Engine");
+		Method method = JdbcTaskRepository.class.getDeclaredMethod("detectH2");
+		method.setAccessible(true);
+
+		assertThat(method.invoke(repository)).isEqualTo(true);
+	}
+
+	@Test
+	void nullDatabaseProductNameIsNotH2() throws Exception {
+		JdbcTaskRepository repository = repositoryDetectingDatabaseProduct(null);
+		Method method = JdbcTaskRepository.class.getDeclaredMethod("detectH2");
+		method.setAccessible(true);
+
+		assertThat(method.invoke(repository)).isEqualTo(false);
+	}
+
+	@Test
+	void h2DetectionUsesCachedValueWhenPresent() throws Exception {
+		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+		JdbcTaskRepository repository =
+				new JdbcTaskRepository(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
+		Method method = JdbcTaskRepository.class.getDeclaredMethod("isH2");
+		method.setAccessible(true);
+		setH2(repository, Boolean.TRUE);
+
+		assertThat(method.invoke(repository)).isEqualTo(true);
+		verifyNoInteractions(jdbcTemplate);
+	}
+
+	@Test
 	void rejectsNullJdbcTemplateExecuteResult() {
 		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
 		JdbcTaskRepository repository =
@@ -973,6 +1005,18 @@ class TaskRepositoryTest extends H2TestSupport {
 				1,
 				now,
 				now);
+	}
+
+	private JdbcTaskRepository repositoryDetectingDatabaseProduct(String productName) throws Exception {
+		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+		java.sql.Connection connection = mock(java.sql.Connection.class);
+		java.sql.DatabaseMetaData metaData = mock(java.sql.DatabaseMetaData.class);
+		when(connection.getMetaData()).thenReturn(metaData);
+		when(metaData.getDatabaseProductName()).thenReturn(productName);
+		when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Boolean>>any()))
+				.thenAnswer(invocation ->
+						invocation.<ConnectionCallback<Boolean>>getArgument(0).doInConnection(connection));
+		return new JdbcTaskRepository(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
 	}
 
 	private static Instant toInstant(Object value) {

@@ -662,14 +662,12 @@ LIMIT ?
 	}
 
 	private boolean isH2() {
-		if (h2 == null) {
-			synchronized (this) {
-				if (h2 == null) {
-					h2 = detectH2();
-				}
-			}
+		Boolean detected = h2;
+		if (detected == null) {
+			detected = detectH2();
+			h2 = detected;
 		}
-		return h2;
+		return detected;
 	}
 
 	private boolean detectH2() {
