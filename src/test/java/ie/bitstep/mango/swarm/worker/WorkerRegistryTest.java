@@ -1,12 +1,13 @@
 package ie.bitstep.mango.swarm.worker;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
-import ie.bitstep.mango.swarm.H2TestSupport;
+import ie.bitstep.mango.swarm.PostgresTestSupport;
 import ie.bitstep.mango.swarm.db.SchemaQualifiedTables;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,7 +18,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class WorkerRegistryTest extends H2TestSupport {
+class WorkerRegistryTest extends PostgresTestSupport {
 
 	@Test
 	void registersWorkerAndUpdatesHeartbeat() {
@@ -28,8 +29,12 @@ class WorkerRegistryTest extends H2TestSupport {
 		workerRegistry.heartbeat(workerId, "node-a", started, started.plusSeconds(5));
 
 		Integer rows = jdbcTemplate.queryForObject("select count(*) from mango_swarm_workers", Integer.class);
-		Instant lastHeartbeat = jdbcTemplate.queryForObject(
-				"select last_heartbeat_at from mango_swarm_workers where worker_id = ?", Instant.class, workerId);
+		Instant lastHeartbeat = jdbcTemplate
+				.queryForObject(
+						"select last_heartbeat_at from mango_swarm_workers where worker_id = ?",
+						OffsetDateTime.class,
+						workerId)
+				.toInstant();
 
 		assertThat(count).isEqualTo(1);
 		assertThat(rows).isEqualTo(1);

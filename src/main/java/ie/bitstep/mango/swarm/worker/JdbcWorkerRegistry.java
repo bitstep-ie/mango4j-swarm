@@ -4,6 +4,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -46,14 +47,14 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement update = scoped.prepareStatement(UPDATE_WORKER_SQL)) {
 						update.setString(1, hostname);
-						update.setObject(2, now);
+						update.setObject(2, now.atOffset(ZoneOffset.UTC));
 						update.setObject(3, workerId);
 						if (update.executeUpdate() == 0) {
 							try (PreparedStatement insert = scoped.prepareStatement(INSERT_WORKER_SQL)) {
 								insert.setObject(1, workerId);
 								insert.setString(2, hostname);
-								insert.setObject(3, startedAt);
-								insert.setObject(4, now);
+								insert.setObject(3, startedAt.atOffset(ZoneOffset.UTC));
+								insert.setObject(4, now.atOffset(ZoneOffset.UTC));
 								insert.executeUpdate();
 							}
 						}
@@ -65,7 +66,7 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 		int prunedWorkers = executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(DELETE_STALE_WORKERS_SQL)) {
-						statement.setObject(1, staleBefore);
+						statement.setObject(1, staleBefore.atOffset(ZoneOffset.UTC));
 						return statement.executeUpdate();
 					}
 				}),
@@ -83,7 +84,7 @@ public class JdbcWorkerRegistry implements WorkerRegistry {
 		int count = executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(COUNT_ACTIVE_WORKERS_SQL)) {
-						statement.setObject(1, now.minus(staleAfter));
+						statement.setObject(1, now.minus(staleAfter).atOffset(ZoneOffset.UTC));
 						try (ResultSet rs = statement.executeQuery()) {
 							rs.next();
 							return rs.getInt(1);
