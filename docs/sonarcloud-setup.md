@@ -25,16 +25,37 @@ This is a one-time change per project.
 
 ## 2. GitHub Actions Secrets Required
 
-| Secret | Purpose |
-|---|---|
-| `SONAR_TOKEN` | Authenticates the Maven scanner with SonarCloud |
-| `SONAR_HOST_URL` | SonarCloud host (`https://sonarcloud.io`) |
-| `GPG_PRIVATE_KEY` | Signing key for Maven Central publishing (release/snapshot workflows only) |
-| `GPG_PASSPHRASE` | Passphrase for the GPG key (release/snapshot workflows only) |
-| `CENTRAL_USERNAME` | Maven Central portal username (release/snapshot workflows only) |
-| `CENTRAL_PASSWORD` | Maven Central portal password (release/snapshot workflows only) |
-| `APP_ID` | GitHub App ID for bot commits (release/snapshot workflows only) |
-| `APP_PRIVATE_KEY` | GitHub App private key for bot commits (release/snapshot workflows only) |
+| Secret | Value | Scope |
+|---|---|---|
+| `SONAR_TOKEN` | Generated per repository — see below | Per-repo |
+| `SONAR_HOST_URL` | `https://sonarcloud.io` | Shared (same for every repo) |
+| `GPG_PRIVATE_KEY` | Signing key for Maven Central publishing | Release/snapshot workflows only |
+| `GPG_PASSPHRASE` | Passphrase for the GPG key | Release/snapshot workflows only |
+| `CENTRAL_USERNAME` | Maven Central portal username | Release/snapshot workflows only |
+| `CENTRAL_PASSWORD` | Maven Central portal password | Release/snapshot workflows only |
+| `APP_ID` | GitHub App ID for bot commits | Release/snapshot workflows only |
+| `APP_PRIVATE_KEY` | GitHub App private key for bot commits | Release/snapshot workflows only |
+
+### Generating `SONAR_TOKEN`
+
+A token must be generated separately for each repository.
+
+1. Log in to [sonarcloud.io](https://sonarcloud.io)
+2. Go to **My Account → Security**
+3. Under **Generate Tokens**, enter a name (e.g. `mango4j-swarm-ci`) and click **Generate**
+4. Copy the token — it is only shown once
+5. In the GitHub repository go to **Settings → Secrets and variables → Actions**
+6. Add a new repository secret named `SONAR_TOKEN` with the copied value
+
+### Setting `SONAR_HOST_URL`
+
+This value is the same for every project using SonarCloud and never changes:
+
+```
+https://sonarcloud.io
+```
+
+Add it as a repository secret named `SONAR_HOST_URL` (or as an organisation-level secret so it is shared across all repositories automatically).
 
 ---
 
