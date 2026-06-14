@@ -4,7 +4,6 @@ import java.sql.Array;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Duration;
 import java.time.Instant;
@@ -236,7 +235,7 @@ LIMIT ?
 						statement.setObject(1, taskId);
 						statement.setString(2, taskType);
 						setJson(statement, payload);
-						statement.setTimestamp(4, Timestamp.from(availableAt));
+						statement.setObject(4, availableAt);
 						statement.executeUpdate();
 						return taskId;
 					}
@@ -266,7 +265,7 @@ LIMIT ?
 		List<UUID> ids = new ArrayList<>();
 		try (PreparedStatement select = connection.prepareStatement(SELECT_QUEUED_TASK_IDS_SQL)) {
 			select.setString(1, taskType);
-			select.setTimestamp(2, Timestamp.from(now));
+			select.setObject(2, now);
 			select.setInt(3, limit);
 			try (ResultSet rs = select.executeQuery()) {
 				while (rs.next()) {
@@ -281,8 +280,8 @@ LIMIT ?
 			throws SQLException {
 		try (PreparedStatement update = connection.prepareStatement(CLAIM_TASK_SQL)) {
 			update.setObject(1, workerId);
-			update.setTimestamp(2, Timestamp.from(now));
-			update.setTimestamp(3, Timestamp.from(now));
+			update.setObject(2, now);
+			update.setObject(3, now);
 			for (UUID id : ids) {
 				update.setObject(4, id);
 				update.addBatch();
@@ -330,7 +329,7 @@ LIMIT ?
 		executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(MARK_IN_PROGRESS_SQL)) {
-						statement.setTimestamp(1, Timestamp.from(now));
+						statement.setObject(1, now);
 						statement.setObject(2, taskId);
 						statement.setObject(3, workerId);
 						int updated = statement.executeUpdate();
@@ -370,9 +369,9 @@ LIMIT ?
 				connection -> tables.withSearchPath(connection, scoped -> {
 					long executionTimeMillis = executionTimeMillis(scoped, taskId, now);
 					try (PreparedStatement statement = scoped.prepareStatement(MARK_COMPLETED_SQL)) {
-						statement.setTimestamp(1, Timestamp.from(now));
+						statement.setObject(1, now);
 						statement.setLong(2, executionTimeMillis);
-						statement.setTimestamp(3, Timestamp.from(now));
+						statement.setObject(3, now);
 						statement.setObject(4, taskId);
 						statement.setObject(5, workerId);
 						int updated = statement.executeUpdate();
@@ -394,9 +393,9 @@ LIMIT ?
 				connection -> tables.withSearchPath(connection, scoped -> {
 					long executionTimeMillis = executionTimeMillis(scoped, taskId, now);
 					try (PreparedStatement statement = scoped.prepareStatement(MARK_FAILED_SQL)) {
-						statement.setTimestamp(1, Timestamp.from(now));
+						statement.setObject(1, now);
 						statement.setLong(2, executionTimeMillis);
-						statement.setTimestamp(3, Timestamp.from(now));
+						statement.setObject(3, now);
 						statement.setString(4, truncate(errorMessage));
 						statement.setObject(5, taskId);
 						statement.setObject(6, workerId);
@@ -419,8 +418,8 @@ LIMIT ?
 		executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(RESCHEDULE_AFTER_FAILURE_SQL)) {
-						statement.setTimestamp(1, Timestamp.from(availableAt));
-						statement.setTimestamp(2, Timestamp.from(now));
+						statement.setObject(1, availableAt);
+						statement.setObject(2, now);
 						statement.setString(3, truncate(errorMessage));
 						statement.setObject(4, taskId);
 						statement.setObject(5, workerId);
@@ -439,8 +438,8 @@ LIMIT ?
 		executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(REQUEUE_CLAIMED_SQL)) {
-						statement.setTimestamp(1, Timestamp.from(availableAt));
-						statement.setTimestamp(2, Timestamp.from(now));
+						statement.setObject(1, availableAt);
+						statement.setObject(2, now);
 						statement.setString(3, truncate(reason));
 						statement.setObject(4, taskId);
 						statement.setObject(5, workerId);
@@ -462,9 +461,9 @@ LIMIT ?
 		return executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(RECLAIM_TIMED_OUT_SQL)) {
-						statement.setTimestamp(1, Timestamp.from(now));
+						statement.setObject(1, now);
 						statement.setString(2, taskType);
-						statement.setTimestamp(3, Timestamp.from(now.minus(timeout)));
+						statement.setObject(3, now.minus(timeout));
 						statement.setInt(4, limit);
 						return statement.executeUpdate();
 					}
@@ -480,10 +479,10 @@ LIMIT ?
 		return executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(MARK_TIMED_OUT_FAILED_SQL)) {
-						statement.setTimestamp(1, Timestamp.from(now));
-						statement.setTimestamp(2, Timestamp.from(now));
+						statement.setObject(1, now);
+						statement.setObject(2, now);
 						statement.setString(3, taskType);
-						statement.setTimestamp(4, Timestamp.from(now.minus(timeout)));
+						statement.setObject(4, now.minus(timeout));
 						statement.setInt(5, limit);
 						return statement.executeUpdate();
 					}
@@ -499,7 +498,7 @@ LIMIT ?
 		return executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(DELETE_COMPLETED_SQL)) {
-						statement.setTimestamp(1, Timestamp.from(now.minus(retention)));
+						statement.setObject(1, now.minus(retention));
 						statement.setInt(2, limit);
 						return statement.executeUpdate();
 					}
@@ -515,7 +514,7 @@ LIMIT ?
 		return executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(DELETE_FAILED_SQL)) {
-						statement.setTimestamp(1, Timestamp.from(now.minus(retention)));
+						statement.setObject(1, now.minus(retention));
 						statement.setInt(2, limit);
 						return statement.executeUpdate();
 					}
@@ -530,7 +529,7 @@ LIMIT ?
 				update.setString(2, truncate(runtime.executionState()));
 				setNullableInteger(update, 3, runtime.progressPercent());
 				update.setString(4, truncate(runtime.message()));
-				update.setTimestamp(5, Timestamp.from(runtime.now()));
+				update.setObject(5, runtime.now());
 				update.setLong(6, runtime.executionTimeMillis());
 				update.setObject(7, runtime.taskId());
 				if (update.executeUpdate() > 0) {
@@ -555,8 +554,8 @@ LIMIT ?
 		statement.setString(3, truncate(runtime.executionState()));
 		setNullableInteger(statement, 4, runtime.progressPercent());
 		statement.setString(5, truncate(runtime.message()));
-		statement.setTimestamp(6, Timestamp.from(runtime.now()));
-		statement.setTimestamp(7, Timestamp.from(runtime.now()));
+		statement.setObject(6, runtime.now());
+		statement.setObject(7, runtime.now());
 		statement.setLong(8, runtime.executionTimeMillis());
 	}
 
@@ -606,7 +605,7 @@ LIMIT ?
 			statement.setObject(1, taskId);
 			try (ResultSet rs = statement.executeQuery()) {
 				if (rs.next()) {
-					return elapsedMillis(rs.getTimestamp("started_at").toInstant(), now);
+					return elapsedMillis(rs.getObject("started_at", Instant.class), now);
 				}
 			}
 		}
@@ -638,18 +637,18 @@ LIMIT ?
 
 	TaskRecord mapTask(ResultSet rs) throws SQLException {
 		try {
-			Timestamp claimedAt = rs.getTimestamp("claimed_at");
+			Instant claimedAt = rs.getObject("claimed_at", Instant.class);
 			return new TaskRecord(
 					rs.getObject("id", UUID.class),
 					rs.getString("task_type"),
 					objectMapper.readTree(rs.getString("payload")),
 					TaskStatus.fromDatabaseValue(rs.getString("status")),
-					rs.getTimestamp("available_at").toInstant(),
+					rs.getObject("available_at", Instant.class),
 					rs.getObject("claimed_by", UUID.class),
-					claimedAt == null ? null : claimedAt.toInstant(),
+					claimedAt,
 					rs.getInt("attempt_count"),
-					rs.getTimestamp("created_at").toInstant(),
-					rs.getTimestamp("updated_at").toInstant());
+					rs.getObject("created_at", Instant.class),
+					rs.getObject("updated_at", Instant.class));
 		} catch (JsonProcessingException ex) {
 			throw new SQLException("Cannot parse task payload", ex);
 		}

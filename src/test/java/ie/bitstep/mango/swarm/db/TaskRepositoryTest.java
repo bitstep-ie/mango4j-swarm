@@ -3,9 +3,11 @@ package ie.bitstep.mango.swarm.db;
 import java.lang.reflect.Proxy;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,12 +80,12 @@ class TaskRepositoryTest extends H2TestSupport {
 		row.put("task_type", "email");
 		row.put("payload", "{\"subject\":\"hello\"}");
 		row.put("status", TaskStatus.QUEUED.databaseValue());
-		row.put("available_at", Timestamp.from(availableAt));
+		row.put("available_at", availableAt);
 		row.put("claimed_by", workerId);
 		row.put("claimed_at", null);
 		row.put("attempt_count", 0);
-		row.put("created_at", Timestamp.from(createdAt));
-		row.put("updated_at", Timestamp.from(updatedAt));
+		row.put("created_at", createdAt);
+		row.put("updated_at", updatedAt);
 
 		TaskRecord task = ((JdbcTaskRepository) taskRepository).mapTask(resultSet(row));
 
@@ -107,12 +109,12 @@ class TaskRepositoryTest extends H2TestSupport {
 		row.put("task_type", "email");
 		row.put("payload", "{}");
 		row.put("status", TaskStatus.CLAIMED.databaseValue());
-		row.put("available_at", Timestamp.from(now.minusSeconds(1)));
+		row.put("available_at", now.minusSeconds(1));
 		row.put("claimed_by", UUID.randomUUID());
-		row.put("claimed_at", Timestamp.from(now));
+		row.put("claimed_at", now);
 		row.put("attempt_count", 1);
-		row.put("created_at", Timestamp.from(now.minusSeconds(2)));
-		row.put("updated_at", Timestamp.from(now));
+		row.put("created_at", now.minusSeconds(2));
+		row.put("updated_at", now);
 
 		TaskRecord task = ((JdbcTaskRepository) taskRepository).mapTask(resultSet(row));
 
@@ -127,12 +129,12 @@ class TaskRepositoryTest extends H2TestSupport {
 		row.put("task_type", "email");
 		row.put("payload", "{");
 		row.put("status", TaskStatus.QUEUED.databaseValue());
-		row.put("available_at", Timestamp.from(now));
+		row.put("available_at", now);
 		row.put("claimed_by", null);
 		row.put("claimed_at", null);
 		row.put("attempt_count", 0);
-		row.put("created_at", Timestamp.from(now));
-		row.put("updated_at", Timestamp.from(now));
+		row.put("created_at", now);
+		row.put("updated_at", now);
 
 		assertThatThrownBy(() -> ((JdbcTaskRepository) taskRepository).mapTask(resultSet(row)))
 				.isInstanceOf(java.sql.SQLException.class)
@@ -157,11 +159,11 @@ class TaskRepositoryTest extends H2TestSupport {
 				""");
 		assertThat(rows).hasSize(3);
 		assertThat(rows).extracting(row -> row.get("id")).containsExactlyInAnyOrder(first, second, third);
-		assertThat(((java.sql.Timestamp) rows.get(0).get("available_at")).toInstant())
+		assertThat(toInstant(rows.get(0).get("available_at")))
 				.isEqualTo(now);
-		assertThat(((java.sql.Timestamp) rows.get(1).get("available_at")).toInstant())
+		assertThat(toInstant(rows.get(1).get("available_at")))
 				.isEqualTo(now);
-		assertThat(((java.sql.Timestamp) rows.get(2).get("available_at")).toInstant())
+		assertThat(toInstant(rows.get(2).get("available_at")))
 				.isEqualTo(now.plusSeconds(1));
 	}
 
@@ -244,7 +246,7 @@ class TaskRepositoryTest extends H2TestSupport {
 				.containsEntry("progress_percent", 50)
 				.containsEntry("progress_message", "sending")
 				.containsEntry("execution_time_ms", 55_000L);
-		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.minusSeconds(5));
+		assertThat(toInstant(row.get("updated_at"))).isEqualTo(now.minusSeconds(5));
 	}
 
 	@Test
@@ -269,8 +271,8 @@ class TaskRepositoryTest extends H2TestSupport {
 				.containsEntry("progress_percent", null)
 				.containsEntry("progress_message", null)
 				.containsEntry("execution_time_ms", 0L);
-		assertThat(((java.sql.Timestamp) row.get("started_at")).toInstant()).isEqualTo(now.plusSeconds(1));
-		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.plusSeconds(1));
+		assertThat(toInstant(row.get("started_at"))).isEqualTo(now.plusSeconds(1));
+		assertThat(toInstant(row.get("updated_at"))).isEqualTo(now.plusSeconds(1));
 		assertThat(jdbcTemplate.queryForObject(
 						"select execution_time_ms from mango_swarm_tasks where id = ?", Long.class, taskId))
 				.isZero();
@@ -301,7 +303,7 @@ class TaskRepositoryTest extends H2TestSupport {
 				"""
 					select started_at from mango_swarm_task_runtime where task_id = ?
 					""", taskId);
-		assertThat(((java.sql.Timestamp) row.get("started_at")).toInstant()).isEqualTo(secondStart);
+		assertThat(toInstant(row.get("started_at"))).isEqualTo(secondStart);
 
 		// execution_time_ms on the terminal task row must be ~10s, not ~100s
 		taskRepository.markCompleted(taskId, workerId, completion);
@@ -350,8 +352,8 @@ class TaskRepositoryTest extends H2TestSupport {
 				.containsEntry("progress_percent", 75)
 				.containsEntry("progress_message", "calling")
 				.containsEntry("execution_time_ms", 1_000L);
-		assertThat(((java.sql.Timestamp) row.get("started_at")).toInstant()).isEqualTo(now.plusSeconds(1));
-		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.plusSeconds(2));
+		assertThat(toInstant(row.get("started_at"))).isEqualTo(now.plusSeconds(1));
+		assertThat(toInstant(row.get("updated_at"))).isEqualTo(now.plusSeconds(2));
 	}
 
 	@Test
@@ -381,7 +383,7 @@ class TaskRepositoryTest extends H2TestSupport {
 				.containsEntry("progress_percent", 100)
 				.containsEntry("progress_message", "finished")
 				.containsEntry("runtime_execution_time_ms", 5_000L);
-		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.plusSeconds(5));
+		assertThat(toInstant(row.get("updated_at"))).isEqualTo(now.plusSeconds(5));
 	}
 
 	@Test
@@ -429,7 +431,7 @@ class TaskRepositoryTest extends H2TestSupport {
 					""",
 				taskId);
 		assertThat(row).containsEntry("status", "queued");
-		assertThat(((java.sql.Timestamp) row.get("available_at")).toInstant()).isEqualTo(retryAt);
+		assertThat(toInstant(row.get("available_at"))).isEqualTo(retryAt);
 		assertThat(row.get("claimed_by")).isNull();
 		assertThat(row.get("claimed_at")).isNull();
 		assertThat(row.get("failed_at")).isNull();
@@ -485,7 +487,7 @@ class TaskRepositoryTest extends H2TestSupport {
 				.containsEntry("progress_percent", null)
 				.containsEntry("progress_message", "remote error")
 				.containsEntry("runtime_execution_time_ms", 0L);
-		assertThat(((java.sql.Timestamp) row.get("updated_at")).toInstant()).isEqualTo(now.plusSeconds(1));
+		assertThat(toInstant(row.get("updated_at"))).isEqualTo(now.plusSeconds(1));
 	}
 
 	@Test
@@ -862,6 +864,13 @@ class TaskRepositoryTest extends H2TestSupport {
 		java.lang.reflect.Field h2 = JdbcTaskRepository.class.getDeclaredField("h2");
 		h2.setAccessible(true);
 		h2.set(repository, Boolean.TRUE);
+	}
+
+	private static Instant toInstant(Object value) {
+		if (value instanceof Instant i) return i;
+		if (value instanceof OffsetDateTime odt) return odt.toInstant();
+		if (value instanceof LocalDateTime ldt) return ldt.toInstant(ZoneOffset.UTC);
+		return ((java.util.Date) value).toInstant();
 	}
 
 	private static ResultSet resultSet(Map<String, Object> row) {
