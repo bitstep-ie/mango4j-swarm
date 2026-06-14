@@ -8,7 +8,7 @@ import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import ie.bitstep.mango.swarm.db.JdbcTaskRepository;
@@ -19,7 +19,7 @@ import ie.bitstep.mango.swarm.worker.WorkerRegistry;
 @Testcontainers(disabledWithoutDocker = true)
 public abstract class PostgresTestSupport {
 	@Container
-	static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+	static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
 	protected JdbcTemplate jdbcTemplate;
 	protected WorkerRegistry workerRegistry;
