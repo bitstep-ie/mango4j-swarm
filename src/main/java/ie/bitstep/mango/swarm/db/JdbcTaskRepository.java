@@ -549,10 +549,6 @@ LIMIT ?
 			Integer progressPercent,
 			String message,
 			long executionTimeMillis) {
-		private RuntimeUpdate withExecutionTimeMillis(long executionTimeMillis) {
-			return new RuntimeUpdate(
-					taskId, workerId, now, executionState, progressPercent, message, executionTimeMillis);
-		}
 	}
 
 	private static void deleteRuntime(java.sql.Connection connection, UUID taskId) throws SQLException {
