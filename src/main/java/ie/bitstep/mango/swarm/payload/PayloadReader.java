@@ -68,7 +68,7 @@ public final class PayloadReader {
 	private JsonNode find(String path) {
 		JsonNode current = root;
 		for (String part : path.split("\\.")) {
-			if (current == null || current.isMissingNode() || current.isNull()) {
+			if (current.isMissingNode() || current.isNull()) {
 				return null;
 			}
 			current = current.path(part);

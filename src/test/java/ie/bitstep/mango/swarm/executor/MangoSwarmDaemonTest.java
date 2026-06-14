@@ -302,6 +302,11 @@ class MangoSwarmDaemonTest {
 	}
 
 	@Test
+	void emptyQueueBackoffCapsWhenScalingWouldOverflow() {
+		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofSeconds(1), 7)).isEqualTo(Duration.ofSeconds(5));
+	}
+
+	@Test
 	void emptyClaimBackoffResetsOnlyAfterNonEmptyClaim() {
 		MangoSwarmProperties properties = properties(10, 1, 1);
 		properties.getExecutor().setPollInterval(Duration.ofMillis(100));
@@ -387,10 +392,20 @@ class MangoSwarmDaemonTest {
 		negativeIntervalDaemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
 		negativeIntervalDaemon.stop();
 
+		MangoSwarmProperties nullInterval = properties(10, 1, 1);
+		nullInterval.getCleanup().setInterval(null);
+		FakeRepository nullIntervalRepository = new FakeRepository(0);
+		MangoSwarmDaemon nullIntervalDaemon = daemon(nullInterval, nullIntervalRepository, 1, new CompletingHandler());
+
+		nullIntervalDaemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+		nullIntervalDaemon.stop();
+
 		assertThat(missingRepository.deleteCompletedCalls).isZero();
 		assertThat(missingRepository.deleteFailedCalls).isZero();
 		assertThat(negativeIntervalRepository.deleteCompletedCalls).isZero();
 		assertThat(negativeIntervalRepository.deleteFailedCalls).isZero();
+		assertThat(nullIntervalRepository.deleteCompletedCalls).isZero();
+		assertThat(nullIntervalRepository.deleteFailedCalls).isZero();
 	}
 
 	@Test
@@ -398,7 +413,7 @@ class MangoSwarmDaemonTest {
 		MangoSwarmProperties properties = properties(10, 1, 1);
 		properties.getCleanup().setInterval(Duration.ofSeconds(1));
 		properties.getCleanup().setCompletedRetention(null);
-		properties.getCleanup().setFailedRetention(Duration.ofNanos(-1));
+		properties.getCleanup().setFailedRetention(Duration.ZERO);
 		FakeRepository repository = new FakeRepository(0);
 		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
 
@@ -406,6 +421,18 @@ class MangoSwarmDaemonTest {
 
 		assertThat(repository.deleteCompletedCalls).isZero();
 		assertThat(repository.deleteFailedCalls).isZero();
+		daemon.stop();
+	}
+
+	@Test
+	void maintenanceBatchDefaultsWhenCleanupConfigurationIsMissing() throws Exception {
+		MangoSwarmProperties properties = properties(10, 1, 1);
+		properties.setCleanup(null);
+		MangoSwarmDaemon daemon = daemon(properties, new FakeRepository(0), 1, new CompletingHandler());
+		Method method = MangoSwarmDaemon.class.getDeclaredMethod("maintenanceBatchSize");
+		method.setAccessible(true);
+
+		assertThat(method.invoke(daemon)).isEqualTo(1_000);
 		daemon.stop();
 	}
 
@@ -567,6 +594,21 @@ class MangoSwarmDaemonTest {
 		assertThat(repository.progressCalls).isEqualTo(4);
 		assertThat(repository.lastProgressState).isEqualTo("running");
 		assertThat(repository.lastProgressPercent).isEqualTo(10);
+		daemon.stop();
+	}
+
+	@Test
+	void runtimeProgressReporterPersistsRepeatedProgressAfterMinInterval() throws Exception {
+		MangoSwarmProperties properties = properties(10, 1, 1);
+		properties.getRuntime().setMinUpdateInterval(Duration.ZERO);
+		FakeRepository repository = new FakeRepository(0);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+		Object reporter = newRuntimeProgressReporter(daemon);
+
+		invokeReport(reporter, "running", 10, "same");
+		invokeReport(reporter, "running", 10, "same");
+
+		assertThat(repository.progressCalls).isEqualTo(2);
 		daemon.stop();
 	}
 

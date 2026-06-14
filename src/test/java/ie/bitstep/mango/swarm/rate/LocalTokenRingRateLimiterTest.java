@@ -48,6 +48,17 @@ class LocalTokenRingRateLimiterTest {
 	}
 
 	@Test
+	void zeroPeriodDisablesLimiter() {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(2);
+		limiter.configure(2, Duration.ofSeconds(2), NOW);
+
+		limiter.configure(2, Duration.ZERO, NOW);
+
+		assertThat(limiter.acquire(NOW).granted()).isFalse();
+		assertThat(limiter.availablePermits(NOW, 2)).isZero();
+	}
+
+	@Test
 	void zeroOrNegativeMaxHasNoAvailablePermits() {
 		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(2);
 		limiter.configure(2, Duration.ofSeconds(2), NOW);
@@ -86,6 +97,14 @@ class LocalTokenRingRateLimiterTest {
 
 		assertThat(acquisition.granted()).isFalse();
 		assertThat(acquisition.waitDuration()).isEqualTo(Duration.ofMillis(500));
+	}
+
+	@Test
+	void availablePermitsStopAtFutureToken() {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(2);
+		limiter.configure(2, Duration.ofSeconds(2), NOW);
+
+		assertThat(limiter.availablePermits(NOW, 2)).isOne();
 	}
 
 	@Test

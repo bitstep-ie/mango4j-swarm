@@ -829,6 +829,45 @@ class TaskRepositoryTest extends H2TestSupport {
 	}
 
 	@Test
+	void postgresRuntimeUpdatesUseNativeUpsert() throws Exception {
+		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+		java.sql.Connection connection = mock(java.sql.Connection.class);
+		PreparedStatement select = mock(PreparedStatement.class);
+		PreparedStatement upsert = mock(PreparedStatement.class);
+		ResultSet resultSet = mock(ResultSet.class);
+		Instant startedAt = Instant.parse("2026-05-20T09:59:58Z");
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+		UUID taskId = UUID.randomUUID();
+		UUID workerId = UUID.randomUUID();
+		when(connection.getAutoCommit()).thenReturn(false);
+		when(connection.prepareStatement(org.mockito.ArgumentMatchers.contains("SELECT started_at")))
+				.thenReturn(select);
+		when(connection.prepareStatement(org.mockito.ArgumentMatchers.contains("ON CONFLICT")))
+				.thenReturn(upsert);
+		when(select.executeQuery()).thenReturn(resultSet);
+		when(resultSet.next()).thenReturn(true);
+		when(resultSet.getObject("started_at", Instant.class)).thenReturn(startedAt);
+		when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Integer>>any()))
+				.thenAnswer(invocation ->
+						invocation.<ConnectionCallback<Integer>>getArgument(0).doInConnection(connection));
+		JdbcTaskRepository repository =
+				new JdbcTaskRepository(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
+		setH2(repository, Boolean.FALSE);
+
+		repository.updateRuntime(taskId, workerId, now, "running", 50, "halfway");
+
+		verify(upsert).setObject(1, taskId);
+		verify(upsert).setObject(2, workerId);
+		verify(upsert).setString(3, "running");
+		verify(upsert).setInt(4, 50);
+		verify(upsert).setString(5, "halfway");
+		verify(upsert).setObject(6, now);
+		verify(upsert).setObject(7, now);
+		verify(upsert).setLong(8, 2_000L);
+		verify(upsert).executeUpdate();
+	}
+
+	@Test
 	void rejectsNullJdbcTemplateExecuteResult() {
 		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
 		JdbcTaskRepository repository =

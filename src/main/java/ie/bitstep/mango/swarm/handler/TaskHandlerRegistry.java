@@ -60,7 +60,7 @@ public final class TaskHandlerRegistry {
 							+ handler.getClass().getName());
 		}
 		String value = annotation.value();
-		if (value == null || value.isBlank()) {
+		if (value.isBlank()) {
 			throw new IllegalStateException(
 					"@" + SwarmHandler.class.getSimpleName() + " value must not be blank for handler "
 							+ handler.getClass().getName());
