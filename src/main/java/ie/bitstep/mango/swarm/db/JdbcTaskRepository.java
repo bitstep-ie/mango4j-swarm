@@ -524,7 +524,8 @@ LIMIT ?
 
 	private void upsertRuntime(java.sql.Connection connection, RuntimeUpdate runtime) throws SQLException {
 		if (isH2()) {
-			try (PreparedStatement update = connection.prepareStatement(UPDATE_RUNTIME_H2_SQL)) {
+			PreparedStatement update = connection.prepareStatement(UPDATE_RUNTIME_H2_SQL);
+			try {
 				update.setObject(1, runtime.workerId());
 				update.setString(2, truncate(runtime.executionState()));
 				setNullableInteger(update, 3, runtime.progressPercent());
@@ -535,6 +536,8 @@ LIMIT ?
 				if (update.executeUpdate() > 0) {
 					return;
 				}
+			} finally {
+				update.close();
 			}
 			try (PreparedStatement insert = connection.prepareStatement(INSERT_RUNTIME_SQL)) {
 				bindRuntimeInsert(insert, runtime.withExecutionTimeMillis(0L));
@@ -596,18 +599,24 @@ LIMIT ?
 	}
 
 	private long executionTimeMillis(java.sql.Connection connection, UUID taskId, Instant now) throws SQLException {
-		try (PreparedStatement statement = connection.prepareStatement(
+		PreparedStatement statement = connection.prepareStatement(
 				"""
 				SELECT started_at
 				FROM mango_swarm_task_runtime
 				WHERE task_id = ?
-				""")) {
+				""");
+		try {
 			statement.setObject(1, taskId);
-			try (ResultSet rs = statement.executeQuery()) {
+			ResultSet rs = statement.executeQuery();
+			try {
 				if (rs.next()) {
 					return elapsedMillis(rs.getObject("started_at", Instant.class), now);
 				}
+			} finally {
+				rs.close();
 			}
+		} finally {
+			statement.close();
 		}
 		return 0L;
 	}
