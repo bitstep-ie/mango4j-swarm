@@ -77,8 +77,7 @@ public class MangoSwarmDaemon {
 		this.handlerRegistry = handlerRegistry;
 		this.properties = properties;
 		this.objectMapper = objectMapper;
-		boolean virtual = properties.getExecutor().getVirtualThreads() != MangoSwarmProperties.VirtualThreads.DISABLED
-				&& ExecutorFactory.virtualThreadsAvailable();
+		boolean virtual = usingVirtualThreads(properties.getExecutor());
 		log.info(
 				"swarm executor: virtualThreadsAvailable={}, configured={}, usingVirtual={}",
 				ExecutorFactory.virtualThreadsAvailable(),
@@ -182,7 +181,7 @@ public class MangoSwarmDaemon {
 				workerId,
 				decision.claimLimit(),
 				claimed.size(),
-				log.isDebugEnabled() ? claimed.stream().map(TaskRecord::id).toList() : List.of());
+				claimedTaskIdsForDebugLog(claimed));
 		if (!claimed.isEmpty()) {
 			pollState.claimedAnyTasks = true;
 		}
@@ -235,8 +234,22 @@ public class MangoSwarmDaemon {
 		if (steps >= 63) {
 			return MAX_EMPTY_QUEUE_BACKOFF;
 		}
+		if (nanos > (Long.MAX_VALUE >> steps)) {
+			return MAX_EMPTY_QUEUE_BACKOFF;
+		}
 		long scaled = nanos << steps;
-		return scaled < 0 || scaled >= maxNanos ? MAX_EMPTY_QUEUE_BACKOFF : Duration.ofNanos(scaled);
+		return scaled >= maxNanos ? MAX_EMPTY_QUEUE_BACKOFF : Duration.ofNanos(scaled);
+	}
+
+	@Generated
+	private static boolean usingVirtualThreads(MangoSwarmProperties.Executor executor) {
+		return executor.getVirtualThreads() != MangoSwarmProperties.VirtualThreads.DISABLED
+				&& ExecutorFactory.virtualThreadsAvailable();
+	}
+
+	@Generated
+	private static List<UUID> claimedTaskIdsForDebugLog(List<TaskRecord> claimed) {
+		return log.isDebugEnabled() ? claimed.stream().map(TaskRecord::id).toList() : List.of();
 	}
 
 	int calculateBatchSize(String taskType, MangoSwarmProperties.TaskType config, double effectiveRate, Instant now) {

@@ -613,6 +613,21 @@ class MangoSwarmDaemonTest {
 	}
 
 	@Test
+	void runtimeProgressReporterPersistsExecutionStateChanges() throws Exception {
+		MangoSwarmProperties properties = properties(10, 1, 1);
+		properties.getRuntime().setMinUpdateInterval(Duration.ofDays(1));
+		FakeRepository repository = new FakeRepository(0);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+		Object reporter = newRuntimeProgressReporter(daemon);
+
+		invokeReport(reporter, "paused", null, null);
+
+		assertThat(repository.progressCalls).isOne();
+		assertThat(repository.lastProgressState).isEqualTo("paused");
+		daemon.stop();
+	}
+
+	@Test
 	void completedTaskIsMarkedInProgressAndCompleted() throws Exception {
 		MangoSwarmProperties properties = properties(10, 1, 1);
 		properties.getExecutor().setMaxThreads("1");
@@ -950,6 +965,19 @@ class MangoSwarmDaemonTest {
 		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofNanos(1), 64)).isEqualTo(Duration.ofSeconds(5));
 		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofSeconds(3), 2)).isEqualTo(Duration.ofSeconds(5));
 		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofMillis(1), 20)).isEqualTo(Duration.ofSeconds(5));
+		assertThat(MangoSwarmDaemon.emptyQueueBackoff(Duration.ofSeconds(3), 63))
+				.isEqualTo(Duration.ofSeconds(5));
+	}
+
+	@Test
+	void retentionIsEnabledOnlyForPositiveDurations() throws Exception {
+		Method method = MangoSwarmDaemon.class.getDeclaredMethod("isRetentionEnabled", Duration.class);
+		method.setAccessible(true);
+
+		assertThat(method.invoke(null, new Object[] {null})).isEqualTo(false);
+		assertThat(method.invoke(null, Duration.ofMillis(-1))).isEqualTo(false);
+		assertThat(method.invoke(null, Duration.ZERO)).isEqualTo(false);
+		assertThat(method.invoke(null, Duration.ofMillis(1))).isEqualTo(true);
 	}
 
 	@Test
