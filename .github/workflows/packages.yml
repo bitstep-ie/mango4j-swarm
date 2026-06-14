@@ -27,7 +27,7 @@ jobs:
           cache: maven
 
       - name: Build with Maven
-        run: mvn --batch-mode --no-transfer-progress verify -Dgpg.skip=true
+        run: mvn --batch-mode --no-transfer-progress verify -Pcoverage -Dgpg.skip=true
 
       - name: SonarQube Scan
         if: github.event_name != 'pull_request'
