@@ -266,6 +266,65 @@ class LocalTokenRingRateLimiterTest {
 	}
 
 	@Test
+	void bothExpiredTokensAreRecycledInExpiredAcquisitionPath() {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(2);
+		limiter.configure(2, Duration.ofSeconds(2), NOW);
+		// At NOW+2s both tokens are expired: expiresAt(0)=NOW+1s, expiresAt(1)=NOW+2s
+		Instant later = NOW.plusSeconds(2);
+
+		limiter.acquire(later);
+
+		// With correct rotation in the expired path both tokens are rescheduled into the future.
+		// Without rotation, only the head token is recycled; the second token keeps its old schedule.
+		assertThat(limiter.tokenAt(1).availableAt()).isAfter(later);
+	}
+
+	@Test
+	void availablePermitsDoesNotExceedMaxWhenMoreTokensAreAvailable() throws Exception {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(3);
+		limiter.configure(3, Duration.ofSeconds(3), NOW);
+		Method schedule =
+				LocalTokenRingRateLimiter.Token.class.getDeclaredMethod("schedule", Instant.class, Duration.class);
+		schedule.setAccessible(true);
+		for (int i = 0; i < 3; i++) {
+			schedule.invoke(limiter.tokenAt(i), NOW, Duration.ofHours(1));
+		}
+
+		assertThat(limiter.availablePermits(NOW, 2)).isEqualTo(2);
+	}
+
+	@Test
+	void timeUntilNextPermitSkipsExpiredHeadToRevealFutureToken() throws Exception {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(2);
+		limiter.configure(2, Duration.ofSeconds(2), NOW);
+		Method schedule =
+				LocalTokenRingRateLimiter.Token.class.getDeclaredMethod("schedule", Instant.class, Duration.class);
+		schedule.setAccessible(true);
+		// Make head token already expired, leave second token at NOW+1s (in the future)
+		schedule.invoke(limiter.tokenAt(0), NOW.minusSeconds(1), Duration.ofMillis(1));
+
+		assertThat(limiter.timeUntilNextPermit(NOW)).isEqualTo(Duration.ofSeconds(1));
+	}
+
+	@Test
+	void reinitializeAfterDisableClearsActiveRing() {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(2);
+		limiter.configure(2, Duration.ofSeconds(2), NOW);
+
+		limiter.configure(-1, Duration.ofSeconds(2), NOW); // disable
+
+		Instant later = NOW.plusSeconds(10);
+		limiter.configure(1, Duration.ofSeconds(2), later); // reinitialize with 1 active token
+
+		assertThat(limiter.acquire(later).granted()).isTrue();
+		// With a clean ring of 1 token, the next acquisition must wait 2s.
+		// Without activeRing.clear(), stale tokens inflate the ring and produce a wrong wait duration.
+		LocalTokenRingRateLimiter.Acquisition second = limiter.acquire(later);
+		assertThat(second.granted()).isFalse();
+		assertThat(second.waitDuration()).isEqualTo(Duration.ofSeconds(2));
+	}
+
+	@Test
 	void separateTaskTypesHaveIndependentRings() {
 		LocalTokenRingRateLimiter email = new LocalTokenRingRateLimiter(1);
 		LocalTokenRingRateLimiter invoice = new LocalTokenRingRateLimiter(1);

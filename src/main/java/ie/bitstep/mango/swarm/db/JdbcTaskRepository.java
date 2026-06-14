@@ -533,15 +533,14 @@ LIMIT ?
 				update.setObject(5, runtime.now());
 				update.setLong(6, runtime.executionTimeMillis());
 				update.setObject(7, runtime.taskId());
-				if (update.executeUpdate() > 0) {
-					return;
+				if (update.executeUpdate() == 0) {
+					try (PreparedStatement insert = connection.prepareStatement(INSERT_RUNTIME_SQL)) {
+						bindRuntimeInsert(insert, runtime.withExecutionTimeMillis(0L));
+						insert.executeUpdate();
+					}
 				}
 			} finally {
 				update.close();
-			}
-			try (PreparedStatement insert = connection.prepareStatement(INSERT_RUNTIME_SQL)) {
-				bindRuntimeInsert(insert, runtime.withExecutionTimeMillis(0L));
-				insert.executeUpdate();
 			}
 			return;
 		}

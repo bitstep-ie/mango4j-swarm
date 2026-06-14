@@ -1000,6 +1000,27 @@ class MangoSwarmDaemonTest {
 	}
 
 	@Test
+	void rateLimitedPollDelayReflectsNextTokenAvailability() {
+		// rate=2/s, period=1s → spacing=500ms → only 1 token available at t=now
+		MangoSwarmProperties properties = properties(2, 2, 2);
+		// Large poll interval so the rate-limited delay (500ms) is clearly smaller
+		properties.getExecutor().setPollInterval(Duration.ofSeconds(10));
+		FakeRepository repository = new FakeRepository(10);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, new CompletingHandler());
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+		// First poll: one rate token available → claims and dispatches 1 task, consuming the token
+		daemon.pollOnce(now);
+
+		// Second poll immediately: startCapacity=0, claimLimit=0, nextExecutionDelay=500ms
+		// The processTaskType inner block must record nextRateLimitedPoll=500ms so pollOnce returns it.
+		Duration delay = daemon.pollOnce(now);
+
+		assertThat(delay).isEqualTo(Duration.ofMillis(500));
+		daemon.stop();
+	}
+
+	@Test
 	void positiveOrZeroConvertsNonPositiveDelays() throws Exception {
 		MangoSwarmProperties properties = properties(10, 1, 1);
 		MangoSwarmDaemon daemon = daemon(properties, new FakeRepository(0), 1, new CompletingHandler());
@@ -1026,6 +1047,30 @@ class MangoSwarmDaemonTest {
 		assertThatCode(() -> {
 					MangoSwarmDaemon.sleepIfPositive(Duration.ZERO);
 					MangoSwarmDaemon.sleepIfPositive(Duration.ofNanos(1));
+				})
+				.doesNotThrowAnyException();
+	}
+
+	@Test
+	void startCreatesThreadOnFirstCall() throws Exception {
+		MangoSwarmProperties properties = properties(0, 1, 1);
+		properties.getExecutor().setPollInterval(Duration.ofSeconds(30));
+		MangoSwarmDaemon daemon = daemon(properties, new FakeRepository(0), 1, new CompletingHandler());
+
+		daemon.start();
+
+		@SuppressWarnings("unchecked")
+		AtomicReference<Thread> ref = (AtomicReference<Thread>) fieldValue(daemon, "daemonThread");
+		assertThat(ref.get()).isNotNull();
+		assertThat(ref.get().isAlive()).isTrue();
+		daemon.stop();
+	}
+
+	@Test
+	void sleepIfPositiveIsNoOpForNullAndNegativeDurations() {
+		assertThatCode(() -> {
+					MangoSwarmDaemon.sleepIfPositive(null);
+					MangoSwarmDaemon.sleepIfPositive(Duration.ofNanos(-1));
 				})
 				.doesNotThrowAnyException();
 	}

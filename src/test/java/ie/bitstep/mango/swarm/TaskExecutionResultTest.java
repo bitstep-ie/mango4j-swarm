@@ -7,6 +7,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TaskExecutionResultTest {
 
 	@Test
+	void completedReturnsNonNullInstance() {
+		assertThat(TaskExecutionResult.completed()).isNotNull().isInstanceOf(TaskExecutionResult.Completed.class);
+	}
+
+	@Test
 	void completedResultIsEqualToAnotherCompleted() {
 		assertThat(TaskExecutionResult.completed()).isEqualTo(TaskExecutionResult.completed());
 	}
