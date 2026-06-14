@@ -4,6 +4,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -67,6 +68,17 @@ class ExecutorFactoryTest {
 		executor.shutdownNow();
 
 		assertThat(threadName).isEqualTo("swarm-worker-1");
+	}
+
+	@Test
+	void usesVirtualExecutorFactoryWhenAvailableAndEnabled() {
+		MangoSwarmProperties.Executor config = new MangoSwarmProperties.Executor();
+		var executor = Executors.newSingleThreadExecutor();
+		try {
+			assertThat(ExecutorFactory.create(config, true, () -> executor)).isSameAs(executor);
+		} finally {
+			executor.shutdownNow();
+		}
 	}
 
 	@Test

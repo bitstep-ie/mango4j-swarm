@@ -11,6 +11,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 import ie.bitstep.mango.swarm.config.MangoSwarmProperties;
 
@@ -43,10 +44,17 @@ final class ExecutorFactory {
 	}
 
 	static ExecutorService create(MangoSwarmProperties.Executor config) {
+		return create(config, VIRTUAL_THREADS_AVAILABLE, ExecutorFactory::createVirtualThreadExecutor);
+	}
+
+	static ExecutorService create(
+			MangoSwarmProperties.Executor config,
+			boolean virtualThreadsAvailable,
+			Supplier<ExecutorService> virtualExecutor) {
 		boolean virtual =
-				config.getVirtualThreads() != MangoSwarmProperties.VirtualThreads.DISABLED && VIRTUAL_THREADS_AVAILABLE;
+				config.getVirtualThreads() != MangoSwarmProperties.VirtualThreads.DISABLED && virtualThreadsAvailable;
 		if (virtual) {
-			return createVirtualThreadExecutor();
+			return virtualExecutor.get();
 		}
 		int maxThreads = resolveMaxThreads(config.getMaxThreads(), false);
 		ThreadPoolExecutor.AbortPolicy abortPolicy = new ThreadPoolExecutor.AbortPolicy();

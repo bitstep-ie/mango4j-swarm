@@ -1,5 +1,6 @@
 package ie.bitstep.mango.swarm.rate;
 
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
 
@@ -103,6 +104,18 @@ class LocalTokenRingRateLimiterTest {
 	void availablePermitsStopAtFutureToken() {
 		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(2);
 		limiter.configure(2, Duration.ofSeconds(2), NOW);
+
+		assertThat(limiter.availablePermits(NOW, 2)).isOne();
+	}
+
+	@Test
+	void availablePermitsStopAtExpiredTokenAfterAvailableToken() throws Exception {
+		LocalTokenRingRateLimiter limiter = new LocalTokenRingRateLimiter(2);
+		limiter.configure(2, Duration.ofSeconds(2), NOW);
+		Method schedule =
+				LocalTokenRingRateLimiter.Token.class.getDeclaredMethod("schedule", Instant.class, Duration.class);
+		schedule.setAccessible(true);
+		schedule.invoke(limiter.tokenAt(1), NOW.minusSeconds(1), Duration.ofMillis(1));
 
 		assertThat(limiter.availablePermits(NOW, 2)).isOne();
 	}
