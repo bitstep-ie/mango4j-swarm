@@ -7,6 +7,8 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -90,17 +92,6 @@ execution_time_ms = EXCLUDED.execution_time_ms
 INSERT INTO mango_swarm_task_runtime(
 task_id, worker_id, execution_state, progress_percent, progress_message, started_at, updated_at, execution_time_ms)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-""";
-	private static final String UPDATE_RUNTIME_H2_SQL =
-			"""
-UPDATE mango_swarm_task_runtime
-SET worker_id = ?,
-execution_state = ?,
-progress_percent = ?,
-progress_message = ?,
-updated_at = ?,
-execution_time_ms = ?
-WHERE task_id = ?
 """;
 	private static final String DELETE_RUNTIME_SQL = """
 DELETE FROM mango_swarm_task_runtime
@@ -214,7 +205,6 @@ LIMIT ?
 	private final JdbcTemplate jdbcTemplate;
 	private final ObjectMapper objectMapper;
 	private final SchemaQualifiedTables tables;
-	private volatile Boolean h2;
 
 	public JdbcTaskRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
 		this(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
@@ -235,7 +225,7 @@ LIMIT ?
 						statement.setObject(1, taskId);
 						statement.setString(2, taskType);
 						setJson(statement, payload);
-						statement.setObject(4, availableAt);
+						statement.setObject(4, ts(availableAt));
 						statement.executeUpdate();
 						return taskId;
 					}
@@ -265,7 +255,7 @@ LIMIT ?
 		List<UUID> ids = new ArrayList<>();
 		try (PreparedStatement select = connection.prepareStatement(SELECT_QUEUED_TASK_IDS_SQL)) {
 			select.setString(1, taskType);
-			select.setObject(2, now);
+			select.setObject(2, ts(now));
 			select.setInt(3, limit);
 			try (ResultSet rs = select.executeQuery()) {
 				while (rs.next()) {
@@ -280,8 +270,8 @@ LIMIT ?
 			throws SQLException {
 		try (PreparedStatement update = connection.prepareStatement(CLAIM_TASK_SQL)) {
 			update.setObject(1, workerId);
-			update.setObject(2, now);
-			update.setObject(3, now);
+			update.setObject(2, ts(now));
+			update.setObject(3, ts(now));
 			for (UUID id : ids) {
 				update.setObject(4, id);
 				update.addBatch();
@@ -293,7 +283,7 @@ LIMIT ?
 	private List<TaskRecord> selectClaimedTasks(java.sql.Connection connection, List<UUID> ids, UUID workerId)
 			throws SQLException {
 		Map<UUID, TaskRecord> claimedById = new HashMap<>();
-		Array taskIds = connection.createArrayOf(uuidArrayType(), ids.toArray());
+		Array taskIds = connection.createArrayOf("uuid", ids.toArray());
 		try (PreparedStatement query = connection.prepareStatement(SELECT_CLAIMED_TASKS_SQL)) {
 			query.setObject(1, workerId);
 			query.setArray(2, taskIds);
@@ -307,10 +297,6 @@ LIMIT ?
 			taskIds.free();
 		}
 		return claimedTasksInSelectionOrder(ids, claimedById);
-	}
-
-	private String uuidArrayType() {
-		return isH2() ? "UUID" : "uuid";
 	}
 
 	private static List<TaskRecord> claimedTasksInSelectionOrder(List<UUID> ids, Map<UUID, TaskRecord> claimedById) {
@@ -329,7 +315,7 @@ LIMIT ?
 		executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(MARK_IN_PROGRESS_SQL)) {
-						statement.setObject(1, now);
+						statement.setObject(1, ts(now));
 						statement.setObject(2, taskId);
 						statement.setObject(3, workerId);
 						int updated = statement.executeUpdate();
@@ -369,9 +355,9 @@ LIMIT ?
 				connection -> tables.withSearchPath(connection, scoped -> {
 					long executionTimeMillis = executionTimeMillis(scoped, taskId, now);
 					try (PreparedStatement statement = scoped.prepareStatement(MARK_COMPLETED_SQL)) {
-						statement.setObject(1, now);
+						statement.setObject(1, ts(now));
 						statement.setLong(2, executionTimeMillis);
-						statement.setObject(3, now);
+						statement.setObject(3, ts(now));
 						statement.setObject(4, taskId);
 						statement.setObject(5, workerId);
 						int updated = statement.executeUpdate();
@@ -393,9 +379,9 @@ LIMIT ?
 				connection -> tables.withSearchPath(connection, scoped -> {
 					long executionTimeMillis = executionTimeMillis(scoped, taskId, now);
 					try (PreparedStatement statement = scoped.prepareStatement(MARK_FAILED_SQL)) {
-						statement.setObject(1, now);
+						statement.setObject(1, ts(now));
 						statement.setLong(2, executionTimeMillis);
-						statement.setObject(3, now);
+						statement.setObject(3, ts(now));
 						statement.setString(4, truncate(errorMessage));
 						statement.setObject(5, taskId);
 						statement.setObject(6, workerId);
@@ -418,8 +404,8 @@ LIMIT ?
 		executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(RESCHEDULE_AFTER_FAILURE_SQL)) {
-						statement.setObject(1, availableAt);
-						statement.setObject(2, now);
+						statement.setObject(1, ts(availableAt));
+						statement.setObject(2, ts(now));
 						statement.setString(3, truncate(errorMessage));
 						statement.setObject(4, taskId);
 						statement.setObject(5, workerId);
@@ -438,8 +424,8 @@ LIMIT ?
 		executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(REQUEUE_CLAIMED_SQL)) {
-						statement.setObject(1, availableAt);
-						statement.setObject(2, now);
+						statement.setObject(1, ts(availableAt));
+						statement.setObject(2, ts(now));
 						statement.setString(3, truncate(reason));
 						statement.setObject(4, taskId);
 						statement.setObject(5, workerId);
@@ -461,9 +447,9 @@ LIMIT ?
 		return executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(RECLAIM_TIMED_OUT_SQL)) {
-						statement.setObject(1, now);
+						statement.setObject(1, ts(now));
 						statement.setString(2, taskType);
-						statement.setObject(3, now.minus(timeout));
+						statement.setObject(3, ts(now.minus(timeout)));
 						statement.setInt(4, limit);
 						return statement.executeUpdate();
 					}
@@ -479,10 +465,10 @@ LIMIT ?
 		return executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(MARK_TIMED_OUT_FAILED_SQL)) {
-						statement.setObject(1, now);
-						statement.setObject(2, now);
+						statement.setObject(1, ts(now));
+						statement.setObject(2, ts(now));
 						statement.setString(3, taskType);
-						statement.setObject(4, now.minus(timeout));
+						statement.setObject(4, ts(now.minus(timeout)));
 						statement.setInt(5, limit);
 						return statement.executeUpdate();
 					}
@@ -498,7 +484,7 @@ LIMIT ?
 		return executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(DELETE_COMPLETED_SQL)) {
-						statement.setObject(1, now.minus(retention));
+						statement.setObject(1, ts(now.minus(retention)));
 						statement.setInt(2, limit);
 						return statement.executeUpdate();
 					}
@@ -514,7 +500,7 @@ LIMIT ?
 		return executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					try (PreparedStatement statement = scoped.prepareStatement(DELETE_FAILED_SQL)) {
-						statement.setObject(1, now.minus(retention));
+						statement.setObject(1, ts(now.minus(retention)));
 						statement.setInt(2, limit);
 						return statement.executeUpdate();
 					}
@@ -523,27 +509,6 @@ LIMIT ?
 	}
 
 	private void upsertRuntime(java.sql.Connection connection, RuntimeUpdate runtime) throws SQLException {
-		if (isH2()) {
-			PreparedStatement update = connection.prepareStatement(UPDATE_RUNTIME_H2_SQL);
-			try {
-				update.setObject(1, runtime.workerId());
-				update.setString(2, truncate(runtime.executionState()));
-				setNullableInteger(update, 3, runtime.progressPercent());
-				update.setString(4, truncate(runtime.message()));
-				update.setObject(5, runtime.now());
-				update.setLong(6, runtime.executionTimeMillis());
-				update.setObject(7, runtime.taskId());
-				if (update.executeUpdate() == 0) {
-					try (PreparedStatement insert = connection.prepareStatement(INSERT_RUNTIME_SQL)) {
-						bindRuntimeInsert(insert, runtime.withExecutionTimeMillis(0L));
-						insert.executeUpdate();
-					}
-				}
-			} finally {
-				update.close();
-			}
-			return;
-		}
 		try (PreparedStatement statement = connection.prepareStatement(UPSERT_RUNTIME_SQL)) {
 			bindRuntimeInsert(statement, runtime);
 			statement.executeUpdate();
@@ -556,8 +521,8 @@ LIMIT ?
 		statement.setString(3, truncate(runtime.executionState()));
 		setNullableInteger(statement, 4, runtime.progressPercent());
 		statement.setString(5, truncate(runtime.message()));
-		statement.setObject(6, runtime.now());
-		statement.setObject(7, runtime.now());
+		statement.setObject(6, ts(runtime.now()));
+		statement.setObject(7, ts(runtime.now()));
 		statement.setLong(8, runtime.executionTimeMillis());
 	}
 
@@ -609,7 +574,7 @@ LIMIT ?
 			ResultSet rs = statement.executeQuery();
 			try {
 				if (rs.next()) {
-					return elapsedMillis(rs.getObject("started_at", Instant.class), now);
+					return elapsedMillis(getInstant(rs, "started_at"), now);
 				}
 			} finally {
 				rs.close();
@@ -625,10 +590,6 @@ LIMIT ?
 	}
 
 	private void setJson(PreparedStatement statement, JsonNode payload) throws SQLException {
-		if (isH2()) {
-			statement.setString(JSON_PARAMETER_INDEX, json(payload));
-			return;
-		}
 		PGobject object = new PGobject();
 		object.setType("jsonb");
 		object.setValue(json(payload));
@@ -645,18 +606,17 @@ LIMIT ?
 
 	TaskRecord mapTask(ResultSet rs) throws SQLException {
 		try {
-			Instant claimedAt = rs.getObject("claimed_at", Instant.class);
 			return new TaskRecord(
 					rs.getObject("id", UUID.class),
 					rs.getString("task_type"),
 					objectMapper.readTree(rs.getString("payload")),
 					TaskStatus.fromDatabaseValue(rs.getString("status")),
-					rs.getObject("available_at", Instant.class),
+					getInstant(rs, "available_at"),
 					rs.getObject("claimed_by", UUID.class),
-					claimedAt,
+					getInstant(rs, "claimed_at"),
 					rs.getInt("attempt_count"),
-					rs.getObject("created_at", Instant.class),
-					rs.getObject("updated_at", Instant.class));
+					getInstant(rs, "created_at"),
+					getInstant(rs, "updated_at"));
 		} catch (JsonProcessingException ex) {
 			throw new SQLException("Cannot parse task payload", ex);
 		}
@@ -669,22 +629,16 @@ LIMIT ?
 		return message.length() > 4000 ? message.substring(0, 4000) : message;
 	}
 
-	private boolean isH2() {
-		Boolean detected = h2;
-		if (detected == null) {
-			detected = detectH2();
-			h2 = detected;
-		}
-		return detected;
+	private static OffsetDateTime ts(Instant instant) {
+		return instant.atOffset(ZoneOffset.UTC);
 	}
 
-	private boolean detectH2() {
-		return executeRequired(
-				connection -> {
-					String productName = connection.getMetaData().getDatabaseProductName();
-					return productName != null && productName.toLowerCase().contains("h2");
-				},
-				"detect database product");
+	private static Instant getInstant(ResultSet rs, String col) throws SQLException {
+		Object value = rs.getObject(col);
+		if (value == null) return null;
+		if (value instanceof Instant i) return i;
+		if (value instanceof OffsetDateTime odt) return odt.toInstant();
+		return ((java.util.Date) value).toInstant();
 	}
 
 	private <T> T executeRequired(ConnectionCallback<T> callback, String operation) {

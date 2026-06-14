@@ -8,7 +8,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -27,7 +26,7 @@ import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import ie.bitstep.mango.swarm.H2TestSupport;
+import ie.bitstep.mango.swarm.PostgresTestSupport;
 import ie.bitstep.mango.swarm.TaskStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,10 +34,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-class TaskRepositoryTest extends H2TestSupport {
+class TaskRepositoryTest extends PostgresTestSupport {
 
 	@Test
 	void claimsTasksInBatches() {
@@ -752,16 +750,8 @@ class TaskRepositoryTest extends H2TestSupport {
 
 	@Test
 	void postgresJsonPayloadsAreBoundAsJsonbObjects() throws Exception {
-		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-		java.sql.Connection connection = mock(java.sql.Connection.class);
-		java.sql.DatabaseMetaData metaData = mock(java.sql.DatabaseMetaData.class);
-		when(connection.getMetaData()).thenReturn(metaData);
-		when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
-		when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Boolean>>any()))
-				.thenAnswer(invocation ->
-						invocation.<ConnectionCallback<Boolean>>getArgument(0).doInConnection(connection));
 		JdbcTaskRepository repository =
-				new JdbcTaskRepository(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
+				new JdbcTaskRepository(mock(JdbcTemplate.class), objectMapper, new SchemaQualifiedTables(null));
 		PreparedStatement statement = mock(PreparedStatement.class);
 
 		var method = JdbcTaskRepository.class.getDeclaredMethod(
@@ -774,20 +764,8 @@ class TaskRepositoryTest extends H2TestSupport {
 
 		var captor = org.mockito.ArgumentCaptor.forClass(PGobject.class);
 		verify(statement, org.mockito.Mockito.times(2)).setObject(eq(3), captor.capture(), eq(java.sql.Types.OTHER));
-		verify(jdbcTemplate).execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Boolean>>any());
 		assertThat(captor.getValue().getType()).isEqualTo("jsonb");
 		assertThat(captor.getValue().getValue()).isEqualTo("{\"subject\":\"hello\"}");
-	}
-
-	@Test
-	void postgresUuidArrayTypeUsesLowercaseUuid() throws Exception {
-		JdbcTaskRepository repository =
-				new JdbcTaskRepository(mock(JdbcTemplate.class), objectMapper, new SchemaQualifiedTables(null));
-		setH2(repository, Boolean.FALSE);
-		Method method = JdbcTaskRepository.class.getDeclaredMethod("uuidArrayType");
-		method.setAccessible(true);
-
-		assertThat(method.invoke(repository)).isEqualTo("uuid");
 	}
 
 	@Test
@@ -816,7 +794,6 @@ class TaskRepositoryTest extends H2TestSupport {
 		};
 		JdbcTaskRepository repository =
 				new JdbcTaskRepository(mock(JdbcTemplate.class), failingMapper, new SchemaQualifiedTables(null));
-		setH2(repository, Boolean.TRUE);
 		PreparedStatement statement = mock(PreparedStatement.class);
 		Method method = JdbcTaskRepository.class.getDeclaredMethod(
 				"setJson", PreparedStatement.class, com.fasterxml.jackson.databind.JsonNode.class);
@@ -847,13 +824,12 @@ class TaskRepositoryTest extends H2TestSupport {
 				.thenReturn(upsert);
 		when(select.executeQuery()).thenReturn(resultSet);
 		when(resultSet.next()).thenReturn(true);
-		when(resultSet.getObject("started_at", Instant.class)).thenReturn(startedAt);
+		when(resultSet.getObject("started_at")).thenReturn(startedAt);
 		when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Integer>>any()))
 				.thenAnswer(invocation ->
 						invocation.<ConnectionCallback<Integer>>getArgument(0).doInConnection(connection));
 		JdbcTaskRepository repository =
 				new JdbcTaskRepository(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
-		setH2(repository, Boolean.FALSE);
 
 		repository.updateRuntime(taskId, workerId, now, "running", 50, "halfway");
 
@@ -862,41 +838,10 @@ class TaskRepositoryTest extends H2TestSupport {
 		verify(upsert).setString(3, "running");
 		verify(upsert).setInt(4, 50);
 		verify(upsert).setString(5, "halfway");
-		verify(upsert).setObject(6, now);
-		verify(upsert).setObject(7, now);
+		verify(upsert).setObject(6, now.atOffset(ZoneOffset.UTC));
+		verify(upsert).setObject(7, now.atOffset(ZoneOffset.UTC));
 		verify(upsert).setLong(8, 2_000L);
 		verify(upsert).executeUpdate();
-	}
-
-	@Test
-	void detectsH2DatabaseProductName() throws Exception {
-		JdbcTaskRepository repository = repositoryDetectingDatabaseProduct("H2 Database Engine");
-		Method method = JdbcTaskRepository.class.getDeclaredMethod("detectH2");
-		method.setAccessible(true);
-
-		assertThat(method.invoke(repository)).isEqualTo(true);
-	}
-
-	@Test
-	void nullDatabaseProductNameIsNotH2() throws Exception {
-		JdbcTaskRepository repository = repositoryDetectingDatabaseProduct(null);
-		Method method = JdbcTaskRepository.class.getDeclaredMethod("detectH2");
-		method.setAccessible(true);
-
-		assertThat(method.invoke(repository)).isEqualTo(false);
-	}
-
-	@Test
-	void h2DetectionUsesCachedValueWhenPresent() throws Exception {
-		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-		JdbcTaskRepository repository =
-				new JdbcTaskRepository(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
-		Method method = JdbcTaskRepository.class.getDeclaredMethod("isH2");
-		method.setAccessible(true);
-		setH2(repository, Boolean.TRUE);
-
-		assertThat(method.invoke(repository)).isEqualTo(true);
-		verifyNoInteractions(jdbcTemplate);
 	}
 
 	@Test
@@ -977,19 +922,8 @@ class TaskRepositoryTest extends H2TestSupport {
 				});
 		JdbcTaskRepository repository =
 				new JdbcTaskRepository(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
-		setH2(repository);
 
 		operation.accept(repository);
-	}
-
-	private static void setH2(JdbcTaskRepository repository) throws Exception {
-		setH2(repository, Boolean.TRUE);
-	}
-
-	private static void setH2(JdbcTaskRepository repository, Boolean value) throws Exception {
-		java.lang.reflect.Field h2 = JdbcTaskRepository.class.getDeclaredField("h2");
-		h2.setAccessible(true);
-		h2.set(repository, value);
 	}
 
 	private static TaskRecord taskRecord(UUID id) {
@@ -1007,22 +941,9 @@ class TaskRepositoryTest extends H2TestSupport {
 				now);
 	}
 
-	private JdbcTaskRepository repositoryDetectingDatabaseProduct(String productName) throws Exception {
-		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-		java.sql.Connection connection = mock(java.sql.Connection.class);
-		java.sql.DatabaseMetaData metaData = mock(java.sql.DatabaseMetaData.class);
-		when(connection.getMetaData()).thenReturn(metaData);
-		when(metaData.getDatabaseProductName()).thenReturn(productName);
-		when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Boolean>>any()))
-				.thenAnswer(invocation ->
-						invocation.<ConnectionCallback<Boolean>>getArgument(0).doInConnection(connection));
-		return new JdbcTaskRepository(jdbcTemplate, objectMapper, new SchemaQualifiedTables(null));
-	}
-
 	private static Instant toInstant(Object value) {
 		if (value instanceof Instant i) return i;
 		if (value instanceof OffsetDateTime odt) return odt.toInstant();
-		if (value instanceof LocalDateTime ldt) return ldt.toInstant(ZoneOffset.UTC);
 		return ((java.util.Date) value).toInstant();
 	}
 
