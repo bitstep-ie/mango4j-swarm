@@ -505,6 +505,7 @@ class MangoSwarmDaemonTest {
 		awaitCounter(() -> repository.rescheduleAfterFailureCalls, 1);
 		assertThat(repository.rescheduleAfterFailureCalls).isEqualTo(1);
 		assertThat(repository.failedTaskCalls).isZero();
+		assertThat(repository.lastFailureMessage).isEqualTo("Task handler reported failure");
 		assertThat(repository.retryAvailableAt).isNotNull();
 		daemon.stop();
 	}
@@ -677,7 +678,7 @@ class MangoSwarmDaemonTest {
 		assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
 		awaitCounter(() -> repository.failedTaskCalls, 1);
 		assertThat(repository.failedTaskCalls).isEqualTo(1);
-		assertThat(repository.lastFailureMessage).isEqualTo("boom");
+		assertThat(repository.lastFailureMessage).isEqualTo("Task handler threw an exception");
 		daemon.stop();
 	}
 
@@ -1431,6 +1432,7 @@ class MangoSwarmDaemonTest {
 				UUID taskId, UUID workerId, Instant now, Instant availableAt, String errorMessage) {
 			rescheduleAfterFailureCalls++;
 			retryAvailableAt = availableAt;
+			lastFailureMessage = errorMessage;
 		}
 
 		@Override

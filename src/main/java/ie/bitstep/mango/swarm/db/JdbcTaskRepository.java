@@ -548,8 +548,7 @@ LIMIT ?
 			String executionState,
 			Integer progressPercent,
 			String message,
-			long executionTimeMillis) {
-	}
+			long executionTimeMillis) {}
 
 	private static void deleteRuntime(java.sql.Connection connection, UUID taskId) throws SQLException {
 		try (PreparedStatement statement = connection.prepareStatement(DELETE_RUNTIME_SQL)) {

@@ -43,6 +43,8 @@ public class MangoSwarmDaemon {
 	private static final Logger log = LoggerFactory.getLogger(MangoSwarmDaemon.class);
 	private static final Duration MAX_EMPTY_QUEUE_BACKOFF = Duration.ofSeconds(5);
 	private static final Duration TIMEOUT_RECOVERY_INTERVAL = Duration.ofSeconds(1);
+	private static final String HANDLER_FAILED_MESSAGE = "Task handler reported failure";
+	private static final String HANDLER_EXCEPTION_MESSAGE = "Task handler threw an exception";
 
 	private final WorkerRegistry workerRegistry;
 	private final TaskRepository taskRepository;
@@ -474,14 +476,14 @@ public class MangoSwarmDaemon {
 					new RuntimeProgressReporter(task.id(), workerId));
 			TaskExecutionResult result = handler.execute(context);
 			if (result instanceof TaskExecutionResult.Failed failed) {
-				handleFailedTask(task, failed.message(), null);
+				handleFailedTask(task, HANDLER_FAILED_MESSAGE);
 				log.debug(
-						"swarm task execution failed-result: taskType={}, taskId={}, workerId={}, attempt={}, message={}",
+						"swarm task execution failed-result: taskType={}, taskId={}, workerId={}, attempt={}, failureType={}",
 						task.taskType(),
 						task.id(),
 						workerId,
 						task.attemptCount(),
-						failed.message());
+						HANDLER_FAILED_MESSAGE);
 			} else {
 				taskRepository.markCompleted(task.id(), workerId, Instant.now());
 				log.debug(
@@ -492,18 +494,18 @@ public class MangoSwarmDaemon {
 						task.attemptCount());
 			}
 		} catch (Exception ex) {
-			handleFailedTask(task, ex.getMessage(), ex);
+			handleFailedTask(task, HANDLER_EXCEPTION_MESSAGE);
 			log.debug(
-					"swarm task execution failed-exception: taskType={}, taskId={}, workerId={}, attempt={}",
+					"swarm task execution failed-exception: taskType={}, taskId={}, workerId={}, attempt={}, exceptionType={}",
 					task.taskType(),
 					task.id(),
 					workerId,
 					task.attemptCount(),
-					ex);
+					ex.getClass().getName());
 		}
 	}
 
-	private void handleFailedTask(TaskRecord task, String errorMessage, Exception exception) {
+	private void handleFailedTask(TaskRecord task, String errorMessage) {
 		Instant now = Instant.now();
 		MangoSwarmProperties.TaskType config = properties.getTaskTypes().get(task.taskType());
 		int maxAttempts = Math.max(1, config.getMaxAttempts());
@@ -512,7 +514,7 @@ public class MangoSwarmDaemon {
 			Instant retryAt = now.plus(retryDelay);
 			taskRepository.rescheduleAfterFailure(task.id(), workerId, now, retryAt, errorMessage);
 			log.debug(
-					"swarm task scheduled for retry: taskType={}, taskId={}, workerId={}, attempt={}, maxAttempts={}, retryDelay={}, retryAt={}, error={}",
+					"swarm task scheduled for retry: taskType={}, taskId={}, workerId={}, attempt={}, maxAttempts={}, retryDelay={}, retryAt={}, failureType={}",
 					task.taskType(),
 					task.id(),
 					workerId,
@@ -520,8 +522,7 @@ public class MangoSwarmDaemon {
 					maxAttempts,
 					retryDelay,
 					retryAt,
-					errorMessage,
-					exception);
+					errorMessage);
 			return;
 		}
 		taskRepository.markFailed(task.id(), workerId, now, errorMessage);
