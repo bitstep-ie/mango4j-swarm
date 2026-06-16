@@ -17,6 +17,8 @@ import ie.bitstep.mango.swarm.config.MangoSwarmProperties;
 
 final class ExecutorFactory {
 	private static final String WORKER_THREAD_PREFIX = "swarm-worker-";
+	private static final int MIN_THREADS = 1;
+	private static final int MAX_THREADS = 256;
 	private static final boolean VIRTUAL_THREADS_AVAILABLE;
 
 	static {
@@ -87,10 +89,21 @@ final class ExecutorFactory {
 	}
 
 	static int resolveMaxThreads(String value, boolean virtualThreads) {
-		if (value == null || "auto".equalsIgnoreCase(value)) {
-			return virtualThreads ? 256 : 16;
+		if (value == null) {
+			return virtualThreads ? MAX_THREADS : 16;
 		}
-		return Integer.parseInt(value);
+		String normalized = value.trim();
+		if (normalized.isEmpty() || "auto".equalsIgnoreCase(normalized)) {
+			return virtualThreads ? MAX_THREADS : 16;
+		}
+		int parsed;
+		try {
+			parsed = Integer.parseInt(normalized);
+		} catch (NumberFormatException ex) {
+			throw new IllegalArgumentException(
+					"mango4j.swarm.executor.maxThreads must be numeric or auto: " + value, ex);
+		}
+		return Math.max(MIN_THREADS, Math.min(MAX_THREADS, parsed));
 	}
 
 	static boolean virtualThreadsAvailable() {

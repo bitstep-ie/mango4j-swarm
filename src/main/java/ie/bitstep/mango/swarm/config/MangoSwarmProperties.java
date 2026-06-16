@@ -13,6 +13,32 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "mango4j.swarm")
 public class MangoSwarmProperties {
+	private static final int MAX_SCHEMA_LENGTH = 63;
+	private static final int MAX_TASK_TYPE_NAME_LENGTH = 128;
+	private static final int MAX_EXECUTOR_THREADS = 256;
+	private static final Duration DEFAULT_EXECUTOR_POLL_INTERVAL = Duration.ofMillis(100);
+	private static final Duration MAX_EXECUTOR_POLL_INTERVAL = Duration.ofMinutes(1);
+	private static final Duration DEFAULT_WORKER_HEARTBEAT_INTERVAL = Duration.ofSeconds(10);
+	private static final Duration MAX_WORKER_HEARTBEAT_INTERVAL = Duration.ofMinutes(1);
+	private static final Duration DEFAULT_WORKER_STALE_AFTER = Duration.ofSeconds(30);
+	private static final Duration MAX_WORKER_STALE_AFTER = Duration.ofHours(24);
+	private static final Duration MAX_CLEANUP_INTERVAL = Duration.ofHours(24);
+	private static final Duration MAX_CLEANUP_RETENTION = Duration.ofDays(365);
+	private static final int MAX_CLEANUP_BATCH_SIZE = 1_000;
+	private static final Duration DEFAULT_RUNTIME_MIN_UPDATE_INTERVAL = Duration.ofSeconds(30);
+	private static final Duration MAX_RUNTIME_MIN_UPDATE_INTERVAL = Duration.ofHours(1);
+	private static final int MAX_RUNTIME_PROGRESS_THRESHOLD_PERCENT = 100;
+	private static final Duration DEFAULT_TASK_PERIOD = Duration.ofSeconds(1);
+	private static final Duration MAX_TASK_PERIOD = Duration.ofHours(24);
+	private static final int MAX_TASK_RATE = 1_000;
+	private static final int MAX_TASK_CONCURRENCY = 256;
+	private static final Duration DEFAULT_TASK_TIMEOUT = Duration.ofMinutes(1);
+	private static final Duration MAX_TASK_TIMEOUT = Duration.ofHours(24);
+	private static final int MAX_TASK_BATCH_SIZE = 1_000;
+	private static final int MAX_TASK_MAX_ATTEMPTS = 100;
+	private static final Duration MAX_RETRY_DELAY = Duration.ofHours(24);
+	private static final double MAX_RETRY_MULTIPLIER = 10.0d;
+
 	private boolean enabled = true;
 	private boolean allowUnconfiguredHandlers = false;
 	private Database database = new Database();
@@ -93,6 +119,175 @@ public class MangoSwarmProperties {
 
 	public void setTaskTypes(Map<String, TaskType> taskTypes) {
 		this.taskTypes = taskTypes;
+	}
+
+	/**
+	 * Normalizes config values into bounded, runtime-safe forms.
+	 *
+	 * <p>This preserves existing disable-by-zero/null semantics where the runtime already relies on them, but it trims
+	 * identifiers and caps values that can otherwise cause resource exhaustion or startup failures.
+	 */
+	public MangoSwarmProperties normalize() {
+		if (database == null) {
+			database = new Database();
+		}
+		database.setSchema(normalizeSchema(database.getSchema()));
+
+		if (worker == null) {
+			worker = new Worker();
+		}
+		worker.setHeartbeatInterval(normalizeRequiredDuration(
+				worker.getHeartbeatInterval(), DEFAULT_WORKER_HEARTBEAT_INTERVAL, MAX_WORKER_HEARTBEAT_INTERVAL));
+		Duration staleAfter =
+				normalizeRequiredDuration(worker.getStaleAfter(), DEFAULT_WORKER_STALE_AFTER, MAX_WORKER_STALE_AFTER);
+		worker.setStaleAfter(
+				staleAfter.compareTo(worker.getHeartbeatInterval()) < 0 ? worker.getHeartbeatInterval() : staleAfter);
+
+		if (executor == null) {
+			executor = new Executor();
+		}
+		executor.setMaxThreads(normalizeExecutorMaxThreads(executor.getMaxThreads()));
+		executor.setPollInterval(normalizeRequiredDuration(
+				executor.getPollInterval(), DEFAULT_EXECUTOR_POLL_INTERVAL, MAX_EXECUTOR_POLL_INTERVAL));
+		if (executor.getQueueStrategy() == null) {
+			executor.setQueueStrategy(QueueStrategy.CALLER_RUNS);
+		}
+		if (executor.getVirtualThreads() == null) {
+			executor.setVirtualThreads(VirtualThreads.AUTO);
+		}
+
+		if (cleanup != null) {
+			cleanup.setInterval(capOptionalDuration(cleanup.getInterval(), MAX_CLEANUP_INTERVAL));
+			cleanup.setCompletedRetention(capOptionalDuration(cleanup.getCompletedRetention(), MAX_CLEANUP_RETENTION));
+			cleanup.setFailedRetention(capOptionalDuration(cleanup.getFailedRetention(), MAX_CLEANUP_RETENTION));
+			cleanup.setBatchSize(clampInt(cleanup.getBatchSize(), 1, MAX_CLEANUP_BATCH_SIZE));
+		}
+
+		if (runtime == null) {
+			runtime = new RuntimeState();
+		}
+		runtime.setProgressThresholdPercent(
+				clampInt(runtime.getProgressThresholdPercent(), 0, MAX_RUNTIME_PROGRESS_THRESHOLD_PERCENT));
+		runtime.setMinUpdateInterval(
+				capOptionalDuration(runtime.getMinUpdateInterval(), MAX_RUNTIME_MIN_UPDATE_INTERVAL));
+
+		if (retry == null) {
+			retry = new Retry();
+		}
+		retry.setBaseDelay(capOptionalDuration(retry.getBaseDelay(), MAX_RETRY_DELAY));
+		retry.setMultiplier(clampMultiplier(retry.getMultiplier()));
+		retry.setMaxDelay(capOptionalDuration(retry.getMaxDelay(), MAX_RETRY_DELAY));
+
+		taskTypes = normalizeTaskTypes(taskTypes);
+		return this;
+	}
+
+	private static Map<String, TaskType> normalizeTaskTypes(Map<String, TaskType> taskTypes) {
+		Map<String, TaskType> normalized = new LinkedHashMap<>();
+		if (taskTypes == null || taskTypes.isEmpty()) {
+			return normalized;
+		}
+		taskTypes.forEach((name, config) -> {
+			String normalizedName = normalizeTaskTypeName(name);
+			TaskType normalizedConfig = config == null ? new TaskType() : config;
+			normalizedConfig.setRate(clampInt(normalizedConfig.getRate(), 0, MAX_TASK_RATE));
+			normalizedConfig.setPeriod(
+					normalizeRequiredDuration(normalizedConfig.getPeriod(), DEFAULT_TASK_PERIOD, MAX_TASK_PERIOD));
+			normalizedConfig.setConcurrency(clampInt(normalizedConfig.getConcurrency(), 1, MAX_TASK_CONCURRENCY));
+			normalizedConfig.setTimeout(
+					normalizeRequiredDuration(normalizedConfig.getTimeout(), DEFAULT_TASK_TIMEOUT, MAX_TASK_TIMEOUT));
+			if (normalizedConfig.getBatchSize() != null) {
+				normalizedConfig.setBatchSize(clampInt(normalizedConfig.getBatchSize(), 1, MAX_TASK_BATCH_SIZE));
+			}
+			normalizedConfig.setMaxAttempts(clampInt(normalizedConfig.getMaxAttempts(), 1, MAX_TASK_MAX_ATTEMPTS));
+			normalizedConfig.setRetryBaseDelay(
+					capOptionalDuration(normalizedConfig.getRetryBaseDelay(), MAX_RETRY_DELAY));
+			normalizedConfig.setRetryDelay(capOptionalDuration(normalizedConfig.getRetryDelay(), MAX_RETRY_DELAY));
+			normalizedConfig.setRetryMaxDelay(
+					capOptionalDuration(normalizedConfig.getRetryMaxDelay(), MAX_RETRY_DELAY));
+			normalizedConfig.setRetryMultiplier(normalizeNullableMultiplier(normalizedConfig.getRetryMultiplier()));
+			if (normalized.putIfAbsent(normalizedName, normalizedConfig) != null) {
+				throw new IllegalArgumentException(
+						"Duplicate mango4j.swarm.task-types key after normalization: " + normalizedName);
+			}
+		});
+		return normalized;
+	}
+
+	private static String normalizeSchema(String schema) {
+		if (schema == null) {
+			return null;
+		}
+		String normalized = schema.trim();
+		if (normalized.isEmpty()) {
+			return null;
+		}
+		if (normalized.length() > MAX_SCHEMA_LENGTH) {
+			throw new IllegalArgumentException("mango4j.swarm.database.schema is too long: " + schema);
+		}
+		return normalized;
+	}
+
+	private static String normalizeTaskTypeName(String taskType) {
+		if (taskType == null) {
+			throw new IllegalArgumentException("Task type name must not be null");
+		}
+		String normalized = taskType.trim();
+		if (normalized.isEmpty()) {
+			throw new IllegalArgumentException("Task type name must not be blank");
+		}
+		if (normalized.length() > MAX_TASK_TYPE_NAME_LENGTH) {
+			throw new IllegalArgumentException("Task type name is too long: " + taskType);
+		}
+		return normalized;
+	}
+
+	private static String normalizeExecutorMaxThreads(String maxThreads) {
+		if (maxThreads == null) {
+			return "auto";
+		}
+		String normalized = maxThreads.trim();
+		if (normalized.isEmpty() || "auto".equalsIgnoreCase(normalized)) {
+			return "auto";
+		}
+		try {
+			return Integer.toString(clampInt(Integer.parseInt(normalized), 1, MAX_EXECUTOR_THREADS));
+		} catch (NumberFormatException ex) {
+			throw new IllegalArgumentException(
+					"mango4j.swarm.executor.maxThreads must be numeric or auto: " + maxThreads, ex);
+		}
+	}
+
+	private static Duration normalizeRequiredDuration(Duration value, Duration defaultValue, Duration maxValue) {
+		if (value == null || value.isZero() || value.isNegative()) {
+			return defaultValue;
+		}
+		return value.compareTo(maxValue) > 0 ? maxValue : value;
+	}
+
+	private static Duration capOptionalDuration(Duration value, Duration maxValue) {
+		if (value == null || value.isZero() || value.isNegative()) {
+			return value;
+		}
+		return value.compareTo(maxValue) > 0 ? maxValue : value;
+	}
+
+	private static int clampInt(int value, int minValue, int maxValue) {
+		return Math.max(minValue, Math.min(maxValue, value));
+	}
+
+	private static double clampMultiplier(double multiplier) {
+		if (!Double.isFinite(multiplier) || multiplier < 1.0d) {
+			return 1.0d;
+		}
+		return Math.min(multiplier, MAX_RETRY_MULTIPLIER);
+	}
+
+	private static Double normalizeNullableMultiplier(Double multiplier) {
+		if (multiplier == null) {
+			return null;
+		}
+		return clampMultiplier(multiplier);
 	}
 
 	/** Worker heartbeat and stale-worker pruning settings. */

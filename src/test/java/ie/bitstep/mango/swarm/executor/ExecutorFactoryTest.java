@@ -27,6 +27,20 @@ class ExecutorFactoryTest {
 	}
 
 	@Test
+	void clampsThreadLimitsWithinSupportedBounds() {
+		assertThat(ExecutorFactory.resolveMaxThreads("0", false)).isEqualTo(1);
+		assertThat(ExecutorFactory.resolveMaxThreads("9999", false)).isEqualTo(256);
+		assertThat(ExecutorFactory.resolveMaxThreads(" 12 ", false)).isEqualTo(12);
+	}
+
+	@Test
+	void rejectsNonNumericThreadLimits() {
+		assertThatThrownBy(() -> ExecutorFactory.resolveMaxThreads("many", false))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("mango4j.swarm.executor.maxThreads");
+	}
+
+	@Test
 	void virtualThreadsAreUnavailableForJavaSeventeenBuild() {
 		assumeTrue(Runtime.version().feature() < 21, "only applies to Java < 21");
 		assertThat(ExecutorFactory.virtualThreadsAvailable()).isFalse();

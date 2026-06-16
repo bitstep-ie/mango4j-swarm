@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MangoSwarmPropertiesTest {
 
@@ -143,5 +144,89 @@ class MangoSwarmPropertiesTest {
 		assertThat(taskType.getRetryMultiplier()).isEqualTo(1.5d);
 		assertThat(taskType.getRetryMaxDelay()).isEqualTo(Duration.ofSeconds(11));
 		assertThat(taskType.getRetryDelay()).isEqualTo(Duration.ofSeconds(12));
+	}
+
+	@Test
+	void normalizeTrimsAndBoundsUnsafeValues() {
+		MangoSwarmProperties properties = new MangoSwarmProperties();
+		properties.getDatabase().setSchema(" application_schema ");
+		properties.getWorker().setHeartbeatInterval(Duration.ofDays(2));
+		properties.getWorker().setStaleAfter(Duration.ofMinutes(1));
+		properties.getExecutor().setMaxThreads("9999");
+		properties.getExecutor().setPollInterval(Duration.ZERO);
+		properties.getCleanup().setBatchSize(0);
+		properties.getRuntime().setProgressThresholdPercent(120);
+		properties.getRuntime().setMinUpdateInterval(Duration.ofDays(2));
+		properties.getRetry().setMultiplier(Double.POSITIVE_INFINITY);
+		MangoSwarmProperties.TaskType taskType = new MangoSwarmProperties.TaskType();
+		taskType.setRate(5_000);
+		taskType.setPeriod(Duration.ofDays(2));
+		taskType.setConcurrency(999);
+		taskType.setTimeout(Duration.ofDays(2));
+		taskType.setBatchSize(0);
+		taskType.setMaxAttempts(0);
+		taskType.setRetryBaseDelay(Duration.ofDays(2));
+		taskType.setRetryMultiplier(0.5d);
+		taskType.setRetryMaxDelay(Duration.ofDays(2));
+		properties.getTaskTypes().put("  email  ", taskType);
+
+		properties.normalize();
+
+		assertThat(properties.getDatabase().getSchema()).isEqualTo("application_schema");
+		assertThat(properties.getWorker().getHeartbeatInterval()).isEqualTo(Duration.ofMinutes(1));
+		assertThat(properties.getWorker().getStaleAfter()).isEqualTo(Duration.ofMinutes(1));
+		assertThat(properties.getExecutor().getMaxThreads()).isEqualTo("256");
+		assertThat(properties.getExecutor().getPollInterval()).isEqualTo(Duration.ofMillis(100));
+		assertThat(properties.getCleanup().getBatchSize()).isEqualTo(1);
+		assertThat(properties.getRuntime().getProgressThresholdPercent()).isEqualTo(100);
+		assertThat(properties.getRuntime().getMinUpdateInterval()).isEqualTo(Duration.ofHours(1));
+		assertThat(properties.getRetry().getMultiplier()).isEqualTo(1.0d);
+		assertThat(properties.getTaskTypes()).containsOnlyKeys("email");
+
+		MangoSwarmProperties.TaskType normalized = properties.getTaskTypes().get("email");
+		assertThat(normalized.getRate()).isEqualTo(1_000);
+		assertThat(normalized.getPeriod()).isEqualTo(Duration.ofDays(1));
+		assertThat(normalized.getConcurrency()).isEqualTo(256);
+		assertThat(normalized.getTimeout()).isEqualTo(Duration.ofHours(24));
+		assertThat(normalized.getBatchSize()).isEqualTo(1);
+		assertThat(normalized.getMaxAttempts()).isEqualTo(1);
+		assertThat(normalized.getRetryBaseDelay()).isEqualTo(Duration.ofHours(24));
+		assertThat(normalized.getRetryMultiplier()).isEqualTo(1.0d);
+		assertThat(normalized.getRetryMaxDelay()).isEqualTo(Duration.ofHours(24));
+	}
+
+	@Test
+	void normalizeRejectsDuplicateTaskTypeNamesAfterTrimming() {
+		MangoSwarmProperties properties = new MangoSwarmProperties();
+		LinkedHashMap<String, MangoSwarmProperties.TaskType> taskTypes = new LinkedHashMap<>();
+		taskTypes.put("email", new MangoSwarmProperties.TaskType());
+		taskTypes.put(" email ", new MangoSwarmProperties.TaskType());
+		properties.setTaskTypes(taskTypes);
+
+		assertThatThrownBy(properties::normalize)
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("Duplicate mango4j.swarm.task-types key");
+	}
+
+	@Test
+	void normalizeRejectsInvalidExecutorThreadLimits() {
+		MangoSwarmProperties properties = new MangoSwarmProperties();
+		properties.getExecutor().setMaxThreads("many");
+
+		assertThatThrownBy(properties::normalize)
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("mango4j.swarm.executor.maxThreads");
+	}
+
+	@Test
+	void normalizePreservesNullTaskRetryMultiplierInheritance() {
+		MangoSwarmProperties properties = new MangoSwarmProperties();
+		MangoSwarmProperties.TaskType taskType = new MangoSwarmProperties.TaskType();
+		taskType.setRetryMultiplier(null);
+		properties.getTaskTypes().put("email", taskType);
+
+		properties.normalize();
+
+		assertThat(properties.getTaskTypes().get("email").getRetryMultiplier()).isNull();
 	}
 }

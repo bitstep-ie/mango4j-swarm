@@ -38,14 +38,15 @@ public class MangoSwarmAutoConfiguration {
 	@Bean
 	@ConditionalOnMissingBean
 	SchemaQualifiedTables mangoSchemaQualifiedTables(MangoSwarmProperties properties) {
-		return new SchemaQualifiedTables(properties.getDatabase().getSchema());
+		return new SchemaQualifiedTables(properties.normalize().getDatabase().getSchema());
 	}
 
 	@Bean
 	@ConditionalOnMissingBean
 	WorkerRegistry mangoWorkerRegistry(
 			JdbcTemplate jdbcTemplate, MangoSwarmProperties properties, SchemaQualifiedTables tables) {
-		return new JdbcWorkerRegistry(jdbcTemplate, properties.getWorker().getStaleAfter(), tables);
+		MangoSwarmProperties normalized = properties.normalize();
+		return new JdbcWorkerRegistry(jdbcTemplate, normalized.getWorker().getStaleAfter(), tables);
 	}
 
 	@Bean
@@ -58,14 +59,15 @@ public class MangoSwarmAutoConfiguration {
 	@Bean
 	@ConditionalOnMissingBean
 	MangoTasks mangoTasks(TaskRepository taskRepository, ObjectMapper objectMapper, MangoSwarmProperties properties) {
-		return new MangoTasks(taskRepository, objectMapper, properties, Clock.systemUTC());
+		return new MangoTasks(taskRepository, objectMapper, properties.normalize(), Clock.systemUTC());
 	}
 
 	@Bean
 	@ConditionalOnMissingBean
 	TaskHandlerRegistry mangoTaskHandlerRegistry(List<TaskHandler<?>> handlers, MangoSwarmProperties properties) {
+		MangoSwarmProperties normalized = properties.normalize();
 		return new TaskHandlerRegistry(
-				handlers, properties.getTaskTypes().keySet(), properties.isAllowUnconfiguredHandlers());
+				handlers, normalized.getTaskTypes().keySet(), normalized.isAllowUnconfiguredHandlers());
 	}
 
 	@Bean(initMethod = "start", destroyMethod = "stop")
@@ -77,14 +79,15 @@ public class MangoSwarmAutoConfiguration {
 			TaskHandlerRegistry handlerRegistry,
 			MangoSwarmProperties properties,
 			ObjectMapper objectMapper) {
-		return new MangoSwarmDaemon(workerRegistry, taskRepository, handlerRegistry, properties, objectMapper);
+		return new MangoSwarmDaemon(
+				workerRegistry, taskRepository, handlerRegistry, properties.normalize(), objectMapper);
 	}
 
 	@Bean
 	@ConditionalOnClass(name = "org.hibernate.cfg.AvailableSettings")
 	HibernatePropertiesCustomizer mangoHibernateDefaultSchemaCustomizer(MangoSwarmProperties properties) {
 		return hibernateProperties -> {
-			String schema = normalizedSchema(properties);
+			String schema = normalizedSchema(properties.normalize());
 			if (schema != null
 					&& properties.getDatabase().isApplySchemaToHibernateDefault()
 					&& !hibernateProperties.containsKey("hibernate.default_schema")) {

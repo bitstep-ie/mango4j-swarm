@@ -77,27 +77,28 @@ public class MangoSwarmDaemon {
 		this.workerRegistry = workerRegistry;
 		this.taskRepository = taskRepository;
 		this.handlerRegistry = handlerRegistry;
-		this.properties = properties;
+		this.properties = properties.normalize();
 		this.objectMapper = objectMapper;
-		boolean virtual = usingVirtualThreads(properties.getExecutor());
+		boolean virtual = usingVirtualThreads(this.properties.getExecutor());
 		log.info(
 				"swarm executor: virtualThreadsAvailable={}, configured={}, usingVirtual={}",
 				ExecutorFactory.virtualThreadsAvailable(),
-				properties.getExecutor().getVirtualThreads(),
+				this.properties.getExecutor().getVirtualThreads(),
 				virtual);
-		this.executorService = ExecutorFactory.create(properties.getExecutor());
+		this.executorService = ExecutorFactory.create(this.properties.getExecutor());
 		int maxThreads =
-				ExecutorFactory.resolveMaxThreads(properties.getExecutor().getMaxThreads(), virtual);
+				ExecutorFactory.resolveMaxThreads(this.properties.getExecutor().getMaxThreads(), virtual);
 		this.executorCapacity = new Semaphore(maxThreads);
 		this.runtimeProgressThresholdPercent =
-				Math.max(0, properties.getRuntime().getProgressThresholdPercent());
-		this.runtimeMinUpdateInterval = positiveOrZero(properties.getRuntime().getMinUpdateInterval());
+				Math.max(0, this.properties.getRuntime().getProgressThresholdPercent());
+		this.runtimeMinUpdateInterval =
+				positiveOrZero(this.properties.getRuntime().getMinUpdateInterval());
 		Map<String, Semaphore> semaphores = new LinkedHashMap<>();
-		properties
+		this.properties
 				.getTaskTypes()
 				.forEach((type, config) -> semaphores.put(type, new Semaphore(Math.max(1, config.getConcurrency()))));
 		this.typeSemaphores = Map.copyOf(semaphores);
-		properties
+		this.properties
 				.getTaskTypes()
 				.forEach((type, config) ->
 						startRateLimiters.put(type, new LocalTokenRingRateLimiter(Math.max(1, config.getRate()))));

@@ -8,10 +8,14 @@ import java.util.regex.Pattern;
 /** Validates and applies the optional schema used by static swarm SQL queries. */
 public record SchemaQualifiedTables(String schema) {
 	private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_]\\w*");
+	private static final int MAX_IDENTIFIER_LENGTH = 63;
 
 	public SchemaQualifiedTables(String schema) {
 		if (schema != null && !schema.isBlank()) {
 			String normalized = schema.trim();
+			if (normalized.length() > MAX_IDENTIFIER_LENGTH) {
+				throw new IllegalArgumentException("Invalid mango4j.swarm.database.schema: " + schema);
+			}
 			if (!IDENTIFIER.matcher(normalized).matches()) {
 				throw new IllegalArgumentException("Invalid mango4j.swarm.database.schema: " + schema);
 			}

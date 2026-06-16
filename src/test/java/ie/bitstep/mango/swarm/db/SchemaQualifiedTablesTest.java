@@ -45,6 +45,15 @@ class SchemaQualifiedTablesTest {
 	}
 
 	@Test
+	void rejectsOverlongSchemaNames() {
+		String schema = "a".repeat(64);
+
+		assertThatThrownBy(() -> new SchemaQualifiedTables(schema))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("Invalid mango4j.swarm.database.schema");
+	}
+
+	@Test
 	void withSearchPathSkipsSchemaWorkWhenNoSchemaConfigured() throws Exception {
 		Connection connection = mock(Connection.class);
 		SchemaQualifiedTables tables = new SchemaQualifiedTables(null);
