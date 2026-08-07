@@ -1,0 +1,1229 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="PostgreSQL-backed, rate-limited, distributed task executor for Spring Boot applications, powered by Mango">
+      
+      
+      
+        <link rel="canonical" href="https://bitstep-ie.github.io/mango4j-swarm/0.1.7/guide/why-mango4j-swarm/">
+      
+      
+        <link rel="prev" href="../how-it-works/">
+      
+      
+        <link rel="next" href="../../schema/schema/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Why mango-swarm? - mango4j-swarm</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#why-mango-swarm" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="mango4j-swarm" class="md-header__button md-logo" aria-label="mango4j-swarm" data-md-component="logo">
+      
+  <img src="../../assets/mango-black.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            mango4j-swarm
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Why mango-swarm?
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="orange" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="orange" data-md-color-accent="deep-orange"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bitstep-ie/mango4j-swarm" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bitstep-ie/mango4j-swarm
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../how-it-works/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../schema/schema/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Schema
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="mango4j-swarm" class="md-nav__button md-logo" aria-label="mango4j-swarm" data-md-component="logo">
+      
+  <img src="../../assets/mango-black.png" alt="logo">
+
+    </a>
+    mango4j-swarm
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bitstep-ie/mango4j-swarm" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bitstep-ie/mango4j-swarm
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how-it-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How It Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why mango-swarm?
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why mango-swarm?
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-with-related-spring-and-java-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison With Related Spring And Java Tools
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-not-shedlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Not ShedLock?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-not-spring-batch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Not Spring Batch?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-mango-swarm-is-better-for-this-use-case" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why mango-swarm Is Better For This Use Case
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Why mango-swarm Is Better For This Use Case">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#durable-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Durable Tasks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-instance-coordination" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Instance Coordination
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limits-that-survive-backlogs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate Limits That Survive Backlogs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#operational-task-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operational Task Modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hot-runtime-state-stays-separate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hot Runtime State Stays Separate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simple-handler-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Simple Handler Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-mango-swarm-fits-best" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When mango-swarm Fits Best
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-another-tool-may-be-better" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Another Tool May Be Better
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../schema/schema/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-with-related-spring-and-java-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison With Related Spring And Java Tools
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-not-shedlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Not ShedLock?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-not-spring-batch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Not Spring Batch?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-mango-swarm-is-better-for-this-use-case" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why mango-swarm Is Better For This Use Case
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Why mango-swarm Is Better For This Use Case">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#durable-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Durable Tasks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-instance-coordination" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Instance Coordination
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limits-that-survive-backlogs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate Limits That Survive Backlogs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#operational-task-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operational Task Modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hot-runtime-state-stays-separate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hot Runtime State Stays Separate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simple-handler-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Simple Handler Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-mango-swarm-fits-best" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When mango-swarm Fits Best
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-another-tool-may-be-better" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Another Tool May Be Better
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="why-mango-swarm">Why mango-swarm?<a class="headerlink" href="#why-mango-swarm" title="Permanent link">&para;</a></h1>
+<p><code>mango-swarm</code> exists for a specific application problem: durable, rate-limited background task execution inside a Spring Boot service.</p>
+<p>The current implementation is PostgreSQL-only. The persistence layer is still an implementation detail from the application model's point of view, but applications should plan for PostgreSQL when adopting mango-swarm today.</p>
+<p>It is not trying to be a general job-processing platform, a workflow engine, or a replacement for every scheduler. It is built for application-owned work such as:</p>
+<ul>
+<li>sending email or notifications</li>
+<li>calling third-party APIs under strict rate limits</li>
+<li>processing delayed or retryable application tasks</li>
+<li>running many independent units of work across multiple service instances</li>
+<li>keeping queued work durable without adding a broker or workflow platform</li>
+<li>reporting progress for long-running tasks</li>
+</ul>
+<h2 id="the-problem">The Problem<a class="headerlink" href="#the-problem" title="Permanent link">&para;</a></h2>
+<p>Many Spring Boot applications eventually need more than <code>@Scheduled</code>.</p>
+<p>A typical application needs to:</p>
+<ul>
+<li>queue work now, later, or after a delay</li>
+<li>survive process restarts</li>
+<li>avoid duplicate execution across multiple app instances</li>
+<li>retry failed work</li>
+<li>reclaim abandoned work after worker crashes</li>
+<li>pause, reject, or drop specific task types operationally</li>
+<li>enforce per-task-type concurrency</li>
+<li>enforce an application-wide rate limit across all workers</li>
+<li>avoid bursting a large backlog after downtime</li>
+<li>observe progress without constantly updating large durable task rows</li>
+</ul>
+<p>These requirements sit between two common tools:</p>
+<ul>
+<li>ShedLock is good at making one scheduled method run on one instance.</li>
+<li>Spring Batch is good at structured batch jobs with readers, processors, writers, steps, and job metadata.</li>
+</ul>
+<p><code>mango-swarm</code> targets the gap between them: distributed durable task execution for many small independent tasks.</p>
+<p>It is not merely a scheduler. It is a task-type execution control layer. Tasks may be queued now, scheduled with <code>at(...)</code> or <code>after(...)</code>, held from execution by task-type mode, activated later, retried according to configurable backoff policy, rejected or dropped according to task policy, and executed under distributed rate and concurrency limits.</p>
+<h2 id="comparison-with-related-spring-and-java-tools">Comparison With Related Spring And Java Tools<a class="headerlink" href="#comparison-with-related-spring-and-java-tools" title="Permanent link">&para;</a></h2>
+<p>Several Spring and Java tools overlap with parts of mango-swarm: background jobs, durable scheduling, retries, distributed execution, message persistence, or scheduled-method coordination. The differences are mostly about the shape of work each tool makes natural. For mango-swarm today, the durable store is PostgreSQL.</p>
+<table>
+<thead>
+<tr>
+<th>Project</th>
+<th style="text-align: right;">Fit vs Swarm</th>
+<th>Immediate jobs</th>
+<th>Future / delayed jobs</th>
+<th>Recurring jobs</th>
+<th>Durable execution</th>
+<th>Multi-instance coordination</th>
+<th>Run modes / queue-only</th>
+<th>Reject / drop policy</th>
+<th>Retry + backoff flexibility</th>
+<th>Rate / pacing</th>
+<th>Per-task concurrency</th>
+<th>Timeout reclaim</th>
+<th>Best fit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mango4J Swarm</td>
+<td style="text-align: right;">10/10</td>
+<td>Yes, <code>queue(...)</code></td>
+<td>Yes, <code>at(...)</code> and <code>after(...)</code></td>
+<td>Possible by scheduling or requeueing, if applicable</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes, task-type modes: <code>execute</code>, <code>queue</code>, <code>reject</code>, <code>drop</code></td>
+<td>Yes</td>
+<td>Yes, global defaults and per-task-type overrides</td>
+<td>Yes, distributed rate division plus local token-ring pacing</td>
+<td>Yes, per task type</td>
+<td>Yes, for idempotent task types with <code>reclaim-on-timeout</code></td>
+<td>Embedded durable task scheduling and controlled execution</td>
+</tr>
+<tr>
+<td>JobRunr</td>
+<td style="text-align: right;">7.5/10</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Partial; workers and queues can be controlled, but not the same task-type enqueue-only model</td>
+<td>Partial</td>
+<td>Good</td>
+<td>Partial; not the central model</td>
+<td>Partial</td>
+<td>Partial</td>
+<td>General durable background jobs</td>
+</tr>
+<tr>
+<td>db-scheduler</td>
+<td style="text-align: right;">7/10</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Partial</td>
+<td>Partial</td>
+<td>Good</td>
+<td>Limited compared with Swarm</td>
+<td>Partial</td>
+<td>Partial</td>
+<td>Lightweight embedded durable scheduling</td>
+</tr>
+<tr>
+<td>Quartz + Spring Boot</td>
+<td style="text-align: right;">6.5/10</td>
+<td>Via triggers</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Partial; jobs and triggers can be paused or resumed</td>
+<td>Mostly custom</td>
+<td>Mostly custom</td>
+<td>Not native rate-limited task execution</td>
+<td>Partial</td>
+<td>Partial</td>
+<td>Mature persistent scheduling</td>
+</tr>
+<tr>
+<td>Temporal Java / Spring Boot</td>
+<td style="text-align: right;">6/10</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Different model via task queues and workers</td>
+<td>Different workflow/activity failure model</td>
+<td>Very strong</td>
+<td>Possible, but different architecture</td>
+<td>Worker/activity controls</td>
+<td>Strong recovery, different model</td>
+<td>Durable workflows and orchestration</td>
+</tr>
+<tr>
+<td>Spring Batch</td>
+<td style="text-align: right;">5.5/10</td>
+<td>Job launch</td>
+<td>Usually external scheduler</td>
+<td>Usually external scheduler</td>
+<td>Yes</td>
+<td>Partial</td>
+<td>Not the same model</td>
+<td>Skip/reject concepts in batch processing</td>
+<td>Strong</td>
+<td>Not a task-type pacer</td>
+<td>Batch-oriented</td>
+<td>Restartability rather than task reclaim</td>
+<td>ETL, chunk processing, restartable batch jobs</td>
+</tr>
+<tr>
+<td>Spring Integration JDBC</td>
+<td style="text-align: right;">4/10</td>
+<td>As messages</td>
+<td>Possible but assembled</td>
+<td>Possible but assembled</td>
+<td>Yes, as message persistence</td>
+<td>Partial</td>
+<td>Custom</td>
+<td>Custom</td>
+<td>Custom</td>
+<td>Custom</td>
+<td>Custom</td>
+<td>Custom</td>
+<td>Building blocks for message-driven flows</td>
+</tr>
+<tr>
+<td>ShedLock</td>
+<td style="text-align: right;">2/10</td>
+<td>No</td>
+<td>Only scheduled methods</td>
+<td>Yes, via <code>@Scheduled</code></td>
+<td>No task queue</td>
+<td>Prevents duplicate scheduled execution</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+<td>Locking scheduled methods across nodes</td>
+</tr>
+</tbody>
+</table>
+<p>The closest broad durable background job alternative is JobRunr. The closest lightweight embedded scheduler alternative is db-scheduler. Quartz is mature and powerful, but scheduler-centric and heavier than mango-swarm's task-type execution model. Spring Batch is excellent for batch pipelines, but not the same shape as many small independently queued application tasks. Temporal is more powerful for workflows, but introduces a larger external workflow architecture. Spring Integration provides useful building blocks, but does not directly provide mango-swarm's task-type execution control model. ShedLock only solves distributed locking for scheduled methods.</p>
+<h2 id="why-not-shedlock">Why Not ShedLock?<a class="headerlink" href="#why-not-shedlock" title="Permanent link">&para;</a></h2>
+<p>ShedLock solves a narrower problem: coordinating scheduled jobs so only one application instance runs a given scheduled method at a time.</p>
+<p>That is useful, but it does not provide a durable task queue.</p>
+<p>For mango-swarm's target use case, ShedLock leaves the application to build most of the system itself:</p>
+<ul>
+<li>no durable per-task payload table</li>
+<li>no per-task lifecycle state</li>
+<li>no task claiming model</li>
+<li>no retry metadata per task</li>
+<li>no timeout reclaim for abandoned work</li>
+<li>no per-task progress visibility</li>
+<li>no per-task-type queue, execute, reject, or drop modes</li>
+<li>no backlog draining semantics</li>
+<li>no built-in rate division across active workers</li>
+<li>no local pacing to prevent catch-up bursts</li>
+</ul>
+<p>With ShedLock, a common design is one locked scheduled method that scans a table and processes rows. That can work, but the application then owns row claiming, retries, timeouts, concurrency, rate limiting, progress, cleanup, and crash recovery.</p>
+<p><code>mango-swarm</code> makes those concerns first-class.</p>
+<h2 id="why-not-spring-batch">Why Not Spring Batch?<a class="headerlink" href="#why-not-spring-batch" title="Permanent link">&para;</a></h2>
+<p>Spring Batch is a mature framework for batch workloads. It is strong when the problem is naturally a batch job:</p>
+<ul>
+<li>read many records</li>
+<li>process them in chunks</li>
+<li>write outputs</li>
+<li>track job and step execution</li>
+<li>restart failed jobs</li>
+<li>model complex batch pipelines</li>
+</ul>
+<p>That is a different shape from mango-swarm's target workload.</p>
+<p>For many application task queues, Spring Batch is more framework than the problem needs. A task such as "send this email", "call this partner API", or "process this customer event after a delay" does not naturally need a job repository, step model, item reader, item processor, item writer, chunk boundaries, or batch restart graph.</p>
+<p><code>mango-swarm</code> is task-oriented:</p>
+<ul>
+<li>one durable row is one unit of work</li>
+<li>the payload is application JSON</li>
+<li>the handler is normal application code</li>
+<li>queue time is earliest eligibility</li>
+<li>workers claim eligible rows</li>
+<li>local token rings decide when execution may start</li>
+<li>retry and terminal state live on the task row</li>
+<li>progress lives in a narrow runtime row</li>
+</ul>
+<p>This keeps the operational model smaller for services that need distributed background tasks, not batch pipelines.</p>
+<h2 id="why-mango-swarm-is-better-for-this-use-case">Why mango-swarm Is Better For This Use Case<a class="headerlink" href="#why-mango-swarm-is-better-for-this-use-case" title="Permanent link">&para;</a></h2>
+<p>For durable application tasks, mango-swarm has the right primitives built in.</p>
+<h3 id="durable-tasks">Durable Tasks<a class="headerlink" href="#durable-tasks" title="Permanent link">&para;</a></h3>
+<p>Tasks are persisted with JSON payloads. The durable task row records lifecycle state, claim metadata, attempts, retry timing, completion/failure timestamps, and the last error.</p>
+<p>The application does not need to invent a queue and then bolt coordination rules onto it.</p>
+<h3 id="multi-instance-coordination">Multi-Instance Coordination<a class="headerlink" href="#multi-instance-coordination" title="Permanent link">&para;</a></h3>
+<p>Workers heartbeat into swarm state. Active worker count is used to divide configured task-type rates across the currently live application instances.</p>
+<p>Each worker claims eligible tasks, so multiple instances can cooperate without a separate broker.</p>
+<h3 id="rate-limits-that-survive-backlogs">Rate Limits That Survive Backlogs<a class="headerlink" href="#rate-limits-that-survive-backlogs" title="Permanent link">&para;</a></h3>
+<p>Task-type rates are configured at application level. Each worker gets a local share:</p>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1">1</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1"></a>effectiveLocalRate = configuredRate / activeWorkerCount
+</code></pre></div></td></tr></table></div>
+<p>Each worker enforces that share with a fixed-capacity local token ring per task type. The ring itself is reused, while the active token count changes with the worker's current local share. When more workers arrive, reduced share is enforced immediately by disabling excess token slots. When workers disappear, only the newly added token slots are enabled, and those slots are scheduled no earlier than the next configured period after reconfiguration. Existing active tokens keep their current windows, so recalculating the share does not create a fresh burst or add replacement capacity inside the current period.</p>
+<p>That means a shrink followed by a grow inside the same period does not put removed tokens back into a period where some starts have already been spent. The higher local share takes effect from the next period onward.</p>
+<p>This matters when many tasks are already eligible. <code>available_at</code> is only earliest database eligibility. It does not guarantee immediate execution. Even if thousands of rows are overdue, workers start tasks only when:</p>
+<ul>
+<li>global worker concurrency permits it</li>
+<li>task-type concurrency permits it</li>
+<li>the local token ring grants a valid token</li>
+</ul>
+<p>Expired token windows are skipped, not replayed. That prevents the concertina effect where downtime or a paused queue turns into a burst when workers resume.</p>
+<h3 id="operational-task-modes">Operational Task Modes<a class="headerlink" href="#operational-task-modes" title="Permanent link">&para;</a></h3>
+<p>Task types can be controlled without deleting code:</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Producer behavior</th>
+<th>Worker behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>execute</code></td>
+<td>insert new task rows</td>
+<td>claim and execute eligible rows</td>
+</tr>
+<tr>
+<td><code>queue</code></td>
+<td>insert new task rows</td>
+<td>leave rows queued</td>
+</tr>
+<tr>
+<td><code>reject</code></td>
+<td>fail before insert</td>
+<td>leave existing rows queued</td>
+</tr>
+<tr>
+<td><code>drop</code></td>
+<td>acknowledge without insert</td>
+<td>leave existing rows queued</td>
+</tr>
+</tbody>
+</table>
+<p>This is useful when a dependency is down, a partner API is throttling, or a class of tasks must accumulate until it is safe to resume.</p>
+<h3 id="hot-runtime-state-stays-separate">Hot Runtime State Stays Separate<a class="headerlink" href="#hot-runtime-state-stays-separate" title="Permanent link">&para;</a></h3>
+<p>The durable task row contains the JSON payload and lifecycle state. It should not be updated for every progress message.</p>
+<p>Frequent mutable execution state lives separately from the durable payload row.</p>
+<p>This avoids turning large durable task rows into hot rows and keeps progress/liveness updates narrow.</p>
+<h3 id="simple-handler-model">Simple Handler Model<a class="headerlink" href="#simple-handler-model" title="Permanent link">&para;</a></h3>
+<p>Application code implements a <code>TaskHandler&lt;T&gt;</code>.</p>
+<p>Handlers receive a <code>TaskExecutionContext&lt;T&gt;</code> with metadata, payload, and progress reporting:</p>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-1-1">1</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1"></a><span class="n">context</span><span class="p">.</span><span class="na">progress</span><span class="p">(</span><span class="mi">30</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Calling partner API&quot;</span><span class="p">);</span>
+</code></pre></div></td></tr></table></div>
+<p>The handler does not need to know about database locking, worker heartbeats, retry bookkeeping, or token-ring pacing.</p>
+<h2 id="when-mango-swarm-fits-best">When mango-swarm Fits Best<a class="headerlink" href="#when-mango-swarm-fits-best" title="Permanent link">&para;</a></h2>
+<p>Use mango-swarm when a Spring Boot application can use PostgreSQL for its durable task store and needs embedded durable background work where task types can be queued, delayed, paused in queue-only mode, activated later, retried with task-specific backoff, dropped or rejected by policy, and executed under task-specific rate and concurrency limits without adopting a full workflow platform, external broker, or heavy batch framework.</p>
+<p>It fits workloads with:</p>
+<ul>
+<li>many independent tasks</li>
+<li>immediate queueing from application code</li>
+<li>future scheduling with <code>at(...)</code> or <code>after(...)</code></li>
+<li>configurable retry and backoff policies</li>
+<li>retry needs ranging from a few short retries to many retries over an extended period</li>
+<li>distributed execution across multiple app instances</li>
+<li>worker heartbeat and stale-worker detection</li>
+<li>timeout reclaim for idempotent abandoned work</li>
+<li>per-task-type rate and concurrency limits</li>
+<li>smooth local pacing to avoid backlog bursts</li>
+<li>task-type modes for <code>execute</code>, <code>queue</code>, <code>reject</code>, and <code>drop</code></li>
+<li>progress or liveness reporting where useful</li>
+<li>Spring Boot auto-configuration</li>
+</ul>
+<h2 id="when-another-tool-may-be-better">When Another Tool May Be Better<a class="headerlink" href="#when-another-tool-may-be-better" title="Permanent link">&para;</a></h2>
+<p>Use Spring Batch for structured batch/ETL pipelines, chunk processing, restartable jobs, and large data processing workflows.</p>
+<p>Use Quartz when the main problem is rich calendar or cron scheduling.</p>
+<p>Use JobRunr when a ready-made general-purpose background job system with dashboard support is desired.</p>
+<p>Use db-scheduler when the main requirement is a small embedded persistent scheduler.</p>
+<p>Use Temporal when the problem is long-running durable workflow orchestration, sagas, human-in-the-loop flows, or cross-service workflows.</p>
+<p>Use Spring Integration JDBC-backed channels or message stores when the application needs message-driven integration building blocks and is prepared to assemble task execution policy itself.</p>
+<p>Use ShedLock when the only requirement is preventing duplicate execution of <code>@Scheduled</code> methods across instances.</p>
+<p>In short: ShedLock coordinates scheduled methods, Spring Batch models batch jobs, Quartz and db-scheduler schedule jobs, Temporal orchestrates workflows, and mango-swarm runs durable distributed application tasks under task-type execution policy.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.top", "navigation.tabs", "navigation.instant", "content.code.annotate", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
