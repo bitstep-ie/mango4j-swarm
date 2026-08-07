@@ -77,8 +77,8 @@ Reference schema docs:
 
 - `examples/reference-email-app/src/main/resources/db/migration/V1__mango_swarm.sql`
 - `src/test/resources/db/migration/V1__mango_swarm.sql`
-- `documentation/mango-swarm-schema.sql`
-- `documentation/mango-swarm-schema.md`
+- `documentation/docs/schema/mango-swarm-schema.sql`
+- [Schema reference](../schema/schema.md)
 
 ## End-to-end runtime flow
 

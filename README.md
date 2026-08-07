@@ -24,10 +24,12 @@
     <p align="center">
         Distributed PostgreSQL-backed, rate-limited task execution for Spring Boot applications.
         <br />
+        <a href="https://bitstep-ie.github.io/mango4j-swarm/latest" target="_blank"><strong>📚 Explore the Official Guide »</strong></a>
         <br />
-        <a href="documentation/how-mango-swarm-works.md"><strong>How It Works</strong></a>
+        <br />
+        <a href="https://bitstep-ie.github.io/mango4j-swarm/latest/guide/how-it-works/"><strong>How It Works</strong></a>
         &middot;
-        <a href="documentation/why-mango4j-swarm.md"><strong>Why mango-swarm?</strong></a>
+        <a href="https://bitstep-ie.github.io/mango4j-swarm/latest/guide/why-mango4j-swarm/"><strong>Why mango-swarm?</strong></a>
         &middot;
         <a href="examples/reference-email-app"><strong>Reference Email App</strong></a>
         <br />
@@ -651,16 +653,12 @@ A matching test migration and documentation copy are provided in:
 
 ```text
 src/test/resources/db/migration/V1__mango_swarm.sql
-documentation/mango-swarm-schema.sql
+documentation/docs/schema/mango-swarm-schema.sql
 ```
 
 These SQL files should match the sample app migration exactly.
 
-The schema is documented in:
-
-```text
-documentation/mango-swarm-schema.md
-```
+The schema is documented at [bitstep-ie.github.io/mango4j-swarm/latest/schema/schema](https://bitstep-ie.github.io/mango4j-swarm/latest/schema/schema/).
 
 ***
 

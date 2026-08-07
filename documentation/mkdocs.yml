@@ -1,0 +1,60 @@
+site_name: "mango4j-swarm"
+site_description: PostgreSQL-backed, rate-limited, distributed task executor for Spring Boot applications, powered by Mango
+site_url: https://bitstep-ie.github.io/mango4j-swarm/
+repo_url: https://github.com/bitstep-ie/mango4j-swarm
+repo_name: bitstep-ie/mango4j-swarm
+docs_dir: ./docs
+
+
+theme:
+  name: material
+  logo: assets/mango-black.png
+  features:
+    - navigation.top
+    - navigation.tabs
+    - navigation.instant
+    - content.code.annotate
+    - content.tabs.link
+  palette:
+    - scheme: default
+      primary: orange
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+      code: github           # light mode code block style
+    - scheme: slate
+      primary: orange
+      accent: deep orange
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+      code: monokai
+
+extra:
+  favicon: assets/favicon.ico
+  version:
+    provider: mike
+
+nav:
+  - Guide:
+      - How It Works: guide/how-it-works.md
+      - Why mango-swarm?: guide/why-mango4j-swarm.md
+  - Schema: schema/schema.md
+
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      guess_lang: false
+      linenums: true
+  - tables
+  - footnotes
+  - def_list
+  - attr_list
+  - md_in_html
+  - pymdownx.blocks.caption

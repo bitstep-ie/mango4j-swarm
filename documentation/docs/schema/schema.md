@@ -2,7 +2,7 @@
 
 This document describes the PostgreSQL tables and indexes required by `mango-swarm`.
 
-Applications own schema creation, table creation, and migration rollout. The library does not run migrations from its jar. The reference DDL is the sample app migration at [`../examples/reference-email-app/src/main/resources/db/migration/V1__mango_swarm.sql`](../examples/reference-email-app/src/main/resources/db/migration/V1__mango_swarm.sql). The test migration at [`../src/test/resources/db/migration/V1__mango_swarm.sql`](../src/test/resources/db/migration/V1__mango_swarm.sql) and the copyable SQL in [`mango-swarm-schema.sql`](mango-swarm-schema.sql) should match the sample app migration exactly.
+Applications own schema creation, table creation, and migration rollout. The library does not run migrations from its jar. The reference DDL is the sample app migration at `examples/reference-email-app/src/main/resources/db/migration/V1__mango_swarm.sql`. The test migration at `src/test/resources/db/migration/V1__mango_swarm.sql` and the copyable SQL in [`mango-swarm-schema.sql`](mango-swarm-schema.sql) should match the sample app migration exactly.
 
 ## Tables
 
