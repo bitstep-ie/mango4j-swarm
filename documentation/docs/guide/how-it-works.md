@@ -163,7 +163,7 @@ Result: overdue rows can build up in the database without being replayed in one 
 
 ## Wake-on-queue
 
-By default, the daemon's poll loop only reacts to newly queued work at the next `executor.poll-interval` tick, via `MangoSwarmDaemon.runLoop()` calling `TaskWakeSignal.awaitOrTimeout(pollOnce(...))`.
+By default, the daemon's poll loop only reacts to queued work at the next `executor.poll-interval` tick, via `MangoSwarmDaemon.runLoop()` calling `TaskWakeSignal.awaitOrTimeout(pollOnce(...))`.
 
 A task type configured with `wake-on-queue: true` shortens that latency for immediate work:
 

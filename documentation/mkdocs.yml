@@ -40,6 +40,7 @@ nav:
   - Guide:
       - How It Works: guide/how-it-works.md
       - Why mango-swarm?: guide/why-mango4j-swarm.md
+  - API Reference: api/reference.md
   - Schema: schema/schema.md
 
 
