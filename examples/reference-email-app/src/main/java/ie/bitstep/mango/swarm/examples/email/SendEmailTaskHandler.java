@@ -25,13 +25,11 @@ class SendEmailTaskHandler implements TaskHandler<EmailPayload> {
     public TaskExecutionResult execute(TaskExecutionContext<EmailPayload> context) {
         EmailPayload payload = context.payload();
         context.progress(10, "preparing");
-        log.info("send-email task fired: taskId={}, attempt={}, customerId={}, to={}, subject={}, body={}",
+        log.info("send-email task fired: taskId={}, attempt={}, customerId={}",
                 context.taskId(),
                 context.attemptCount(),
-                payload.customerId(),
-                payload.to(),
-                payload.subject(),
-                payload.body());
+                payload.customerId());
+        log.trace("send-email payload detail: to={}, subject={}", payload.to(), payload.subject());
         return TaskExecutionResult.completed();
     }
 }

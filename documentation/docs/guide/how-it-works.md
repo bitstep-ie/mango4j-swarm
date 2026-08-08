@@ -121,7 +121,7 @@ Runtime table flow:
 
 | Step | Tables | What happens |
 | --- | --- | --- |
-| Queue task | `mango_swarm_tasks` | `MangoTasks` inserts a durable `queued` task row with the JSON payload and an `available_at` earliest eligibility timestamp. |
+| Queue task | `mango_swarm_tasks` | `MangoTasks` inserts a durable `queued` task row with the JSON payload and an `available_at` earliest eligibility timestamp. If the task type has `wake-on-queue: true` and the task is due immediately, the daemon's poll wait is interrupted early. |
 | Drop task | none | `mode: drop` returns an acknowledgement id without inserting into any swarm table. |
 | Reject task | none | `mode: reject` fails before inserting into any swarm table. |
 | Worker heartbeat | `mango_swarm_workers` | The daemon upserts its worker row, updates `last_heartbeat_at`, prunes stale workers, and uses the remaining worker count for rate division. |
@@ -159,6 +159,19 @@ stateDiagram-v2
 `available_at` is earliest database eligibility only. It is not an execution guarantee. A due row can be claimed only when worker capacity, task-type concurrency, and the worker-local token ring all allow a start.
 
 Result: overdue rows can build up in the database without being replayed in one burst when workers resume.
+
+## Wake-on-queue
+
+By default, the daemon's poll loop only reacts to newly queued work at the next `executor.poll-interval` tick, via `MangoSwarmDaemon.runLoop()` calling `TaskWakeSignal.awaitOrTimeout(pollOnce(...))`.
+
+A task type configured with `wake-on-queue: true` shortens that latency for immediate work:
+
+- `MangoTasks.queue(...)`, and `at(...)`/`after(...)` calls whose due time has already arrived, call `TaskWakeSignal.signal()` after the row is inserted.
+- `at(...)`/`after(...)` calls scheduled for the future do not signal, since there is nothing for the daemon to claim yet.
+- The signal interrupts the current poll wait early so the next `pollOnce` cycle runs immediately instead of waiting out the remaining `poll-interval`.
+- Signals are coalesced: repeated `signal()` calls before the daemon consumes one are collapsed into a single early wake-up, so a burst of queuing calls does not schedule a matching burst of extra poll cycles.
+
+This only affects how soon the daemon looks again; task-type mode, rate, concurrency, and token-ring pacing still govern whether and when a claimed row is actually allowed to start.
 
 ## Distributed rate division
 
@@ -241,6 +254,14 @@ On successful completion, the library records:
 
 Handlers should return `TaskExecutionResult.completed()` for success or `TaskExecutionResult.failed(message)` for an explicit failure. A `null` result is still treated as success for compatibility, but new handlers should not rely on that behavior.
 
+## Handler failure messages
+
+When a handler throws during dispatch, the daemon records a `last_error_message` and logs at `warn` (with the stacktrace at `debug`):
+
+- a payload extraction/cast failure (`ClassCastException`) is recorded distinctly as `Task payload type mismatch: <exception type>`, which usually indicates the payload no longer matches what `payloadExtractor()` expects
+- any other handler exception is recorded as `Task handler threw an exception: <exception type>`
+- an explicit `TaskExecutionResult.failed(...)` result is recorded as `Task handler reported failure` (the handler's own failure message is not currently persisted to `last_error_message`)
+
 ## Retries and reclaim
 
 Failure retry:
@@ -261,11 +282,11 @@ The daemon also runs a built-in retention cleanup pass. No application `TaskHand
 
 Cleanup config:
 
-- `mango.swarm.cleanup.enabled` (default `true`)
-- `mango.swarm.cleanup.interval` (default `10m`)
-- `mango.swarm.cleanup.completed-retention` (default `30d`)
-- `mango.swarm.cleanup.failed-retention` (default `90d`)
-- `mango.swarm.cleanup.batch-size` (default `1000`)
+- `mango4j.swarm.cleanup.enabled` (default `true`)
+- `mango4j.swarm.cleanup.interval` (default `10m`)
+- `mango4j.swarm.cleanup.completed-retention` (default `30d`)
+- `mango4j.swarm.cleanup.failed-retention` (default `90d`)
+- `mango4j.swarm.cleanup.batch-size` (default `1000`)
 
 Cleanup behavior:
 

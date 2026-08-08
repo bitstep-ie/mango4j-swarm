@@ -6,6 +6,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import ie.bitstep.mango.swarm.config.MangoSwarmProperties;
 import ie.bitstep.mango.swarm.db.TaskRecord;
 import ie.bitstep.mango.swarm.db.TaskRepository;
+import ie.bitstep.mango.swarm.executor.TaskWakeSignal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
@@ -28,7 +32,7 @@ class MangoTasksTest {
 	@Test
 	void queuesObjectPayloadForImmediateExecution() {
 		RecordingRepository repository = new RecordingRepository();
-		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties(), FIXED_CLOCK);
+		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties(), FIXED_CLOCK, new TaskWakeSignal());
 
 		UUID taskId = tasks.queue("email", new EmailRequest("customer-1", "x@example.com"));
 
@@ -42,7 +46,7 @@ class MangoTasksTest {
 	@Test
 	void queuesJsonPayloadForImmediateExecution() {
 		RecordingRepository repository = new RecordingRepository();
-		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties(), FIXED_CLOCK);
+		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties(), FIXED_CLOCK, new TaskWakeSignal());
 		ObjectNode payload = JsonNodeFactory.instance
 				.objectNode()
 				.put("customerId", "customer-2")
@@ -58,7 +62,7 @@ class MangoTasksTest {
 	@Test
 	void schedulesObjectPayloadAtRequestedTime() {
 		RecordingRepository repository = new RecordingRepository();
-		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties(), FIXED_CLOCK);
+		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties(), FIXED_CLOCK, new TaskWakeSignal());
 		Instant availableAt = Instant.parse("2026-05-21T10:00:00Z");
 
 		UUID taskId = tasks.at(availableAt, "email", new EmailRequest("customer-1", "x@example.com"));
@@ -73,7 +77,7 @@ class MangoTasksTest {
 	@Test
 	void scheduleAfterUsesFutureAvailableAt() {
 		RecordingRepository repository = new RecordingRepository();
-		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties(), FIXED_CLOCK);
+		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties(), FIXED_CLOCK, new TaskWakeSignal());
 
 		UUID taskId = tasks.after(Duration.ofSeconds(30), "email", new EmailRequest("customer-1", "x@example.com"));
 
@@ -84,7 +88,7 @@ class MangoTasksTest {
 	@Test
 	void schedulesJsonPayloadAfterDelay() {
 		RecordingRepository repository = new RecordingRepository();
-		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties(), FIXED_CLOCK);
+		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties(), FIXED_CLOCK, new TaskWakeSignal());
 		ObjectNode payload = JsonNodeFactory.instance.objectNode().put("customerId", "customer-3");
 
 		UUID taskId = tasks.after(Duration.ofSeconds(5), "email", payload);
@@ -96,7 +100,7 @@ class MangoTasksTest {
 
 	@Test
 	void rejectsNullDelayTaskTypePayloadAndTime() {
-		MangoTasks tasks = new MangoTasks(new RecordingRepository(), new ObjectMapper(), properties(), FIXED_CLOCK);
+		MangoTasks tasks = new MangoTasks(new RecordingRepository(), new ObjectMapper(), properties(), FIXED_CLOCK, new TaskWakeSignal());
 		ObjectNode payload = JsonNodeFactory.instance.objectNode();
 
 		assertThatNullPointerException()
@@ -124,7 +128,7 @@ class MangoTasksTest {
 		RecordingRepository repository = new RecordingRepository();
 		MangoSwarmProperties properties = properties();
 		properties.getTaskTypes().get("email").setRate(0);
-		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties, FIXED_CLOCK);
+		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties, FIXED_CLOCK, new TaskWakeSignal());
 
 		tasks.queue("email", JsonNodeFactory.instance.objectNode());
 
@@ -132,8 +136,66 @@ class MangoTasksTest {
 	}
 
 	@Test
+	void wakesSignalImmediatelyWhenTaskTypeOptsIn() throws Exception {
+		RecordingRepository repository = new RecordingRepository();
+		MangoSwarmProperties properties = properties();
+		properties.getTaskTypes().get("email").setWakeOnQueue(true);
+		TaskWakeSignal wakeSignal = new TaskWakeSignal();
+		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties, FIXED_CLOCK, wakeSignal);
+		CountDownLatch waiting = new CountDownLatch(1);
+		AtomicBoolean wokeEarly = new AtomicBoolean(false);
+		Thread waiter = new Thread(() -> {
+			waiting.countDown();
+			try {
+				long start = System.nanoTime();
+				wakeSignal.awaitOrTimeout(Duration.ofSeconds(30));
+				wokeEarly.set(System.nanoTime() - start < Duration.ofSeconds(5).toNanos());
+			} catch (InterruptedException ex) {
+				Thread.currentThread().interrupt();
+			}
+		});
+		waiter.start();
+		assertThat(waiting.await(5, TimeUnit.SECONDS)).isTrue();
+		Thread.sleep(50);
+
+		tasks.queue("email", JsonNodeFactory.instance.objectNode());
+		waiter.join(5_000);
+
+		assertThat(waiter.isAlive()).isFalse();
+		assertThat(wokeEarly).isTrue();
+	}
+
+	@Test
+	void doesNotWakeSignalWhenTaskTypeDoesNotOptIn() throws Exception {
+		RecordingRepository repository = new RecordingRepository();
+		TaskWakeSignal wakeSignal = new TaskWakeSignal();
+		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties(), FIXED_CLOCK, wakeSignal);
+
+		tasks.queue("email", JsonNodeFactory.instance.objectNode());
+
+		long start = System.nanoTime();
+		wakeSignal.awaitOrTimeout(Duration.ofMillis(100));
+		assertThat(System.nanoTime() - start).isGreaterThanOrEqualTo(Duration.ofMillis(90).toNanos());
+	}
+
+	@Test
+	void doesNotWakeSignalWhenScheduledInTheFuture() throws Exception {
+		RecordingRepository repository = new RecordingRepository();
+		MangoSwarmProperties properties = properties();
+		properties.getTaskTypes().get("email").setWakeOnQueue(true);
+		TaskWakeSignal wakeSignal = new TaskWakeSignal();
+		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties, FIXED_CLOCK, wakeSignal);
+
+		tasks.after(Duration.ofSeconds(30), "email", JsonNodeFactory.instance.objectNode());
+
+		long start = System.nanoTime();
+		wakeSignal.awaitOrTimeout(Duration.ofMillis(100));
+		assertThat(System.nanoTime() - start).isGreaterThanOrEqualTo(Duration.ofMillis(90).toNanos());
+	}
+
+	@Test
 	void rejectsUnconfiguredTaskType() {
-		MangoTasks tasks = new MangoTasks(new RecordingRepository(), new ObjectMapper(), properties(), FIXED_CLOCK);
+		MangoTasks tasks = new MangoTasks(new RecordingRepository(), new ObjectMapper(), properties(), FIXED_CLOCK, new TaskWakeSignal());
 		ObjectNode payload = JsonNodeFactory.instance.objectNode();
 
 		assertThatThrownBy(() -> tasks.queue("unknown", payload))
@@ -146,7 +208,7 @@ class MangoTasksTest {
 		RecordingRepository repository = new RecordingRepository();
 		MangoSwarmProperties properties = properties();
 		properties.getTaskTypes().get("email").setMode(MangoSwarmProperties.TaskMode.REJECT);
-		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties, FIXED_CLOCK);
+		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties, FIXED_CLOCK, new TaskWakeSignal());
 		ObjectNode payload = JsonNodeFactory.instance.objectNode();
 
 		assertThatThrownBy(() -> tasks.queue("email", payload))
@@ -160,7 +222,7 @@ class MangoTasksTest {
 		RecordingRepository repository = new RecordingRepository();
 		MangoSwarmProperties properties = properties();
 		properties.getTaskTypes().get("email").setMode(MangoSwarmProperties.TaskMode.DROP);
-		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties, FIXED_CLOCK);
+		MangoTasks tasks = new MangoTasks(repository, new ObjectMapper(), properties, FIXED_CLOCK, new TaskWakeSignal());
 
 		UUID taskId = tasks.queue("email", JsonNodeFactory.instance.objectNode());
 

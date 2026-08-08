@@ -3,6 +3,7 @@ package ie.bitstep.mango.swarm.config;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -14,6 +15,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "mango4j.swarm")
 public class MangoSwarmProperties {
 	private static final int MAX_SCHEMA_LENGTH = 63;
+	private static final Pattern SCHEMA_IDENTIFIER = Pattern.compile("[A-Za-z_]\\w*");
 	private static final int MAX_TASK_TYPE_NAME_LENGTH = 128;
 	private static final int MAX_EXECUTOR_THREADS = 256;
 	private static final Duration DEFAULT_EXECUTOR_POLL_INTERVAL = Duration.ofMillis(100);
@@ -224,6 +226,9 @@ public class MangoSwarmProperties {
 		}
 		if (normalized.length() > MAX_SCHEMA_LENGTH) {
 			throw new IllegalArgumentException("mango4j.swarm.database.schema is too long: " + schema);
+		}
+		if (!SCHEMA_IDENTIFIER.matcher(normalized).matches()) {
+			throw new IllegalArgumentException("Invalid mango4j.swarm.database.schema: " + schema);
 		}
 		return normalized;
 	}
@@ -503,6 +508,7 @@ public class MangoSwarmProperties {
 		private Duration timeout = Duration.ofMinutes(1);
 		private boolean reclaimOnTimeout;
 		private boolean idempotent;
+		private boolean wakeOnQueue;
 		private Integer batchSize;
 		private int maxAttempts = 1;
 		private Duration retryBaseDelay;
@@ -564,6 +570,14 @@ public class MangoSwarmProperties {
 
 		public void setIdempotent(boolean idempotent) {
 			this.idempotent = idempotent;
+		}
+
+		public boolean isWakeOnQueue() {
+			return wakeOnQueue;
+		}
+
+		public void setWakeOnQueue(boolean wakeOnQueue) {
+			this.wakeOnQueue = wakeOnQueue;
 		}
 
 		public Integer getBatchSize() {

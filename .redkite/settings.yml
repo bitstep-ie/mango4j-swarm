@@ -1,0 +1,18 @@
+# RedKite build validation settings for this project — see:
+# https://johnjoeallen.github.io/redkite/projects/build-validation/
+#
+# Uncomment and edit whatever this project actually needs; everything below is
+# optional, and this file is never overwritten once it exists.
+
+#redkite:
+#  maven:
+#    mode: run              # run (default) | verify | test — or a combination, e.g. [run, test]
+#                           # include "test" to run tests; omitted means -DskipTests
+#    fullLogs: false        # true includes dependency transfer logging — default false
+#    profile: my-profile
+#    args:
+#      - "-Dfoo=bar"
+#    env:
+#      KEY: value
+#    spring:
+#      profiles: my-spring-profile

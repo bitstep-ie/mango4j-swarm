@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import ie.bitstep.mango.swarm.config.MangoSwarmProperties;
 import ie.bitstep.mango.swarm.db.TaskRepository;
+import ie.bitstep.mango.swarm.executor.TaskWakeSignal;
 
 /**
  * High-level task scheduling API for application code.
@@ -22,13 +23,19 @@ public class MangoTasks {
 	private final ObjectMapper objectMapper;
 	private final MangoSwarmProperties properties;
 	private final Clock clock;
+	private final TaskWakeSignal wakeSignal;
 
 	public MangoTasks(
-			TaskRepository taskRepository, ObjectMapper objectMapper, MangoSwarmProperties properties, Clock clock) {
+			TaskRepository taskRepository,
+			ObjectMapper objectMapper,
+			MangoSwarmProperties properties,
+			Clock clock,
+			TaskWakeSignal wakeSignal) {
 		this.taskRepository = taskRepository;
 		this.objectMapper = objectMapper;
 		this.properties = properties.normalize();
 		this.clock = clock;
+		this.wakeSignal = wakeSignal;
 	}
 
 	/**
@@ -98,7 +105,11 @@ public class MangoTasks {
 		if (config.getMode() == MangoSwarmProperties.TaskMode.DROP) {
 			return UuidV7.generate();
 		}
-		return taskRepository.queue(taskType, payload, at);
+		UUID taskId = taskRepository.queue(taskType, payload, at);
+		if (config.isWakeOnQueue() && !at.isAfter(Instant.now(clock))) {
+			wakeSignal.signal();
+		}
+		return taskId;
 	}
 
 	/**

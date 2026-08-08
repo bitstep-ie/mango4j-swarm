@@ -241,6 +241,7 @@ mango4j:
         timeout: 30s
         reclaim-on-timeout: true
         idempotent: true
+        wake-on-queue: true
         batch-size: 20
         max-attempts: 3
         retry-base-delay: 10s
@@ -258,7 +259,7 @@ mango4j:
 
 ### Database
 
-* `mango4j.swarm.database.schema` (optional): schema prefix for native SQL table access.
+* `mango4j.swarm.database.schema` (optional): schema prefix for native SQL table access. Must be a valid SQL identifier (starts with a letter or underscore, followed by letters, digits, or underscores) and at most 63 characters.
 * `mango4j.swarm.database.apply-schema-to-hibernate-default` (default `true`): if `true` and `hibernate.default_schema` is not set, swarm can set it to `database.schema`.
 
 ### Worker
@@ -317,7 +318,7 @@ mango4j:
 ### Executor
 
 * `mango4j.swarm.executor.max-threads` (default `auto`): global local execution cap.
-* `mango4j.swarm.executor.poll-interval` (default `100ms`): fallback poll delay when no rate-gated wakeup applies.
+* `mango4j.swarm.executor.poll-interval` (default `100ms`): fallback poll delay when no rate-gated wakeup applies. A task type with `wake-on-queue: true` can interrupt this wait early when a task becomes immediately due.
 * `mango4j.swarm.executor.queue-strategy` (default `CALLER_RUNS`): overload behavior (`CALLER_RUNS` or `ABORT`).
 * `mango4j.swarm.executor.virtual-threads` (default `auto`): reserved virtual-thread policy (`auto`, `enabled`, `disabled`). Current Java 17 builds always use platform threads.
 
@@ -339,6 +340,7 @@ Optional:
 * `timeout` (default `1m`)
 * `reclaim-on-timeout` (default `false`)
 * `idempotent` (default `false`)
+* `wake-on-queue` (default `false`): when `true`, queuing a task for immediate execution (`queue(...)`, or `at(...)`/`after(...)` with a due time that has already arrived) interrupts the daemon's poll wait early instead of waiting for the next `poll-interval` tick. Tasks scheduled for the future do not trigger a wake.
 * `batch-size` (derived when omitted)
 * `max-attempts` (default `1`)
 * `retry-base-delay` (override)

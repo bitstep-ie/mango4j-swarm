@@ -18,6 +18,7 @@ import ie.bitstep.mango.swarm.db.JdbcTaskRepository;
 import ie.bitstep.mango.swarm.db.SchemaQualifiedTables;
 import ie.bitstep.mango.swarm.db.TaskRepository;
 import ie.bitstep.mango.swarm.executor.MangoSwarmDaemon;
+import ie.bitstep.mango.swarm.executor.TaskWakeSignal;
 import ie.bitstep.mango.swarm.handler.TaskHandler;
 import ie.bitstep.mango.swarm.handler.TaskHandlerRegistry;
 import ie.bitstep.mango.swarm.worker.JdbcWorkerRegistry;
@@ -58,8 +59,18 @@ public class MangoSwarmAutoConfiguration {
 
 	@Bean
 	@ConditionalOnMissingBean
-	MangoTasks mangoTasks(TaskRepository taskRepository, ObjectMapper objectMapper, MangoSwarmProperties properties) {
-		return new MangoTasks(taskRepository, objectMapper, properties.normalize(), Clock.systemUTC());
+	TaskWakeSignal mangoTaskWakeSignal() {
+		return new TaskWakeSignal();
+	}
+
+	@Bean
+	@ConditionalOnMissingBean
+	MangoTasks mangoTasks(
+			TaskRepository taskRepository,
+			ObjectMapper objectMapper,
+			MangoSwarmProperties properties,
+			TaskWakeSignal wakeSignal) {
+		return new MangoTasks(taskRepository, objectMapper, properties.normalize(), Clock.systemUTC(), wakeSignal);
 	}
 
 	@Bean
@@ -78,9 +89,10 @@ public class MangoSwarmAutoConfiguration {
 			TaskRepository taskRepository,
 			TaskHandlerRegistry handlerRegistry,
 			MangoSwarmProperties properties,
-			ObjectMapper objectMapper) {
+			ObjectMapper objectMapper,
+			TaskWakeSignal wakeSignal) {
 		return new MangoSwarmDaemon(
-				workerRegistry, taskRepository, handlerRegistry, properties.normalize(), objectMapper);
+				workerRegistry, taskRepository, handlerRegistry, properties.normalize(), objectMapper, wakeSignal);
 	}
 
 	@Bean

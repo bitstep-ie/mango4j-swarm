@@ -12,6 +12,7 @@ import ie.bitstep.mango.swarm.MangoTasks;
 import ie.bitstep.mango.swarm.db.SchemaQualifiedTables;
 import ie.bitstep.mango.swarm.db.TaskRepository;
 import ie.bitstep.mango.swarm.executor.MangoSwarmDaemon;
+import ie.bitstep.mango.swarm.executor.TaskWakeSignal;
 import ie.bitstep.mango.swarm.handler.TaskHandlerRegistry;
 import ie.bitstep.mango.swarm.worker.WorkerRegistry;
 
@@ -31,9 +32,10 @@ class MangoSwarmAutoConfigurationTest {
 		ObjectMapper objectMapper = configuration.mangoObjectMapper();
 		TaskHandlerRegistry registry = configuration.mangoTaskHandlerRegistry(List.of(), properties);
 
-		MangoTasks tasks = configuration.mangoTasks(taskRepository, objectMapper, properties);
-		MangoSwarmDaemon daemon =
-				configuration.mangoSwarmDaemon(workerRegistry, taskRepository, registry, properties, objectMapper);
+		TaskWakeSignal wakeSignal = configuration.mangoTaskWakeSignal();
+		MangoTasks tasks = configuration.mangoTasks(taskRepository, objectMapper, properties, wakeSignal);
+		MangoSwarmDaemon daemon = configuration.mangoSwarmDaemon(
+				workerRegistry, taskRepository, registry, properties, objectMapper, wakeSignal);
 
 		assertThat(objectMapper).isNotNull();
 		assertThat(registry.taskTypes()).isEmpty();

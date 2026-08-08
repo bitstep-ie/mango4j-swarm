@@ -32,7 +32,6 @@ import ie.bitstep.mango.swarm.payload.PayloadExtractor;
 import ie.bitstep.mango.swarm.worker.WorkerRegistry;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 
 class MangoSwarmDaemonTest {
 
@@ -678,7 +677,7 @@ class MangoSwarmDaemonTest {
 		assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
 		awaitCounter(() -> repository.failedTaskCalls, 1);
 		assertThat(repository.failedTaskCalls).isEqualTo(1);
-		assertThat(repository.lastFailureMessage).isEqualTo("Task handler threw an exception");
+		assertThat(repository.lastFailureMessage).isEqualTo("Task handler threw an exception: IllegalStateException");
 		daemon.stop();
 	}
 
@@ -1044,15 +1043,6 @@ class MangoSwarmDaemonTest {
 	}
 
 	@Test
-	void sleepIfPositiveDoesNotThrow() {
-		assertThatCode(() -> {
-					MangoSwarmDaemon.sleepIfPositive(Duration.ZERO);
-					MangoSwarmDaemon.sleepIfPositive(Duration.ofNanos(1));
-				})
-				.doesNotThrowAnyException();
-	}
-
-	@Test
 	void startCreatesThreadOnFirstCall() throws Exception {
 		MangoSwarmProperties properties = properties(0, 1, 1);
 		properties.getExecutor().setPollInterval(Duration.ofSeconds(30));
@@ -1067,15 +1057,6 @@ class MangoSwarmDaemonTest {
 		daemon.stop();
 	}
 
-	@Test
-	void sleepIfPositiveIsNoOpForNullAndNegativeDurations() {
-		assertThatCode(() -> {
-					MangoSwarmDaemon.sleepIfPositive(null);
-					MangoSwarmDaemon.sleepIfPositive(Duration.ofNanos(-1));
-				})
-				.doesNotThrowAnyException();
-	}
-
 	private static MangoSwarmDaemon daemon(
 			MangoSwarmProperties properties, FakeRepository repository, int activeWorkers, TaskHandler<?> handler) {
 		return daemon(properties, repository, new TestWorkerRegistry(activeWorkers), handler);
@@ -1088,7 +1069,7 @@ class MangoSwarmDaemonTest {
 			TaskHandler<?> handler) {
 		TaskHandlerRegistry registry = new TaskHandlerRegistry(
 				List.of(handler), properties.getTaskTypes().keySet(), false);
-		return new MangoSwarmDaemon(workers, repository, registry, properties, new ObjectMapper());
+		return new MangoSwarmDaemon(workers, repository, registry, properties, new ObjectMapper(), new TaskWakeSignal());
 	}
 
 	private static MangoSwarmProperties properties(int rate, int concurrency, int batchSize) {

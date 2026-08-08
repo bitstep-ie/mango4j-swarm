@@ -51,6 +51,7 @@ public class MangoSwarmDaemon {
 	private final TaskHandlerRegistry handlerRegistry;
 	private final MangoSwarmProperties properties;
 	private final ObjectMapper objectMapper;
+	private final TaskWakeSignal wakeSignal;
 	private final UUID workerId = UUID.randomUUID();
 	private final Instant startedAt = Instant.now();
 	private final String hostname = resolveHostname();
@@ -73,12 +74,14 @@ public class MangoSwarmDaemon {
 			TaskRepository taskRepository,
 			TaskHandlerRegistry handlerRegistry,
 			MangoSwarmProperties properties,
-			ObjectMapper objectMapper) {
+			ObjectMapper objectMapper,
+			TaskWakeSignal wakeSignal) {
 		this.workerRegistry = workerRegistry;
 		this.taskRepository = taskRepository;
 		this.handlerRegistry = handlerRegistry;
 		this.properties = properties.normalize();
 		this.objectMapper = objectMapper;
+		this.wakeSignal = wakeSignal;
 		boolean virtual = usingVirtualThreads(this.properties.getExecutor());
 		log.info(
 				"swarm executor: virtualThreadsAvailable={}, configured={}, usingVirtual={}",
@@ -282,7 +285,7 @@ public class MangoSwarmDaemon {
 	private void runLoop() {
 		while (running.get()) {
 			try {
-				sleepIfPositive(pollOnce(Instant.now()));
+				wakeSignal.awaitOrTimeout(pollOnce(Instant.now()));
 			} catch (InterruptedException ex) {
 				Thread.currentThread().interrupt();
 				return;
@@ -300,15 +303,6 @@ public class MangoSwarmDaemon {
 			return candidate;
 		}
 		return current;
-	}
-
-	static void sleepIfPositive(Duration delay) throws InterruptedException {
-		if (!isPositive(delay)) {
-			return;
-		}
-		long millis = delay.toMillis();
-		int nanos = (int) delay.minusMillis(millis).toNanos();
-		Thread.sleep(millis, nanos);
 	}
 
 	static boolean isPositive(Duration delay) {
@@ -494,15 +488,18 @@ public class MangoSwarmDaemon {
 						workerId,
 						task.attemptCount());
 			}
+		} catch (ClassCastException ex) {
+			handleFailedTask(task, "Task payload type mismatch: " + ex.getClass().getSimpleName());
+			log.warn(
+					"swarm task execution failed-type-mismatch: taskType={}, taskId={}, workerId={}, attempt={}, exceptionType={}",
+					task.taskType(), task.id(), workerId, task.attemptCount(), ex.getClass().getName());
+			log.debug("swarm task execution failed-type-mismatch stacktrace", ex);
 		} catch (Exception ex) {
-			handleFailedTask(task, HANDLER_EXCEPTION_MESSAGE);
-			log.debug(
+			handleFailedTask(task, HANDLER_EXCEPTION_MESSAGE + ": " + ex.getClass().getSimpleName());
+			log.warn(
 					"swarm task execution failed-exception: taskType={}, taskId={}, workerId={}, attempt={}, exceptionType={}",
-					task.taskType(),
-					task.id(),
-					workerId,
-					task.attemptCount(),
-					ex.getClass().getName());
+					task.taskType(), task.id(), workerId, task.attemptCount(), ex.getClass().getName());
+			log.debug("swarm task execution failed-exception stacktrace", ex);
 		}
 	}
 
