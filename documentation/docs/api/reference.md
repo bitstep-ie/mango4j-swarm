@@ -22,6 +22,26 @@ All methods null-check their arguments (`NullPointerException`). All methods als
 - `IllegalArgumentException` if `taskType` has no matching configured `mango4j.swarm.task-types.*` entry.
 - `IllegalStateException` if the task type's `mode` is `reject`.
 
+**`queue(...)`** — run as soon as possible:
+
+```java
+UUID taskId = tasks.queue("send-email", new EmailRequest("customer-1", "user@example.com"));
+```
+
+**`after(...)`** — run after a delay from now, e.g. a follow-up reminder:
+
+```java
+UUID taskId = tasks.after(Duration.ofMinutes(15), "send-email", new EmailRequest("customer-1", "user@example.com"));
+```
+
+**`at(...)`** — run at (or after) a specific instant, e.g. a scheduled campaign send:
+
+```java
+UUID taskId = tasks.at(Instant.parse("2026-06-01T09:00:00Z"), "send-email", new EmailRequest("customer-1", "user@example.com"));
+```
+
+Put together in a Spring service:
+
 ```java
 @Service
 class EmailTaskService {
@@ -123,15 +143,27 @@ Passed to `TaskHandler.execute(...)`. Carries attempt metadata, the extracted pa
 
 ### Recurring tasks with `again(...)`
 
-A handler can queue its own follow-up occurrence from inside `execute(...)`, independent of the `TaskExecutionResult` it ultimately returns — call it on success, on failure, or both:
+A handler can queue its own follow-up occurrence from inside `execute(...)`, independent of the `TaskExecutionResult` it ultimately returns — call it on success, on failure, or both.
+
+**Without a new payload** — reuse the current payload unchanged, e.g. a fixed-interval health check:
+
+```java
+@Override
+public TaskExecutionResult execute(TaskExecutionContext<HealthCheckPayload> context) {
+    pingEndpoint(context.payload().url());
+    context.again(Duration.ofMinutes(10));
+    return TaskExecutionResult.completed();
+}
+```
+
+**With a new payload** — advance state for the next occurrence, e.g. an incrementing cursor:
 
 ```java
 @Override
 public TaskExecutionResult execute(TaskExecutionContext<PollPayload> context) {
     PollPayload payload = context.payload();
-    // ... do the work for this occurrence ...
-    context.again(Duration.ofMinutes(10));                       // same payload
-    // or: context.again(Duration.ofMinutes(10), payload.withCursor(next));
+    String next = pollFeed(payload.cursor());
+    context.again(Duration.ofMinutes(10), payload.withCursor(next));
     return TaskExecutionResult.completed();
 }
 ```
