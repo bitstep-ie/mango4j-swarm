@@ -175,7 +175,9 @@ Handlers receive a `TaskExecutionContext<T>` containing:
 - `attemptCount`: current attempt number
 - `claimedAt`: claim timestamp for the current attempt
 - `payload`: extracted typed payload
+- `seriesId`: id shared by every occurrence of this task's recurring series, or `null` if standalone
 - progress API: `progress(percent)` and `progress(percent, description)`
+- recurring API: `again(delay)` and `again(delay, newPayload)`
 
 Calling `context.progress(percent)` or `context.progress(percent, description)` records progress from `0` to `100` in the runtime table and also acts as task liveness. Runtime updates extend the stale-task timeout window for that task and refresh the current `execution_time_ms`. The optional description can be used for human-readable stages such as `connecting`, `sending`, or `completing`.
 
@@ -191,6 +193,27 @@ execution_time_ms = elapsed attempt time in milliseconds
 Handlers can still report `100` themselves if they want a custom final description before returning, but the default successful completion state is always `100` / `finished`.
 
 Handlers should return `TaskExecutionResult.completed()` for success or `TaskExecutionResult.failed(message)` for an explicit failure. A `null` result is still treated as success for compatibility, but new handlers should not rely on that behavior.
+
+## Recurring / Self-Rescheduling Tasks
+
+A handler can queue its own follow-up occurrence by calling `context.again(...)` during `execute(...)`:
+
+```java
+@Override
+public TaskExecutionResult execute(TaskExecutionContext<PollPayload> context) {
+    PollPayload payload = context.payload();
+    // ... do the work for this occurrence ...
+    context.again(Duration.ofMinutes(10));                       // same payload
+    // or: context.again(Duration.ofMinutes(10), payload.withCursor(next));
+    return TaskExecutionResult.completed();
+}
+```
+
+- `again(delay)` inserts a new task row with the same payload; `again(delay, newPayload)` inserts one with a different payload (e.g. an advanced cursor).
+- It's independent of the returned `TaskExecutionResult` — call it on success, on failure, or both; it does not affect the outcome recorded for the current attempt.
+- Each occurrence is its own durable row (same mechanics as `after(...)`), so occurrence history is free and governed by the normal `cleanup.completed-retention`/`failed-retention` policy — no separate history table.
+- Occurrences are linked via `mango_swarm_tasks.series_id`: the first occurrence created by `again()` gets `series_id` set to the *root* task's own `id`; every later occurrence inherits that same `series_id`. The root task itself keeps `series_id = NULL`. To fetch a whole series: `WHERE id = :rootId OR series_id = :rootId`.
+- `again()` respects the task type's `mode` and `wake-on-queue` settings exactly like `queue`/`at`/`after` (throws on `reject`, silently no-ops on `drop`).
 
 ***
 

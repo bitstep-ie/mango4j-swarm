@@ -2,7 +2,7 @@
 
 This document describes the PostgreSQL tables and indexes required by `mango-swarm`.
 
-Applications own schema creation, table creation, and migration rollout. The library does not run migrations from its jar. The reference DDL is the sample app migration at `examples/reference-email-app/src/main/resources/db/migration/V1__mango_swarm.sql`. The test migration at `src/test/resources/db/migration/V1__mango_swarm.sql` and the copyable SQL in [`mango-swarm-schema.sql`](mango-swarm-schema.sql) should match the sample app migration exactly.
+Applications own schema creation, table creation, and migration rollout. The library does not run migrations from its jar. The reference DDL is the sample app's migrations at `examples/reference-email-app/src/main/resources/db/migration/`. The test migrations at `src/test/resources/db/migration/` should match the sample app's migrations exactly. The copyable SQL in [`mango-swarm-schema.sql`](mango-swarm-schema.sql) is the cumulative result of applying all migrations in order, kept as a single ready-to-run script.
 
 ## Tables
 
@@ -49,6 +49,7 @@ Task rows are the durable queue and execution history.
 | `failed_at` | `timestamptz` | no | Failure time for terminal failed rows. |
 | `execution_time_ms` | `bigint` | no | Final or durable lifecycle execution time in milliseconds. Must be non-negative when present. |
 | `last_error_message` | `text` | no | Most recent failure, timeout, or requeue message. |
+| `series_id` | `uuid` | no | Groups an occurrence created via `TaskExecutionContext.again(...)` with the rest of its recurring series. `NULL` for standalone tasks and for the first (root) occurrence of a series; every occurrence after the root carries the root task's own `id`. |
 
 The `status` check constraint keeps lifecycle values within the states the repository understands. `execution_time_ms` is nullable because queued and newly claimed rows do not yet have an execution duration.
 
@@ -127,6 +128,16 @@ CREATE INDEX IF NOT EXISTS idx_mango_tasks_failed_cleanup
 ```
 
 Supports retention cleanup of failed rows ordered by terminal timestamp.
+
+### `idx_mango_tasks_series`
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_mango_tasks_series
+    ON mango_swarm_tasks (series_id, id)
+    WHERE series_id IS NOT NULL;
+```
+
+Supports querying all occurrences of a recurring series (`WHERE id = :rootId OR series_id = :rootId`). Partial and excludes `NULL`, since most tasks never join a series.
 
 ## Lifecycle
 

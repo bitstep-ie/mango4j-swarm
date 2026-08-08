@@ -15,8 +15,13 @@ import com.fasterxml.jackson.databind.JsonNode;
  * use by multiple workers.
  */
 public interface TaskRepository {
-	/** Persists a task at a concrete availability time. */
-	UUID queue(String taskType, JsonNode payload, Instant availableAt);
+	/**
+	 * Persists a task at a concrete availability time.
+	 *
+	 * @param seriesId groups this task with other occurrences of the same recurring series (see
+	 *     {@code TaskExecutionContext.again(...)}); {@code null} for a standalone task or the root of a new series
+	 */
+	UUID queue(String taskType, JsonNode payload, Instant availableAt, UUID seriesId);
 
 	/** Claims up to {@code limit} queued tasks for a worker. */
 	List<TaskRecord> claimBatch(String taskType, UUID workerId, Instant now, int limit);

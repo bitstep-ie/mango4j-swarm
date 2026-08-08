@@ -105,7 +105,7 @@ public class MangoTasks {
 		if (config.getMode() == MangoSwarmProperties.TaskMode.DROP) {
 			return UuidV7.generate();
 		}
-		UUID taskId = taskRepository.queue(taskType, payload, at);
+		UUID taskId = taskRepository.queue(taskType, payload, at, null);
 		if (config.isWakeOnQueue() && !at.isAfter(Instant.now(clock))) {
 			wakeSignal.signal();
 		}

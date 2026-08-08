@@ -14,7 +14,7 @@ This document explains the runtime model of `mango-swarm`, the table interaction
 - `MangoTasks`: high-level API for `queue(...)`, `at(...)`, and `after(...)`.
 - `MangoSwarmDaemon`: worker loop that heartbeats, claims, dispatches, retries, reclaims, and cleans up old terminal tasks.
 - `TaskHandler<T>`: application task logic.
-- `TaskExecutionContext<T>`: metadata + payload + progress reporting callback.
+- `TaskExecutionContext<T>`: metadata + payload + progress reporting callback + recurring self-reschedule (`again(...)`) callback.
 - `TaskRepository`: PostgreSQL persistence contract used by the daemon.
 - `WorkerRegistry`: worker heartbeat and active-worker counting.
 
@@ -49,6 +49,7 @@ Durable work item and lifecycle state:
 - `completed_at`, `failed_at`: terminal state timestamps
 - `execution_time_ms`: final/current attempt execution time for durable lifecycle transitions
 - `last_error_message`: last failure, timeout, or requeue message
+- `series_id`: groups an occurrence created via `TaskExecutionContext.again(...)` with the rest of its recurring series; `NULL` for standalone tasks and for the root occurrence of a series
 
 This table is intentionally durable and mostly stable. Payloads live here, and frequent progress updates do not.
 
@@ -261,6 +262,16 @@ When a handler throws during dispatch, the daemon records a `last_error_message`
 - a payload extraction/cast failure (`ClassCastException`) is recorded distinctly as `Task payload type mismatch: <exception type>`, which usually indicates the payload no longer matches what `payloadExtractor()` expects
 - any other handler exception is recorded as `Task handler threw an exception: <exception type>`
 - an explicit `TaskExecutionResult.failed(...)` result is recorded as `Task handler reported failure` (the handler's own failure message is not currently persisted to `last_error_message`)
+
+## Recurring tasks via `again()`
+
+`TaskExecutionContext.again(delay)` / `again(delay, newPayload)` lets a handler queue its own follow-up occurrence from inside `execute(...)`, independent of the `TaskExecutionResult` it ultimately returns — call it on success, on failure, or both.
+
+- Executes synchronously and immediately: it inserts a new task row the same way `MangoTasks.after(...)` does, it does not defer or batch anything, and it does not affect the outcome recorded for the *current* attempt.
+- Reuses the current payload by default, or takes an explicit new payload (e.g. an advanced cursor) via the second form.
+- Links occurrences with the new `series_id` column rather than reusing the same row: the daemon computes `seriesId = task.seriesId() != null ? task.seriesId() : task.id()` before dispatch, so the first `again()` call from a standalone (root) task sets the new row's `series_id` to the root's own `id`, and every later occurrence propagates that same `series_id` forward. The root row itself keeps `series_id = NULL`.
+- One row per occurrence gives free history and audit trail through the existing `mango_swarm_tasks` table and its `cleanup.completed-retention`/`failed-retention` policy — no separate history table. Fetching a whole series is `WHERE id = :rootId OR series_id = :rootId`.
+- Respects the task type's `mode` and `wake-on-queue` exactly like `MangoTasks.at(...)` (throws on `reject`, silently no-ops on `drop`), since the daemon mirrors that logic directly against `TaskRepository`/`MangoSwarmProperties` rather than depending on `MangoTasks`.
 
 ## Retries and reclaim
 

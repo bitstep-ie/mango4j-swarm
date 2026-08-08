@@ -34,8 +34,8 @@ import ie.bitstep.mango.swarm.UuidV7;
 public class JdbcTaskRepository implements TaskRepository {
 	private static final String INSERT_TASK_SQL =
 			"""
-INSERT INTO mango_swarm_tasks(id, task_type, payload, status, available_at)
-VALUES (?, ?, ?, 'queued', ?)
+INSERT INTO mango_swarm_tasks(id, task_type, payload, status, available_at, series_id)
+VALUES (?, ?, ?, 'queued', ?, ?)
 """;
 	private static final String SELECT_QUEUED_TASK_IDS_SQL =
 			"""
@@ -63,7 +63,7 @@ AND status = 'queued'
 	private static final String SELECT_CLAIMED_TASKS_SQL =
 			"""
 SELECT id, task_type, payload, status, available_at, claimed_by, claimed_at,
-attempt_count, created_at, updated_at
+attempt_count, created_at, updated_at, series_id
 FROM mango_swarm_tasks
 WHERE claimed_by = ?
 AND id = ANY (?)
@@ -217,7 +217,7 @@ LIMIT ?
 	}
 
 	@Override
-	public UUID queue(String taskType, JsonNode payload, Instant availableAt) {
+	public UUID queue(String taskType, JsonNode payload, Instant availableAt, UUID seriesId) {
 		return executeRequired(
 				connection -> tables.withSearchPath(connection, scoped -> {
 					UUID taskId = UuidV7.generate();
@@ -226,6 +226,7 @@ LIMIT ?
 						statement.setString(2, taskType);
 						setJson(statement, payload);
 						statement.setObject(4, ts(availableAt));
+						statement.setObject(5, seriesId);
 						statement.executeUpdate();
 						return taskId;
 					}
@@ -611,7 +612,8 @@ LIMIT ?
 					getInstant(rs, "claimed_at"),
 					rs.getInt("attempt_count"),
 					getInstant(rs, "created_at"),
-					getInstant(rs, "updated_at"));
+					getInstant(rs, "updated_at"),
+					rs.getObject("series_id", UUID.class));
 		} catch (JsonProcessingException ex) {
 			throw new SQLException("Cannot parse task payload", ex);
 		}

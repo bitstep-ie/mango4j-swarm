@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS mango_swarm_tasks (
     completed_at timestamptz NULL,
     failed_at timestamptz NULL,
     execution_time_ms bigint NULL CHECK (execution_time_ms >= 0),
-    last_error_message text NULL
+    last_error_message text NULL,
+    series_id uuid NULL
 );
 
 CREATE TABLE IF NOT EXISTS mango_swarm_task_runtime (
@@ -48,3 +49,7 @@ CREATE INDEX IF NOT EXISTS idx_mango_tasks_completed_cleanup
 CREATE INDEX IF NOT EXISTS idx_mango_tasks_failed_cleanup
     ON mango_swarm_tasks (failed_at, id)
     WHERE status = 'failed';
+
+CREATE INDEX IF NOT EXISTS idx_mango_tasks_series
+    ON mango_swarm_tasks (series_id, id)
+    WHERE series_id IS NOT NULL;

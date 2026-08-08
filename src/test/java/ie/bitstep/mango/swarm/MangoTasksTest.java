@@ -41,6 +41,8 @@ class MangoTasksTest {
 		assertThat(repository.availableAt).isEqualTo(FIXED_NOW);
 		assertThat(repository.payload.get("customerId").asText()).isEqualTo("customer-1");
 		assertThat(repository.payload.get("email").asText()).isEqualTo("x@example.com");
+		assertThat(repository.seriesIdCaptured).isTrue();
+		assertThat(repository.seriesId).isNull();
 	}
 
 	@Test
@@ -261,14 +263,18 @@ class MangoTasksTest {
 		private String taskType;
 		private JsonNode payload;
 		private Instant availableAt;
+		private UUID seriesId;
+		private boolean seriesIdCaptured;
 
 		private static final UUID TASK_ID = UUID.fromString("018f0000-0000-7000-8000-000000000001");
 
 		@Override
-		public UUID queue(String taskType, JsonNode payload, Instant availableAt) {
+		public UUID queue(String taskType, JsonNode payload, Instant availableAt, UUID seriesId) {
 			this.taskType = taskType;
 			this.payload = payload;
 			this.availableAt = availableAt;
+			this.seriesId = seriesId;
+			this.seriesIdCaptured = true;
 			return TASK_ID;
 		}
 

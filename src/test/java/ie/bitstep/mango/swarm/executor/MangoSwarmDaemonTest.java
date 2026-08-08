@@ -578,6 +578,67 @@ class MangoSwarmDaemonTest {
 	}
 
 	@Test
+	void againInsertsLinkedFollowUpOccurrenceReusingPayload() throws Exception {
+		MangoSwarmProperties properties = properties(10, 1, 1);
+		FakeRepository repository = new FakeRepository(1);
+		CountDownLatch executed = new CountDownLatch(1);
+		AgainCallingHandler handler = new AgainCallingHandler(executed, Duration.ofMinutes(5), null);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, handler);
+		Instant now = Instant.parse("2026-05-20T10:00:00Z");
+
+		daemon.pollOnce(now);
+
+		assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
+		awaitCounter(() -> repository.queueCalls.size(), 1);
+		assertThat(repository.lastClaimedTaskIds).hasSize(1);
+		UUID rootId = repository.lastClaimedTaskIds.get(0);
+		FakeRepository.QueuedCall call = repository.queueCalls.get(0);
+		assertThat(call.taskType()).isEqualTo("email");
+		assertThat(call.payload().asText()).isEqualTo("ok");
+		// requestAgain stamps availableAt from the real wall clock (matching markCompleted/markFailed elsewhere in
+		// executeTask), not from pollOnce's now parameter, so assert against Instant.now() with tolerance.
+		assertThat(call.availableAt())
+				.isCloseTo(Instant.now().plus(Duration.ofMinutes(5)), org.assertj.core.api.Assertions.within(Duration.ofSeconds(5)));
+		assertThat(call.seriesId()).isEqualTo(rootId);
+		assertThat(handler.againTaskId).isNotNull();
+		daemon.stop();
+	}
+
+	@Test
+	void againWithNewPayloadOverridesCurrentPayload() throws Exception {
+		MangoSwarmProperties properties = properties(10, 1, 1);
+		FakeRepository repository = new FakeRepository(1);
+		CountDownLatch executed = new CountDownLatch(1);
+		AgainCallingHandler handler = new AgainCallingHandler(executed, Duration.ofMinutes(1), "next-cursor");
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, handler);
+
+		daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+
+		assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
+		awaitCounter(() -> repository.queueCalls.size(), 1);
+		assertThat(repository.queueCalls.get(0).payload().asText()).isEqualTo("next-cursor");
+		daemon.stop();
+	}
+
+	@Test
+	void againPropagatesExistingSeriesIdRatherThanTasksOwnId() throws Exception {
+		MangoSwarmProperties properties = properties(10, 1, 1);
+		FakeRepository repository = new FakeRepository(1);
+		UUID existingSeriesId = UUID.randomUUID();
+		repository.setSeriesIdForClaims(existingSeriesId);
+		CountDownLatch executed = new CountDownLatch(1);
+		AgainCallingHandler handler = new AgainCallingHandler(executed, Duration.ofMinutes(1), null);
+		MangoSwarmDaemon daemon = daemon(properties, repository, 1, handler);
+
+		daemon.pollOnce(Instant.parse("2026-05-20T10:00:00Z"));
+
+		assertThat(executed.await(5, TimeUnit.SECONDS)).isTrue();
+		awaitCounter(() -> repository.queueCalls.size(), 1);
+		assertThat(repository.queueCalls.get(0).seriesId()).isEqualTo(existingSeriesId);
+		daemon.stop();
+	}
+
+	@Test
 	void runtimeProgressReporterPersistsOnlyChangedNullProgress() throws Exception {
 		MangoSwarmProperties properties = properties(10, 1, 1);
 		properties.getRuntime().setMinUpdateInterval(Duration.ofDays(1));
@@ -1141,7 +1202,8 @@ class MangoSwarmDaemonTest {
 				now,
 				1,
 				now,
-				now);
+				now,
+				null);
 	}
 
 	@SwarmHandler("email")
@@ -1293,6 +1355,26 @@ class MangoSwarmDaemonTest {
 		}
 	}
 
+	private static final class AgainCallingHandler extends CompletingHandler {
+		private final CountDownLatch executed;
+		private final Duration delay;
+		private final String newPayload;
+		private volatile UUID againTaskId;
+
+		private AgainCallingHandler(CountDownLatch executed, Duration delay, String newPayload) {
+			this.executed = executed;
+			this.delay = delay;
+			this.newPayload = newPayload;
+		}
+
+		@Override
+		public TaskExecutionResult execute(TaskExecutionContext<String> context) {
+			againTaskId = newPayload == null ? context.again(delay) : context.again(delay, newPayload);
+			executed.countDown();
+			return TaskExecutionResult.completed();
+		}
+	}
+
 	private static final class TestWorkerRegistry implements WorkerRegistry {
 		private final int activeWorkers;
 		private int heartbeatCalls;
@@ -1338,6 +1420,9 @@ class MangoSwarmDaemonTest {
 		private int deleteFailedCalls;
 		private int lastDeleteLimit;
 		private Runnable afterClaimLimitCalculated = () -> {};
+		private final List<QueuedCall> queueCalls = new ArrayList<>();
+		private final List<UUID> lastClaimedTaskIds = new ArrayList<>();
+		private UUID seriesIdForClaims;
 
 		private FakeRepository(int available) {
 			this.available = available;
@@ -1347,8 +1432,20 @@ class MangoSwarmDaemonTest {
 			this.available = available;
 		}
 
+		private void setSeriesIdForClaims(UUID seriesIdForClaims) {
+			this.seriesIdForClaims = seriesIdForClaims;
+		}
+
+		private record QueuedCall(
+				String taskType, com.fasterxml.jackson.databind.JsonNode payload, Instant availableAt, UUID seriesId) {}
+
 		@Override
-		public UUID queue(String taskType, com.fasterxml.jackson.databind.JsonNode payload, Instant availableAt) {
+		public UUID queue(
+				String taskType,
+				com.fasterxml.jackson.databind.JsonNode payload,
+				Instant availableAt,
+				UUID seriesId) {
+			queueCalls.add(new QueuedCall(taskType, payload, availableAt, seriesId));
 			return UUID.randomUUID();
 		}
 
@@ -1362,9 +1459,11 @@ class MangoSwarmDaemonTest {
 			available -= count;
 			List<TaskRecord> records = new ArrayList<>();
 			for (int i = 0; i < count; i++) {
+				UUID taskId = UUID.nameUUIDFromBytes(
+						("task-" + nextId.getAndIncrement()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+				lastClaimedTaskIds.add(taskId);
 				records.add(new TaskRecord(
-						UUID.nameUUIDFromBytes(
-								("task-" + nextId.getAndIncrement()).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+						taskId,
 						taskType,
 						JsonNodeFactory.instance.objectNode(),
 						ie.bitstep.mango.swarm.TaskStatus.CLAIMED,
@@ -1373,7 +1472,8 @@ class MangoSwarmDaemonTest {
 						now,
 						1,
 						now,
-						now));
+						now,
+						seriesIdForClaims));
 			}
 			return records;
 		}

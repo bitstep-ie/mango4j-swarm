@@ -19,11 +19,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ie.bitstep.mango.swarm.TaskExecutionContext;
 import ie.bitstep.mango.swarm.TaskExecutionResult;
+import ie.bitstep.mango.swarm.UuidV7;
 import ie.bitstep.mango.swarm.config.MangoSwarmProperties;
 import ie.bitstep.mango.swarm.db.TaskRecord;
 import ie.bitstep.mango.swarm.db.TaskRepository;
@@ -461,6 +463,7 @@ public class MangoSwarmDaemon {
 					workerId,
 					task.attemptCount());
 			T payload = handler.payloadExtractor().extract(new PayloadReader(task.payload(), objectMapper));
+			UUID currentSeriesId = task.seriesId() != null ? task.seriesId() : task.id();
 			TaskExecutionContext<T> context = new TaskExecutionContext<>(
 					task.id(),
 					task.taskType(),
@@ -468,7 +471,9 @@ public class MangoSwarmDaemon {
 					task.attemptCount(),
 					task.claimedAt(),
 					payload,
-					new RuntimeProgressReporter(task.id(), workerId));
+					task.seriesId(),
+					new RuntimeProgressReporter(task.id(), workerId),
+					(delay, newPayload) -> requestAgain(task, currentSeriesId, delay, newPayload));
 			TaskExecutionResult result = handler.execute(context);
 			if (result instanceof TaskExecutionResult.Failed failed) {
 				handleFailedTask(task, HANDLER_FAILED_MESSAGE);
@@ -501,6 +506,29 @@ public class MangoSwarmDaemon {
 					task.taskType(), task.id(), workerId, task.attemptCount(), ex.getClass().getName());
 			log.debug("swarm task execution failed-exception stacktrace", ex);
 		}
+	}
+
+	/**
+	 * Inserts a follow-up occurrence of {@code task}'s recurring series, requested via {@link
+	 * TaskExecutionContext#again}. Mirrors {@code MangoTasks.at(...)}'s mode and wake-on-queue handling, since the
+	 * daemon operates against {@link TaskRepository}/{@link MangoSwarmProperties} directly rather than depending on the
+	 * application-facing {@code MangoTasks} façade.
+	 */
+	private UUID requestAgain(TaskRecord task, UUID seriesId, Duration delay, Object newPayload) {
+		MangoSwarmProperties.TaskType config = properties.getTaskTypes().get(task.taskType());
+		if (config.getMode() == MangoSwarmProperties.TaskMode.REJECT) {
+			throw new IllegalStateException("Task type is rejecting new tasks: " + task.taskType());
+		}
+		if (config.getMode() == MangoSwarmProperties.TaskMode.DROP) {
+			return UuidV7.generate();
+		}
+		Instant at = Instant.now().plus(delay);
+		JsonNode payloadNode = objectMapper.valueToTree(newPayload);
+		UUID newTaskId = taskRepository.queue(task.taskType(), payloadNode, at, seriesId);
+		if (config.isWakeOnQueue() && !at.isAfter(Instant.now())) {
+			wakeSignal.signal();
+		}
+		return newTaskId;
 	}
 
 	private void handleFailedTask(TaskRecord task, String errorMessage) {

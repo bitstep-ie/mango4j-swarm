@@ -17,4 +17,5 @@ public record TaskRecord(
 		Instant claimedAt,
 		int attemptCount,
 		Instant createdAt,
-		Instant updatedAt) {}
+		Instant updatedAt,
+		UUID seriesId) {}
