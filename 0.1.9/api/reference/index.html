@@ -1,0 +1,1152 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="PostgreSQL-backed, rate-limited, distributed task executor for Spring Boot applications, powered by Mango">
+      
+      
+      
+        <link rel="canonical" href="https://bitstep-ie.github.io/mango4j-swarm/0.1.9/api/reference/">
+      
+      
+        <link rel="prev" href="../../guide/why-mango4j-swarm/">
+      
+      
+        <link rel="next" href="../../schema/schema/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>API Reference - mango4j-swarm</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="mango4j-swarm" class="md-header__button md-logo" aria-label="mango4j-swarm" data-md-component="logo">
+      
+  <img src="../../assets/mango-black.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            mango4j-swarm
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API Reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="orange" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="orange" data-md-color-accent="deep-orange"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bitstep-ie/mango4j-swarm" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bitstep-ie/mango4j-swarm
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/how-it-works/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../schema/schema/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Schema
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="mango4j-swarm" class="md-nav__button md-logo" aria-label="mango4j-swarm" data-md-component="logo">
+      
+  <img src="../../assets/mango-black.png" alt="logo">
+
+    </a>
+    mango4j-swarm
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bitstep-ie/mango4j-swarm" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bitstep-ie/mango4j-swarm
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/how-it-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How It Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/why-mango4j-swarm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why mango-swarm?
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#mangotasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MangoTasks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#handlertaskhandlert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        handler.TaskHandler&lt;T&gt;
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#payloadpayloadextractort-and-payloadpayloadreader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        payload.PayloadExtractor&lt;T&gt; and payload.PayloadReader
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#taskexecutioncontextt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskExecutionContext&lt;T&gt;
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TaskExecutionContext&lt;T&gt;">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recurring-tasks-with-again" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recurring tasks with again(...)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#taskexecutionresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskExecutionResult
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../schema/schema/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#mangotasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MangoTasks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#handlertaskhandlert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        handler.TaskHandler&lt;T&gt;
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#payloadpayloadextractort-and-payloadpayloadreader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        payload.PayloadExtractor&lt;T&gt; and payload.PayloadReader
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#taskexecutioncontextt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskExecutionContext&lt;T&gt;
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TaskExecutionContext&lt;T&gt;">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recurring-tasks-with-again" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recurring tasks with again(...)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#taskexecutionresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskExecutionResult
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h1>
+<p>This page documents the Java types application code interacts with directly: queuing work, implementing handlers, and reading execution context. For <code>mango4j.swarm.*</code> configuration properties, see the <a href="https://github.com/bitstep-ie/mango4j-swarm#configuration-reference">README Configuration Reference</a>. For table/column details, see the <a href="../../schema/schema/">Schema reference</a>.</p>
+<p>All types below live under the <code>ie.bitstep.mango.swarm</code> package (or a named subpackage where noted).</p>
+<h2 id="mangotasks"><code>MangoTasks</code><a class="headerlink" href="#mangotasks" title="Permanent link">&para;</a></h2>
+<p>Injectable Spring bean used to queue work. All queuing methods return the persisted task's <code>UUID</code>, except under <code>mode: drop</code>, where an acknowledgement id is returned without persisting anything.</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Parameters</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>queue(String taskType, JsonNode payload)</code></td>
+<td>task type key, JSON payload</td>
+<td>Queues for immediate eligibility (<code>available_at = now</code>).</td>
+</tr>
+<tr>
+<td><code>queue(String taskType, Object payload)</code></td>
+<td>task type key, arbitrary object</td>
+<td>Payload is converted via Jackson (<code>ObjectMapper.valueToTree</code>).</td>
+</tr>
+<tr>
+<td><code>at(Instant at, String taskType, JsonNode payload)</code></td>
+<td>target instant, task type key, JSON payload</td>
+<td>Queues for eligibility at or after <code>at</code>.</td>
+</tr>
+<tr>
+<td><code>at(Instant at, String taskType, Object payload)</code></td>
+<td>target instant, task type key, arbitrary object</td>
+<td>Object overload of <code>at(...)</code>.</td>
+</tr>
+<tr>
+<td><code>after(Duration delay, String taskType, JsonNode payload)</code></td>
+<td>delay, task type key, JSON payload</td>
+<td>Shorthand for <code>at(now + delay, ...)</code>.</td>
+</tr>
+<tr>
+<td><code>after(Duration delay, String taskType, Object payload)</code></td>
+<td>delay, task type key, arbitrary object</td>
+<td>Object overload of <code>after(...)</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>All methods null-check their arguments (<code>NullPointerException</code>). All methods also throw:</p>
+<ul>
+<li><code>IllegalArgumentException</code> if <code>taskType</code> has no matching configured <code>mango4j.swarm.task-types.*</code> entry.</li>
+<li><code>IllegalStateException</code> if the task type's <code>mode</code> is <code>reject</code>.</li>
+</ul>
+<p><strong><code>queue(...)</code></strong> — run as soon as possible:</p>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1">1</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1"></a><span class="n">UUID</span><span class="w"> </span><span class="n">taskId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tasks</span><span class="p">.</span><span class="na">queue</span><span class="p">(</span><span class="s">&quot;send-email&quot;</span><span class="p">,</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">EmailRequest</span><span class="p">(</span><span class="s">&quot;customer-1&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;user@example.com&quot;</span><span class="p">));</span>
+</code></pre></div></td></tr></table></div>
+<p><strong><code>after(...)</code></strong> — run after a delay from now, e.g. a follow-up reminder:</p>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-1-1">1</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1"></a><span class="n">UUID</span><span class="w"> </span><span class="n">taskId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tasks</span><span class="p">.</span><span class="na">after</span><span class="p">(</span><span class="n">Duration</span><span class="p">.</span><span class="na">ofMinutes</span><span class="p">(</span><span class="mi">15</span><span class="p">),</span><span class="w"> </span><span class="s">&quot;send-email&quot;</span><span class="p">,</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">EmailRequest</span><span class="p">(</span><span class="s">&quot;customer-1&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;user@example.com&quot;</span><span class="p">));</span>
+</code></pre></div></td></tr></table></div>
+<p><strong><code>at(...)</code></strong> — run at (or after) a specific instant, e.g. a scheduled campaign send:</p>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-2-1">1</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1"></a><span class="n">UUID</span><span class="w"> </span><span class="n">taskId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tasks</span><span class="p">.</span><span class="na">at</span><span class="p">(</span><span class="n">Instant</span><span class="p">.</span><span class="na">parse</span><span class="p">(</span><span class="s">&quot;2026-06-01T09:00:00Z&quot;</span><span class="p">),</span><span class="w"> </span><span class="s">&quot;send-email&quot;</span><span class="p">,</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">EmailRequest</span><span class="p">(</span><span class="s">&quot;customer-1&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;user@example.com&quot;</span><span class="p">));</span>
+</code></pre></div></td></tr></table></div>
+<p>Put together in a Spring service:</p>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-3-1"> 1</a></span>
+<span class="normal"><a href="#__codelineno-3-2"> 2</a></span>
+<span class="normal"><a href="#__codelineno-3-3"> 3</a></span>
+<span class="normal"><a href="#__codelineno-3-4"> 4</a></span>
+<span class="normal"><a href="#__codelineno-3-5"> 5</a></span>
+<span class="normal"><a href="#__codelineno-3-6"> 6</a></span>
+<span class="normal"><a href="#__codelineno-3-7"> 7</a></span>
+<span class="normal"><a href="#__codelineno-3-8"> 8</a></span>
+<span class="normal"><a href="#__codelineno-3-9"> 9</a></span>
+<span class="normal"><a href="#__codelineno-3-10">10</a></span>
+<span class="normal"><a href="#__codelineno-3-11">11</a></span>
+<span class="normal"><a href="#__codelineno-3-12">12</a></span>
+<span class="normal"><a href="#__codelineno-3-13">13</a></span>
+<span class="normal"><a href="#__codelineno-3-14">14</a></span>
+<span class="normal"><a href="#__codelineno-3-15">15</a></span>
+<span class="normal"><a href="#__codelineno-3-16">16</a></span>
+<span class="normal"><a href="#__codelineno-3-17">17</a></span>
+<span class="normal"><a href="#__codelineno-3-18">18</a></span>
+<span class="normal"><a href="#__codelineno-3-19">19</a></span>
+<span class="normal"><a href="#__codelineno-3-20">20</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1"></a><span class="nd">@Service</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2"></a><span class="kd">class</span> <span class="nc">EmailTaskService</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3"></a><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">MangoTasks</span><span class="w"> </span><span class="n">tasks</span><span class="p">;</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5"></a><span class="w">    </span><span class="n">EmailTaskService</span><span class="p">(</span><span class="n">MangoTasks</span><span class="w"> </span><span class="n">tasks</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6"></a><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">tasks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tasks</span><span class="p">;</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8"></a>
+<a id="__codelineno-3-9" name="__codelineno-3-9"></a><span class="w">    </span><span class="n">UUID</span><span class="w"> </span><span class="nf">sendNow</span><span class="p">(</span><span class="n">EmailRequest</span><span class="w"> </span><span class="n">request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">tasks</span><span class="p">.</span><span class="na">queue</span><span class="p">(</span><span class="s">&quot;send-email&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">request</span><span class="p">);</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12"></a>
+<a id="__codelineno-3-13" name="__codelineno-3-13"></a><span class="w">    </span><span class="n">UUID</span><span class="w"> </span><span class="nf">sendAt</span><span class="p">(</span><span class="n">EmailRequest</span><span class="w"> </span><span class="n">request</span><span class="p">,</span><span class="w"> </span><span class="n">Instant</span><span class="w"> </span><span class="n">at</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">tasks</span><span class="p">.</span><span class="na">at</span><span class="p">(</span><span class="n">at</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;send-email&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">request</span><span class="p">);</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16"></a>
+<a id="__codelineno-3-17" name="__codelineno-3-17"></a><span class="w">    </span><span class="n">UUID</span><span class="w"> </span><span class="nf">sendAfter</span><span class="p">(</span><span class="n">EmailRequest</span><span class="w"> </span><span class="n">request</span><span class="p">,</span><span class="w"> </span><span class="n">Duration</span><span class="w"> </span><span class="n">delay</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">tasks</span><span class="p">.</span><span class="na">after</span><span class="p">(</span><span class="n">delay</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;send-email&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">request</span><span class="p">);</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20"></a><span class="p">}</span>
+</code></pre></div></td></tr></table></div>
+<h2 id="handlertaskhandlert"><code>handler.TaskHandler&lt;T&gt;</code><a class="headerlink" href="#handlertaskhandlert" title="Permanent link">&para;</a></h2>
+<p>Application-defined task logic. One handler bean per configured task type, discovered automatically as a Spring bean.</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Returns</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>payloadExtractor()</code></td>
+<td><code>PayloadExtractor&lt;T&gt;</code></td>
+<td>Converts the durable JSON payload into the handler's Java model. Called once per attempt, before <code>execute(...)</code>.</td>
+</tr>
+<tr>
+<td><code>execute(TaskExecutionContext&lt;T&gt; context)</code></td>
+<td><code>TaskExecutionResult</code></td>
+<td>Runs one attempt. May throw <code>TaskHandlerException</code> (checked) or any unchecked exception — both are caught by the daemon and routed through the normal retry/failure path.</td>
+</tr>
+</tbody>
+</table>
+<p>Annotate the implementation with <code>@handler.SwarmHandler("task-type-key")</code> — this both declares which configured task type the handler serves and registers it as a Spring <code>@Component</code>.</p>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-4-1"> 1</a></span>
+<span class="normal"><a href="#__codelineno-4-2"> 2</a></span>
+<span class="normal"><a href="#__codelineno-4-3"> 3</a></span>
+<span class="normal"><a href="#__codelineno-4-4"> 4</a></span>
+<span class="normal"><a href="#__codelineno-4-5"> 5</a></span>
+<span class="normal"><a href="#__codelineno-4-6"> 6</a></span>
+<span class="normal"><a href="#__codelineno-4-7"> 7</a></span>
+<span class="normal"><a href="#__codelineno-4-8"> 8</a></span>
+<span class="normal"><a href="#__codelineno-4-9"> 9</a></span>
+<span class="normal"><a href="#__codelineno-4-10">10</a></span>
+<span class="normal"><a href="#__codelineno-4-11">11</a></span>
+<span class="normal"><a href="#__codelineno-4-12">12</a></span>
+<span class="normal"><a href="#__codelineno-4-13">13</a></span>
+<span class="normal"><a href="#__codelineno-4-14">14</a></span>
+<span class="normal"><a href="#__codelineno-4-15">15</a></span>
+<span class="normal"><a href="#__codelineno-4-16">16</a></span>
+<span class="normal"><a href="#__codelineno-4-17">17</a></span>
+<span class="normal"><a href="#__codelineno-4-18">18</a></span>
+<span class="normal"><a href="#__codelineno-4-19">19</a></span>
+<span class="normal"><a href="#__codelineno-4-20">20</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1"></a><span class="nd">@SwarmHandler</span><span class="p">(</span><span class="s">&quot;send-email&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2"></a><span class="kd">class</span> <span class="nc">SendEmailTaskHandler</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">TaskHandler</span><span class="o">&lt;</span><span class="n">EmailPayload</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4"></a><span class="w">    </span><span class="nd">@Override</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5"></a><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">PayloadExtractor</span><span class="o">&lt;</span><span class="n">EmailPayload</span><span class="o">&gt;</span><span class="w"> </span><span class="nf">payloadExtractor</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">reader</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">EmailPayload</span><span class="p">(</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7"></a><span class="w">                </span><span class="n">reader</span><span class="p">.</span><span class="na">required</span><span class="p">(</span><span class="n">String</span><span class="p">.</span><span class="na">class</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;customerId&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;userId&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;customer.id&quot;</span><span class="p">),</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8"></a><span class="w">                </span><span class="n">reader</span><span class="p">.</span><span class="na">required</span><span class="p">(</span><span class="n">String</span><span class="p">.</span><span class="na">class</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;to&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;email&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;recipientEmail&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;to.address&quot;</span><span class="p">),</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9"></a><span class="w">                </span><span class="n">reader</span><span class="p">.</span><span class="na">optional</span><span class="p">(</span><span class="n">String</span><span class="p">.</span><span class="na">class</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;subject&quot;</span><span class="p">).</span><span class="na">orDefault</span><span class="p">(</span><span class="s">&quot;Hello&quot;</span><span class="p">),</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10"></a><span class="w">                </span><span class="n">reader</span><span class="p">.</span><span class="na">optional</span><span class="p">(</span><span class="n">String</span><span class="p">.</span><span class="na">class</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;body&quot;</span><span class="p">).</span><span class="na">orDefault</span><span class="p">(</span><span class="s">&quot;&quot;</span><span class="p">));</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12"></a>
+<a id="__codelineno-4-13" name="__codelineno-4-13"></a><span class="w">    </span><span class="nd">@Override</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14"></a><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">TaskExecutionResult</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="n">TaskExecutionContext</span><span class="o">&lt;</span><span class="n">EmailPayload</span><span class="o">&gt;</span><span class="w"> </span><span class="n">context</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15"></a><span class="w">        </span><span class="n">EmailPayload</span><span class="w"> </span><span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">context</span><span class="p">.</span><span class="na">payload</span><span class="p">();</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16"></a><span class="w">        </span><span class="n">context</span><span class="p">.</span><span class="na">progress</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;connecting&quot;</span><span class="p">);</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17"></a><span class="w">        </span><span class="c1">// send email, call partner API, write a report, etc.</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">TaskExecutionResult</span><span class="p">.</span><span class="na">completed</span><span class="p">();</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-4-20" name="__codelineno-4-20"></a><span class="p">}</span>
+</code></pre></div></td></tr></table></div>
+<p>Returning <code>null</code> from <code>execute(...)</code> is treated as <code>completed()</code> for backward compatibility, but new handlers should return <code>TaskExecutionResult.completed()</code> explicitly.</p>
+<h2 id="payloadpayloadextractort-and-payloadpayloadreader"><code>payload.PayloadExtractor&lt;T&gt;</code> and <code>payload.PayloadReader</code><a class="headerlink" href="#payloadpayloadextractort-and-payloadpayloadreader" title="Permanent link">&para;</a></h2>
+<p><code>PayloadExtractor&lt;T&gt;</code> is a <code>@FunctionalInterface</code> with a single method, <code>T extract(PayloadReader reader)</code>, used as <code>payloadExtractor()</code>'s return value. <code>PayloadReader</code> wraps the durable JSON payload and supports aliasing, defaults, and validation so a handler can evolve its payload shape over time without breaking already-queued rows:</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Returns</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>required(Class&lt;T&gt; type, String primaryPath, String... aliases)</code></td>
+<td><code>T</code></td>
+<td>Reads the first matching path; throws <code>PayloadExtractionException</code> if none are present.</td>
+</tr>
+<tr>
+<td><code>optional(Class&lt;T&gt; type, String primaryPath, String... aliases)</code></td>
+<td><code>OptionalValue&lt;T&gt;</code></td>
+<td>Reads the first matching path, or empty if none are present.</td>
+</tr>
+</tbody>
+</table>
+<p><code>OptionalValue&lt;T&gt;</code> (nested in <code>PayloadReader</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Returns</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>orDefault(T defaultValue)</code></td>
+<td><code>T</code></td>
+<td>Value if present, else the default.</td>
+</tr>
+<tr>
+<td><code>asOptional()</code></td>
+<td><code>Optional&lt;T&gt;</code></td>
+<td>Raw optional.</td>
+</tr>
+<tr>
+<td><code>orElseThrow(String message)</code></td>
+<td><code>T</code></td>
+<td>Value if present, else throws <code>PayloadExtractionException(message)</code>.</td>
+</tr>
+<tr>
+<td><code>validate(Predicate&lt;T&gt; predicate, String message)</code></td>
+<td><code>OptionalValue&lt;T&gt;</code></td>
+<td>Throws <code>PayloadExtractionException</code> if present but invalid; returns <code>this</code> for chaining.</td>
+</tr>
+</tbody>
+</table>
+<p>Paths support dotted nesting (e.g. <code>"customer.id"</code>), and <code>aliases</code> let a field be renamed in code while still reading rows queued under the old field name.</p>
+<h2 id="taskexecutioncontextt"><code>TaskExecutionContext&lt;T&gt;</code><a class="headerlink" href="#taskexecutioncontextt" title="Permanent link">&para;</a></h2>
+<p>Passed to <code>TaskHandler.execute(...)</code>. Carries attempt metadata, the extracted payload, and callbacks for progress reporting and self-rescheduling.</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Returns</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>taskId()</code></td>
+<td><code>UUID</code></td>
+<td>Persisted task id (<code>mango_swarm_tasks.id</code>).</td>
+</tr>
+<tr>
+<td><code>taskType()</code></td>
+<td><code>String</code></td>
+<td>Configured task type key.</td>
+</tr>
+<tr>
+<td><code>workerId()</code></td>
+<td><code>UUID</code></td>
+<td>Worker id executing this attempt.</td>
+</tr>
+<tr>
+<td><code>attemptCount()</code></td>
+<td><code>int</code></td>
+<td>Current attempt number.</td>
+</tr>
+<tr>
+<td><code>claimedAt()</code></td>
+<td><code>Instant</code></td>
+<td>Claim timestamp for this attempt.</td>
+</tr>
+<tr>
+<td><code>payload()</code></td>
+<td><code>T</code></td>
+<td>Extracted, typed payload.</td>
+</tr>
+<tr>
+<td><code>seriesId()</code></td>
+<td><code>UUID</code></td>
+<td>Id shared by every occurrence of this task's recurring series, or <code>null</code> if standalone. See <a href="#recurring-tasks-with-again">Recurring tasks</a> below.</td>
+</tr>
+<tr>
+<td><code>progress(int percent)</code></td>
+<td><code>void</code></td>
+<td>Records progress <code>[0,100]</code>; also acts as liveness for timeout reclaim.</td>
+</tr>
+<tr>
+<td><code>progress(int percent, String description)</code></td>
+<td><code>void</code></td>
+<td>Same, with a human-readable stage description.</td>
+</tr>
+<tr>
+<td><code>again(Duration delay)</code></td>
+<td><code>UUID</code></td>
+<td>Queues a follow-up occurrence reusing the current payload. See below.</td>
+</tr>
+<tr>
+<td><code>again(Duration delay, T newPayload)</code></td>
+<td><code>UUID</code></td>
+<td>Queues a follow-up occurrence with a new payload. See below.</td>
+</tr>
+</tbody>
+</table>
+<p><code>progress(...)</code> throws <code>IllegalArgumentException</code> if <code>percent</code> is outside <code>[0,100]</code>.</p>
+<h3 id="recurring-tasks-with-again">Recurring tasks with <code>again(...)</code><a class="headerlink" href="#recurring-tasks-with-again" title="Permanent link">&para;</a></h3>
+<p>A handler can queue its own follow-up occurrence from inside <code>execute(...)</code>, independent of the <code>TaskExecutionResult</code> it ultimately returns — call it on success, on failure, or both.</p>
+<p><strong>Without a new payload</strong> — reuse the current payload unchanged, e.g. a fixed-interval health check:</p>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-5-1">1</a></span>
+<span class="normal"><a href="#__codelineno-5-2">2</a></span>
+<span class="normal"><a href="#__codelineno-5-3">3</a></span>
+<span class="normal"><a href="#__codelineno-5-4">4</a></span>
+<span class="normal"><a href="#__codelineno-5-5">5</a></span>
+<span class="normal"><a href="#__codelineno-5-6">6</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1"></a><span class="nd">@Override</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2"></a><span class="kd">public</span><span class="w"> </span><span class="n">TaskExecutionResult</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="n">TaskExecutionContext</span><span class="o">&lt;</span><span class="n">HealthCheckPayload</span><span class="o">&gt;</span><span class="w"> </span><span class="n">context</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3"></a><span class="w">    </span><span class="n">pingEndpoint</span><span class="p">(</span><span class="n">context</span><span class="p">.</span><span class="na">payload</span><span class="p">().</span><span class="na">url</span><span class="p">());</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4"></a><span class="w">    </span><span class="n">context</span><span class="p">.</span><span class="na">again</span><span class="p">(</span><span class="n">Duration</span><span class="p">.</span><span class="na">ofMinutes</span><span class="p">(</span><span class="mi">10</span><span class="p">));</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">TaskExecutionResult</span><span class="p">.</span><span class="na">completed</span><span class="p">();</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6"></a><span class="p">}</span>
+</code></pre></div></td></tr></table></div>
+<p><strong>With a new payload</strong> — advance state for the next occurrence, e.g. an incrementing cursor:</p>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-6-1">1</a></span>
+<span class="normal"><a href="#__codelineno-6-2">2</a></span>
+<span class="normal"><a href="#__codelineno-6-3">3</a></span>
+<span class="normal"><a href="#__codelineno-6-4">4</a></span>
+<span class="normal"><a href="#__codelineno-6-5">5</a></span>
+<span class="normal"><a href="#__codelineno-6-6">6</a></span>
+<span class="normal"><a href="#__codelineno-6-7">7</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1"></a><span class="nd">@Override</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2"></a><span class="kd">public</span><span class="w"> </span><span class="n">TaskExecutionResult</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="n">TaskExecutionContext</span><span class="o">&lt;</span><span class="n">PollPayload</span><span class="o">&gt;</span><span class="w"> </span><span class="n">context</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3"></a><span class="w">    </span><span class="n">PollPayload</span><span class="w"> </span><span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">context</span><span class="p">.</span><span class="na">payload</span><span class="p">();</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4"></a><span class="w">    </span><span class="n">String</span><span class="w"> </span><span class="n">next</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pollFeed</span><span class="p">(</span><span class="n">payload</span><span class="p">.</span><span class="na">cursor</span><span class="p">());</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5"></a><span class="w">    </span><span class="n">context</span><span class="p">.</span><span class="na">again</span><span class="p">(</span><span class="n">Duration</span><span class="p">.</span><span class="na">ofMinutes</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span><span class="w"> </span><span class="n">payload</span><span class="p">.</span><span class="na">withCursor</span><span class="p">(</span><span class="n">next</span><span class="p">));</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">TaskExecutionResult</span><span class="p">.</span><span class="na">completed</span><span class="p">();</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7"></a><span class="p">}</span>
+</code></pre></div></td></tr></table></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code>again(...)</code> executes synchronously and immediately — it inserts a new task row the same way <code>MangoTasks.after(...)</code> does. It does not defer, batch, or affect the outcome recorded for the <em>current</em> attempt, and it respects the task type's <code>mode</code>/<code>wake-on-queue</code> settings exactly like <code>queue</code>/<code>at</code>/<code>after</code> (throws on <code>reject</code>, silently no-ops on <code>drop</code>).</p>
+</div>
+<p>Each occurrence is its own durable row, so occurrence history is free via the existing <code>cleanup.completed-retention</code>/<code>failed-retention</code> policy — no separate history table. Occurrences are linked via <code>mango_swarm_tasks.series_id</code>: the first occurrence created by <code>again()</code> gets <code>series_id</code> set to the <em>root</em> task's own <code>id</code>; every later occurrence inherits that same <code>series_id</code>, and the root task itself keeps <code>series_id = NULL</code>. To fetch a whole series: <code>WHERE id = :rootId OR series_id = :rootId</code>.</p>
+<h2 id="taskexecutionresult"><code>TaskExecutionResult</code><a class="headerlink" href="#taskexecutionresult" title="Permanent link">&para;</a></h2>
+<p>Sealed interface returned by <code>execute(...)</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Factory</th>
+<th>Returns</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TaskExecutionResult.completed()</code></td>
+<td><code>Completed</code></td>
+<td>Successful execution.</td>
+</tr>
+<tr>
+<td><code>TaskExecutionResult.failed(String message)</code></td>
+<td><code>Failed</code></td>
+<td>Explicit failure; <code>message</code> is persisted for diagnostics and triggers the retry/failure flow based on task-type configuration.</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-7-1">1</a></span>
+<span class="normal"><a href="#__codelineno-7-2">2</a></span>
+<span class="normal"><a href="#__codelineno-7-3">3</a></span>
+<span class="normal"><a href="#__codelineno-7-4">4</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1"></a><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">partnerApiRejected</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">TaskExecutionResult</span><span class="p">.</span><span class="na">failed</span><span class="p">(</span><span class="s">&quot;Partner API returned 4xx&quot;</span><span class="p">);</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3"></a><span class="p">}</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4"></a><span class="k">return</span><span class="w"> </span><span class="n">TaskExecutionResult</span><span class="p">.</span><span class="na">completed</span><span class="p">();</span>
+</code></pre></div></td></tr></table></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.top", "navigation.tabs", "navigation.instant", "content.code.annotate", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

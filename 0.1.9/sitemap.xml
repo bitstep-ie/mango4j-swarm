@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://bitstep-ie.github.io/mango4j-swarm/0.1.9/</loc>
+         <lastmod>2026-08-08</lastmod>
+    </url>
+    <url>
+         <loc>https://bitstep-ie.github.io/mango4j-swarm/0.1.9/api/reference/</loc>
+         <lastmod>2026-08-08</lastmod>
+    </url>
+    <url>
+         <loc>https://bitstep-ie.github.io/mango4j-swarm/0.1.9/guide/how-it-works/</loc>
+         <lastmod>2026-08-08</lastmod>
+    </url>
+    <url>
+         <loc>https://bitstep-ie.github.io/mango4j-swarm/0.1.9/guide/why-mango4j-swarm/</loc>
+         <lastmod>2026-08-08</lastmod>
+    </url>
+    <url>
+         <loc>https://bitstep-ie.github.io/mango4j-swarm/0.1.9/schema/schema/</loc>
+         <lastmod>2026-08-08</lastmod>
+    </url>
+</urlset>
